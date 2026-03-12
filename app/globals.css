@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply min-h-screen bg-slate-950 text-slate-50 antialiased;
+}
+
+.app-shell {
+  @apply flex min-h-screen flex-col;
+}
+
+.app-main {
+  @apply mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-10;
+}
