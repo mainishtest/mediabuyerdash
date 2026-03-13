@@ -1,27 +1,34 @@
-export interface AdAccount {
+// Top of the entity hierarchy: ClientAccount → Campaign → AdSet → Ad
+
+export interface ClientAccount {
   id: string;
   name: string;
   platform: "facebook";
   currency: string;
   timezone: string;
-  createdAt: string; // ISO date "YYYY-MM-DD"
+  createdAt: string; // "YYYY-MM-DD"
 }
 
 export interface Campaign {
   id: string;
-  accountId: string;   // FK → AdAccount.id
+  accountId: string;    // FK → ClientAccount.id
   name: string;
   objective: "conversions" | "traffic" | "reach" | "brand_awareness";
   status: "active" | "paused" | "archived";
   dailyBudget: number;
   createdAt: string;
+  // Per-campaign optimization targets — configured in the Client Workspace
+  roasGoalType: "high" | "low";
+  roasGoalValue: number;
+  cpaGoalType: "high" | "low";
+  cpaGoalValue: number;
 }
 
 export interface AdSet {
   id: string;
   campaignId: string;  // FK → Campaign.id
   name: string;
-  targeting: string;   // human-readable targeting description
+  targeting: string;
   dailyBudget: number;
   status: "active" | "paused" | "archived";
   startDate: string;
@@ -48,9 +55,9 @@ export interface Creative {
 
 export interface DailyMetric {
   id: string;
-  accountId: string;  // FK → AdAccount.id
+  accountId: string;  // FK → ClientAccount.id
   campaignId: string; // FK → Campaign.id
-  date: string;       // "YYYY-MM-DD"
+  date: string;
   spend: number;
   impressions: number;
   clicks: number;
@@ -71,11 +78,11 @@ export type Weekday =
 
 export interface HourlyMetric {
   id: string;
-  accountId: string;  // FK → AdAccount.id
+  accountId: string;  // FK → ClientAccount.id
   campaignId: string; // FK → Campaign.id
-  date: string;       // "YYYY-MM-DD"
+  date: string;
   weekday: Weekday;
-  hour: number;       // 0–23
+  hour: number;
   spend: number;
   impressions: number;
   clicks: number;

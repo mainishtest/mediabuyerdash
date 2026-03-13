@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DashboardCard } from "./components/DashboardCard";
 import { MetricStat } from "./components/MetricStat";
 import { HourlyRow } from "./components/HourlyRow";
@@ -5,7 +6,7 @@ import { FilterableAnalysis } from "./components/FilterableAnalysis";
 import { DataModelPreview } from "./components/DataModelPreview";
 import { IngestionPreview } from "./components/IngestionPreview";
 import { AggregatedPerformance } from "./components/AggregatedPerformance";
-import { adAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
+import { clientAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
 import { dailyMetrics, hourlyMetrics } from "../lib/sampleMetrics";
 import {
   totalSpend,
@@ -16,6 +17,7 @@ import {
   formatRoas,
   formatHour
 } from "../lib/metricUtils";
+import { getCampaignsByAccountId } from "../lib/selectors";
 import {
   mockRawAccounts,
   mockRawCampaigns,
@@ -37,23 +39,18 @@ import {
 } from "../lib/aggregations";
 
 export default function Page() {
-  // --- existing sample data counts ---
-  const accountCount  = adAccounts.length;
   const campaignCount = campaigns.length;
   const creativeCount = creatives.length;
 
-  // --- existing metric summaries ---
   const spend       = totalSpend(dailyMetrics);
   const conversions = totalConversions(dailyMetrics);
   const cpa         = averageCpa(dailyMetrics);
   const roas        = averageRoas(dailyMetrics);
 
-  // --- adapter: map raw payload to internal models ---
   const mappedCampaigns     = mapAllRawCampaigns(mockRawCampaigns);
   const mappedAds           = mapAllRawAds(mockRawAds);
   const mappedHourlyMetrics = mapAllRawHourlyMetrics(mockRawHourlyMetrics);
 
-  // --- aggregations from normalized hourly sample data ---
   const accountSummaries  = aggregateByAccount(hourlyMetrics);
   const campaignSummaries = aggregateByCampaign(hourlyMetrics);
   const dateSummaries     = aggregateByDate(hourlyMetrics);
@@ -66,17 +63,53 @@ export default function Page() {
           Media Buying Dashboard
         </h1>
         <p className="mt-2 max-w-xl text-sm text-slate-300">
-          Foundation overview of ad accounts, campaigns, creatives, performance
-          metrics, dayparting analysis, rule-based recommendations, ingestion
-          adapter layer, and aggregated metric summaries.
+          Manage client accounts, campaigns, ad sets, and ads. Configure
+          per-campaign optimization goals and inspect dayparting performance.
         </p>
       </header>
+
+      {/* Client Optimization Workspace */}
+      <section className="mb-10">
+        <h2 className="mb-1 text-xl font-semibold text-slate-50">
+          Client Optimization Workspace
+        </h2>
+        <p className="mb-5 text-sm text-slate-400">
+          Select a client account to view their campaign hierarchy, performance
+          data, and configure per-campaign ROAS and CPA optimization targets.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {clientAccounts.map((account) => {
+            const accountCampaigns = getCampaignsByAccountId(campaigns, account.id);
+            return (
+              <Link
+                key={account.id}
+                href={`/clients/${account.id}`}
+                className="group rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm shadow-slate-900/40 transition-colors hover:border-slate-600"
+              >
+                <h3 className="font-semibold text-slate-50 group-hover:text-white">
+                  {account.name}
+                </h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {account.platform} · {account.currency} · {account.timezone}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {accountCampaigns.length} campaign
+                  {accountCampaigns.length !== 1 ? "s" : ""}
+                </p>
+                <p className="mt-3 text-xs font-medium text-emerald-400 group-hover:text-emerald-300">
+                  View Workspace →
+                </p>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Entity overview cards */}
       <section className="mb-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <DashboardCard
           title="Account Overview"
-          description={`Summary of connected ad accounts will appear here. Currently tracking ${accountCount} account${accountCount === 1 ? "" : "s"}.`}
+          description={`${clientAccounts.length} client account${clientAccounts.length === 1 ? "" : "s"} tracked. Click a workspace card above to drill in.`}
         />
         <DashboardCard
           title="Campaign Performance"
@@ -129,7 +162,7 @@ export default function Page() {
       <div className="mb-10">
         <DataModelPreview
           counts={{
-            accounts:      adAccounts.length,
+            accounts:      clientAccounts.length,
             campaigns:     campaigns.length,
             adSets:        adSets.length,
             ads:           ads.length,
@@ -169,7 +202,7 @@ export default function Page() {
         />
       </div>
 
-      {/* Filterable dayparting analysis + recommendations (client component) */}
+      {/* Filterable dayparting analysis + recommendations */}
       <FilterableAnalysis />
     </>
   );

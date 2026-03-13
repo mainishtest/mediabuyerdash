@@ -20,13 +20,12 @@ export function DataModelPreview({ counts }: DataModelPreviewProps) {
         Data Model Preview
       </h2>
       <p className="mb-5 text-sm text-slate-400">
-        Entity counts from the normalized sample data layer. This structure
-        mirrors the schema that will be populated from Meta Ads in a future
-        step.
+        Entity counts from the normalized sample data layer. Hierarchy:
+        Client Account → Campaign → Ad Set → Ad.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricStat label="Ad Accounts"       value={String(counts.accounts)} />
+        <MetricStat label="Client Accounts"    value={String(counts.accounts)} />
         <MetricStat label="Campaigns"         value={String(counts.campaigns)} />
         <MetricStat label="Ad Sets"           value={String(counts.adSets)} />
         <MetricStat label="Ads"               value={String(counts.ads)} />

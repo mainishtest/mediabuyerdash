@@ -1,6 +1,6 @@
-import type { AdAccount } from "../../types/media";
+import type { ClientAccount } from "../../types/media";
 
-export const adAccounts: AdAccount[] = [
+export const clientAccounts: ClientAccount[] = [
   {
     id: "act_1",
     name: "Main FB Account",

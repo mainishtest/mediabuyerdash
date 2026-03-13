@@ -8,7 +8,11 @@ export const campaigns: Campaign[] = [
     objective: "conversions",
     status: "active",
     dailyBudget: 200,
-    createdAt: "2024-01-01"
+    createdAt: "2024-01-01",
+    roasGoalType: "high",
+    roasGoalValue: 3.5,
+    cpaGoalType: "low",
+    cpaGoalValue: 20.00
   },
   {
     id: "camp_2",
@@ -17,6 +21,10 @@ export const campaigns: Campaign[] = [
     objective: "traffic",
     status: "paused",
     dailyBudget: 100,
-    createdAt: "2024-01-01"
+    createdAt: "2024-01-01",
+    roasGoalType: "high",
+    roasGoalValue: 2.5,
+    cpaGoalType: "low",
+    cpaGoalValue: 30.00
   }
 ];

@@ -12,7 +12,7 @@ import type {
 } from "../types/rawPlatform";
 
 import type {
-  AdAccount,
+  ClientAccount,
   Campaign,
   AdSet,
   Ad,
@@ -34,10 +34,10 @@ function mapStatus(platformStatus: string): "active" | "paused" | "archived" {
 
 function mapObjective(obj: string): Campaign["objective"] {
   const map: Record<string, Campaign["objective"]> = {
-    CONVERSIONS:       "conversions",
-    LINK_CLICKS:       "traffic",
-    REACH:             "reach",
-    BRAND_AWARENESS:   "brand_awareness"
+    CONVERSIONS:     "conversions",
+    LINK_CLICKS:     "traffic",
+    REACH:           "reach",
+    BRAND_AWARENESS: "brand_awareness"
   };
   return map[obj.toUpperCase()] ?? "traffic";
 }
@@ -53,18 +53,16 @@ function mapCreativeType(type: string): Creative["type"] {
 
 function mapCallToAction(cta: string): string {
   const map: Record<string, string> = {
-    LEARN_MORE:  "Learn More",
-    SHOP_NOW:    "Shop Now",
-    SIGN_UP:     "Sign Up",
-    GET_QUOTE:   "Get Quote",
-    CONTACT_US:  "Contact Us",
-    DOWNLOAD:    "Download"
+    LEARN_MORE: "Learn More",
+    SHOP_NOW:   "Shop Now",
+    SIGN_UP:    "Sign Up",
+    GET_QUOTE:  "Get Quote",
+    CONTACT_US: "Contact Us",
+    DOWNLOAD:   "Download"
   };
   return map[cta.toUpperCase()] ?? cta;
 }
 
-// Derives weekday name from a "YYYY-MM-DD" date string using UTC noon to avoid
-// timezone-related off-by-one errors.
 function getWeekday(dateStr: string): Weekday {
   const days: Weekday[] = [
     "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
@@ -73,12 +71,10 @@ function getWeekday(dateStr: string): Weekday {
   return days[date.getUTCDay()];
 }
 
-// Platforms typically return budgets in the smallest currency unit (cents).
 function centsToDollars(cents: number): number {
   return cents / 100;
 }
 
-// Extracts "YYYY-MM-DD" from a full ISO datetime string.
 function toDateString(isoDatetime: string): string {
   return isoDatetime.slice(0, 10);
 }
@@ -89,7 +85,7 @@ function round2(value: number): number {
 
 // --- Public mapping functions ------------------------------------------------
 
-export function mapRawAccountToAdAccount(raw: RawAccount): AdAccount {
+export function mapRawAccountToClientAccount(raw: RawAccount): ClientAccount {
   return {
     id:        raw.external_id,
     name:      raw.account_name,
@@ -102,13 +98,18 @@ export function mapRawAccountToAdAccount(raw: RawAccount): AdAccount {
 
 export function mapRawCampaignToCampaign(raw: RawCampaign): Campaign {
   return {
-    id:          raw.external_id,
-    accountId:   raw.account_external_id,
-    name:        raw.campaign_name,
-    objective:   mapObjective(raw.campaign_objective),
-    status:      mapStatus(raw.campaign_status),
-    dailyBudget: centsToDollars(raw.daily_budget_cents),
-    createdAt:   toDateString(raw.created_time)
+    id:            raw.external_id,
+    accountId:     raw.account_external_id,
+    name:          raw.campaign_name,
+    objective:     mapObjective(raw.campaign_objective),
+    status:        mapStatus(raw.campaign_status),
+    dailyBudget:   centsToDollars(raw.daily_budget_cents),
+    createdAt:     toDateString(raw.created_time),
+    // Goals are configured post-ingestion; use safe defaults when mapping raw data
+    roasGoalType:  "high",
+    roasGoalValue: 2.0,
+    cpaGoalType:   "low",
+    cpaGoalValue:  25.00
   };
 }
 
@@ -150,8 +151,8 @@ export function mapRawCreativeToCreative(raw: RawCreative): Creative {
 export function mapRawHourlyMetricToHourlyMetric(
   raw: RawHourlyMetric
 ): HourlyMetric {
-  const cpa  = raw.result_count > 0  ? raw.spend_amount  / raw.result_count  : 0;
-  const roas = raw.spend_amount  > 0  ? raw.purchase_value / raw.spend_amount : 0;
+  const cpa  = raw.result_count > 0  ? raw.spend_amount   / raw.result_count  : 0;
+  const roas = raw.spend_amount  > 0  ? raw.purchase_value / raw.spend_amount  : 0;
 
   return {
     id:          raw.external_id,
@@ -172,8 +173,8 @@ export function mapRawHourlyMetricToHourlyMetric(
 
 // --- Batch convenience wrappers ----------------------------------------------
 
-export function mapAllRawAccounts(raws: RawAccount[]): AdAccount[] {
-  return raws.map(mapRawAccountToAdAccount);
+export function mapAllRawAccounts(raws: RawAccount[]): ClientAccount[] {
+  return raws.map(mapRawAccountToClientAccount);
 }
 
 export function mapAllRawCampaigns(raws: RawCampaign[]): Campaign[] {

@@ -1,4 +1,4 @@
-export { adAccounts } from "./accounts";
+export { clientAccounts } from "./accounts";
 export { campaigns } from "./campaigns";
 export { adSets } from "./adSets";
 export { ads } from "./ads";
