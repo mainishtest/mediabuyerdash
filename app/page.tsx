@@ -4,6 +4,7 @@ import { HourlyRow } from "./components/HourlyRow";
 import { FilterableAnalysis } from "./components/FilterableAnalysis";
 import { DataModelPreview } from "./components/DataModelPreview";
 import { IngestionPreview } from "./components/IngestionPreview";
+import { AggregatedPerformance } from "./components/AggregatedPerformance";
 import { adAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
 import { dailyMetrics, hourlyMetrics } from "../lib/sampleMetrics";
 import {
@@ -29,6 +30,11 @@ import {
   mapAllRawHourlyMetrics,
   mapRawCampaignToCampaign
 } from "../lib/adapters";
+import {
+  aggregateByAccount,
+  aggregateByCampaign,
+  aggregateByDate
+} from "../lib/aggregations";
 
 export default function Page() {
   // --- existing sample data counts ---
@@ -47,6 +53,11 @@ export default function Page() {
   const mappedAds           = mapAllRawAds(mockRawAds);
   const mappedHourlyMetrics = mapAllRawHourlyMetrics(mockRawHourlyMetrics);
 
+  // --- aggregations from normalized hourly sample data ---
+  const accountSummaries  = aggregateByAccount(hourlyMetrics);
+  const campaignSummaries = aggregateByCampaign(hourlyMetrics);
+  const dateSummaries     = aggregateByDate(hourlyMetrics);
+
   return (
     <>
       {/* Page header */}
@@ -56,8 +67,8 @@ export default function Page() {
         </h1>
         <p className="mt-2 max-w-xl text-sm text-slate-300">
           Foundation overview of ad accounts, campaigns, creatives, performance
-          metrics, dayparting analysis, rule-based recommendations, and
-          ingestion-ready adapter layer.
+          metrics, dayparting analysis, rule-based recommendations, ingestion
+          adapter layer, and aggregated metric summaries.
         </p>
       </header>
 
@@ -90,7 +101,7 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Hourly performance preview (static — first 5 rows of sample) */}
+      {/* Hourly performance preview */}
       <section className="mb-10">
         <h2 className="mb-4 text-xl font-semibold text-slate-50">
           Hourly Performance Preview
@@ -128,20 +139,29 @@ export default function Page() {
         />
       </div>
 
+      {/* Aggregated performance summaries */}
+      <div className="mb-10">
+        <AggregatedPerformance
+          accountSummaries={accountSummaries}
+          campaignSummaries={campaignSummaries}
+          dateSummaries={dateSummaries}
+        />
+      </div>
+
       {/* Adapter ingestion preview */}
       <div className="mb-10">
         <IngestionPreview
           rawCounts={{
-            accounts:     mockRawAccounts.length,
-            campaigns:    mockRawCampaigns.length,
-            adSets:       mockRawAdSets.length,
-            ads:          mockRawAds.length,
-            creatives:    mockRawCreatives.length,
+            accounts:      mockRawAccounts.length,
+            campaigns:     mockRawCampaigns.length,
+            adSets:        mockRawAdSets.length,
+            ads:           mockRawAds.length,
+            creatives:     mockRawCreatives.length,
             hourlyMetrics: mockRawHourlyMetrics.length
           }}
           mappedCounts={{
-            campaigns:    mappedCampaigns.length,
-            ads:          mappedAds.length,
+            campaigns:     mappedCampaigns.length,
+            ads:           mappedAds.length,
             hourlyMetrics: mappedHourlyMetrics.length
           }}
           rawCampaignSample={mockRawCampaigns[0]}
