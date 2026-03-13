@@ -28,6 +28,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             Integrations
           </Link>
+          <Link
+            href="/reporting"
+            className="rounded-md px-3 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+          >
+            Reporting
+          </Link>
         </nav>
 
         <main className="app-main">
