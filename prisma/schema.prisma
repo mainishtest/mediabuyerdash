@@ -1,12 +1,12 @@
-// Media Buying Dashboard — Prisma schema (SQLite)
-// Local-first, minimal schema for core product direction.
+// Media Buying Dashboard — Prisma schema
+// Production: PostgreSQL (Supabase). Local dev: set DATABASE_URL in .env.local
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
