@@ -5,6 +5,11 @@ import { prisma } from "../../lib/db";
 import { getCopyProvider, getImageProvider } from "../../lib/aiProvider";
 import { runRealGenerationPipeline } from "../../lib/pipeline";
 import {
+  persistGenerationRun,
+  setGenerationApproval,
+  setSelectedVariant
+} from "../../lib/generationPersistence";
+import {
   getOpenAIConfig,
   getAnthropicConfig,
   getImagePlaceholderConfig
@@ -152,6 +157,40 @@ export async function runRealPipelineAction(
   provider: "openai_text" | "anthropic_text" | "image_provider_placeholder"
 ): Promise<MockGenerationPipelineResult> {
   return runRealGenerationPipeline({ entry, requestType, provider });
+}
+
+// ── Generation persistence & audit trail ─────────────────────────────────────
+
+export async function persistGenerationRunAction(
+  result: MockGenerationPipelineResult,
+  entry: CreativeLabEntry,
+  mode: "mock" | "real"
+) {
+  const persisted = await persistGenerationRun(result, entry, mode);
+  if (persisted) revalidatePath("/creative-lab");
+  if (persisted) revalidatePath("/creative-history");
+  return persisted;
+}
+
+export async function setGenerationApprovalAction(
+  runId: string,
+  variationId: string,
+  variationType: "copy" | "image",
+  decision: "approved" | "rejected"
+) {
+  await setGenerationApproval(runId, variationId, variationType, decision);
+  revalidatePath("/creative-lab");
+  revalidatePath("/creative-history");
+}
+
+export async function setSelectedVariantAction(
+  runId: string,
+  variationId: string,
+  variationType: "copy" | "image"
+) {
+  await setSelectedVariant(runId, variationId, variationType);
+  revalidatePath("/creative-lab");
+  revalidatePath("/creative-history");
 }
 
 // ── Provider config status ────────────────────────────────────────────────────

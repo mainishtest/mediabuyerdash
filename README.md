@@ -69,3 +69,17 @@ Open [http://localhost:3000](http://localhost:3000).
 - `prisma/schema.prisma` — Database schema (Prisma)
 - `prisma/seed.js` — Sample data seed
 - `lib/db.ts` — Prisma client singleton
+
+## Generation persistence and audit trail
+
+The migration `20250312000000_add_generation_persistence` adds models for AI generation history:
+
+- **GenerationRun** — Run metadata (ad, request type, provider, mode, status)
+- **GenerationPromptSnapshot** — Rendered prompt and context
+- **GenerationProviderRequest** — Formatted provider payload
+- **GenerationProviderResponse** — Raw provider response
+- **GeneratedCopyVariation** / **GeneratedImageVariation** — Parsed outputs with approval status
+- **GenerationApprovalDecision** — Approval/rejection decisions
+- **SelectedCreativeVariant** — Selected test candidate per run
+
+Run the migration with `npm run db:migrate` or `npm run db:push`. The seed script does not populate generation data; it is created when you run the pipeline in Creative Lab. View history at `/creative-history`.

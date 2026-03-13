@@ -247,3 +247,116 @@ model CreativeApproval {
 
   @@unique([jobId, variationId])
 }
+
+// ── Generation persistence & audit trail ────────────────────────────────────────
+
+model GenerationRun {
+  id              String    @id @default(cuid())
+  clientAccountId  String?
+  campaignId       String
+  adSetId          String?
+  adId             String
+  adName           String
+  requestType      String    // copy_generation | image_variation_generation
+  provider         String    // openai_text | anthropic_text | image_provider_placeholder
+  mode             String    // mock | real
+  status           String    // completed | failed | partial
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  promptSnapshot    GenerationPromptSnapshot?
+  providerRequest   GenerationProviderRequest?
+  providerResponse  GenerationProviderResponse?
+  copyVariations    GeneratedCopyVariation[]
+  imageVariations   GeneratedImageVariation[]
+  approvalDecisions GenerationApprovalDecision[]
+  selectedVariants  SelectedCreativeVariant[]
+}
+
+model GenerationPromptSnapshot {
+  id                 String   @id @default(cuid())
+  generationRunId    String   @unique
+  templateType       String
+  templateVersion    String
+  renderedPrompt     String
+  contextSnapshotJson String
+  createdAt          DateTime @default(now())
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model GenerationProviderRequest {
+  id               String   @id @default(cuid())
+  generationRunId  String   @unique
+  provider         String
+  requestPayloadJson String
+  createdAt        DateTime @default(now())
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model GenerationProviderResponse {
+  id                String   @id @default(cuid())
+  generationRunId   String   @unique
+  provider          String
+  responsePayloadJson String
+  executionStatus   String
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedCopyVariation {
+  id             String   @id @default(cuid())
+  generationRunId String
+  title          String
+  hook           String
+  body           String
+  callToAction   String
+  approvalStatus String   @default("draft")  // draft | approved | rejected
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedImageVariation {
+  id              String   @id @default(cuid())
+  generationRunId String
+  title           String
+  conceptSummary  String
+  visualChanges   String
+  goal            String
+  approvalStatus  String   @default("draft")  // draft | approved | rejected
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model GenerationApprovalDecision {
+  id              String   @id @default(cuid())
+  generationRunId String
+  variationType   String   // copy | image
+  variationId     String   // id of GeneratedCopyVariation or GeneratedImageVariation
+  decision        String   // approved | rejected
+  notes           String?
+  decidedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+}
+
+model SelectedCreativeVariant {
+  id              String   @id @default(cuid())
+  generationRunId String
+  variationType   String   // copy | image
+  variationId     String
+  selectedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  run GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+
+  @@unique([generationRunId, variationType])
+}

@@ -15,7 +15,10 @@ import {
   generateCopyVariationsAction,
   generateImageVariationsAction,
   setApprovalAction,
-  runRealPipelineAction
+  runRealPipelineAction,
+  persistGenerationRunAction,
+  setGenerationApprovalAction,
+  setSelectedVariantAction
 } from "./actions";
 import {
   assembleCopyGenerationContext,
@@ -54,6 +57,7 @@ import type {
   MockGenerationPipelineResult,
   PipelineExecutionStatus
 } from "../../types/pipeline";
+import type { PersistedGenerationRun } from "../../lib/generationPersistence";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -1143,7 +1147,10 @@ function EndToEndPipelineSection({
   const [provider, setProvider] = useState<ProviderAdapterType>("openai_text");
   const [mode, setMode] = useState<"mock" | "real">("mock");
   const [result, setResult] = useState<MockGenerationPipelineResult | null>(null);
+  const [persistedRun, setPersistedRun] = useState<PersistedGenerationRun | null>(null);
   const [approvalMap, setApprovalMap] = useState<Record<string, CreativeApprovalStatus>>({});
+  const [selectedCopyId, setSelectedCopyId] = useState<string | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [traceOpen, setTraceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -1158,37 +1165,57 @@ function EndToEndPipelineSection({
   async function handleRunCopy() {
     if (!entry) return;
     setApprovalMap({});
+    setPersistedRun(null);
+    setSelectedCopyId(null);
+    let r: MockGenerationPipelineResult;
     if (mode === "mock") {
-      setResult(runMockGenerationPipeline({ entry, requestType: "copy_generation", provider }));
+      r = runMockGenerationPipeline({ entry, requestType: "copy_generation", provider });
+      setResult(r);
     } else {
       setLoading(true);
       try {
-        const r = await runRealPipelineAction(entry, "copy_generation", provider);
+        r = await runRealPipelineAction(entry, "copy_generation", provider);
         setResult(r);
       } finally {
         setLoading(false);
       }
     }
+    const persisted = await persistGenerationRunAction(r, entry, mode);
+    if (persisted) setPersistedRun(persisted);
   }
 
   async function handleRunImage() {
     if (!entry) return;
     setApprovalMap({});
+    setPersistedRun(null);
+    setSelectedImageId(null);
+    let r: MockGenerationPipelineResult;
     if (mode === "mock") {
-      setResult(runMockGenerationPipeline({ entry, requestType: "image_variation_generation", provider }));
+      r = runMockGenerationPipeline({ entry, requestType: "image_variation_generation", provider });
+      setResult(r);
     } else {
       setLoading(true);
       try {
-        const r = await runRealPipelineAction(entry, "image_variation_generation", provider);
+        r = await runRealPipelineAction(entry, "image_variation_generation", provider);
         setResult(r);
       } finally {
         setLoading(false);
       }
     }
+    const persisted = await persistGenerationRunAction(r, entry, mode);
+    if (persisted) setPersistedRun(persisted);
   }
 
-  function handleApprovalChange(variationId: string, status: CreativeApprovalStatus) {
+  async function handleApprovalChange(runId: string, variationId: string, variationType: "copy" | "image", status: CreativeApprovalStatus) {
+    if (status !== "approved" && status !== "rejected") return;
+    await setGenerationApprovalAction(runId, variationId, variationType, status);
     setApprovalMap((prev) => ({ ...prev, [variationId]: status }));
+  }
+
+  async function handleSelectVariant(runId: string, variationId: string, variationType: "copy" | "image") {
+    await setSelectedVariantAction(runId, variationId, variationType);
+    if (variationType === "copy") setSelectedCopyId(variationId);
+    else setSelectedImageId(variationId);
   }
 
   return (
@@ -1209,6 +1236,7 @@ function EndToEndPipelineSection({
           onChange={(e) => {
             setMode(e.target.value as "mock" | "real");
             setResult(null);
+            setPersistedRun(null);
           }}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
         >
@@ -1231,6 +1259,7 @@ function EndToEndPipelineSection({
               onChange={(e) => {
                 setSelectedIndex(Number(e.target.value));
                 setResult(null);
+                setPersistedRun(null);
               }}
               className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
             >
@@ -1243,10 +1272,11 @@ function EndToEndPipelineSection({
             <label className="text-sm text-slate-400">Request type:</label>
             <select
               value={requestType}
-              onChange={(e) => {
-                setRequestType(e.target.value as "copy_generation" | "image_variation_generation");
-                setResult(null);
-              }}
+          onChange={(e) => {
+            setRequestType(e.target.value as "copy_generation" | "image_variation_generation");
+            setResult(null);
+            setPersistedRun(null);
+          }}
               className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
             >
               {PIPELINE_REQUEST_OPTIONS.map((o) => (
@@ -1256,10 +1286,11 @@ function EndToEndPipelineSection({
             <label className="text-sm text-slate-400">Provider:</label>
             <select
               value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value as ProviderAdapterType);
-                setResult(null);
-              }}
+          onChange={(e) => {
+            setProvider(e.target.value as ProviderAdapterType);
+            setResult(null);
+            setPersistedRun(null);
+          }}
               className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
             >
               {PIPELINE_PROVIDER_OPTIONS.map((o) => (
@@ -1305,8 +1336,12 @@ function EndToEndPipelineSection({
           {result && (
             <PipelineResultDisplay
               result={result}
+              persistedRun={persistedRun}
               approvalMap={approvalMap}
               onApprovalChange={handleApprovalChange}
+              onSelectVariant={handleSelectVariant}
+              selectedCopyId={selectedCopyId}
+              selectedImageId={selectedImageId}
               traceOpen={traceOpen}
               onTraceToggle={() => setTraceOpen((v) => !v)}
               mode={mode}
@@ -1320,21 +1355,32 @@ function EndToEndPipelineSection({
 
 function PipelineResultDisplay({
   result,
+  persistedRun,
   approvalMap,
   onApprovalChange,
+  onSelectVariant,
+  selectedCopyId,
+  selectedImageId,
   traceOpen,
   onTraceToggle,
   mode
 }: {
   result: MockGenerationPipelineResult;
+  persistedRun: PersistedGenerationRun | null;
   approvalMap: Record<string, CreativeApprovalStatus>;
-  onApprovalChange: (variationId: string, status: CreativeApprovalStatus) => void;
+  onApprovalChange: (runId: string, variationId: string, variationType: "copy" | "image", status: CreativeApprovalStatus) => void;
+  onSelectVariant: (runId: string, variationId: string, variationType: "copy" | "image") => void;
+  selectedCopyId: string | null;
+  selectedImageId: string | null;
   traceOpen: boolean;
   onTraceToggle: () => void;
   mode?: "mock" | "real";
 }) {
   const status = result.status;
   const isCopy = result.requestType === "copy_generation";
+  const runId = persistedRun?.runId ?? null;
+  const copyVariations = persistedRun?.copyVariations ?? result.copyOutput ?? [];
+  const imageVariations = persistedRun?.imageVariations ?? result.imageOutput ?? [];
 
   return (
     <div className="space-y-4">
@@ -1391,98 +1437,142 @@ function PipelineResultDisplay({
         </div>
       </div>
 
-      {isCopy && result.copyOutput && result.copyOutput.length > 0 && (
+      {isCopy && copyVariations.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-medium text-slate-500">Final normalized copy output (approval-ready):</p>
           <div className="grid gap-4 md:grid-cols-3">
-            {result.copyOutput.map((v) => (
-              <div key={v.id} className="rounded-xl border border-violet-800/40 bg-violet-950/20 p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">{v.title}</p>
-                  <ApprovalBadge status={approvalMap[v.id] ?? "draft"} />
+            {copyVariations.map((v) => {
+              const approvalStatus = approvalMap[v.id] ?? v.approvalStatus ?? "draft";
+              const isSelected = selectedCopyId === v.id;
+              return (
+                <div key={v.id} className="rounded-xl border border-violet-800/40 bg-violet-950/20 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">{v.title}</p>
+                    <div className="flex items-center gap-2">
+                      {isSelected && (
+                        <span className="rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">Selected</span>
+                      )}
+                      <ApprovalBadge status={approvalStatus} />
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <p className="text-xs text-slate-500">Hook</p>
+                      <p className="mt-0.5 italic text-slate-200">&quot;{v.hook}&quot;</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Body</p>
+                      <p className="mt-0.5 text-slate-300">{v.body}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Call to Action</p>
+                      <p className="mt-0.5 font-medium text-violet-300">{v.callToAction}</p>
+                    </div>
+                  </div>
+                  {runId && (approvalStatus === "draft" || approvalStatus === "approved") && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {approvalStatus === "draft" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onApprovalChange(runId, v.id, "copy", "approved")}
+                            className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onApprovalChange(runId, v.id, "copy", "rejected")}
+                            className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {approvalStatus === "approved" && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectVariant(runId, v.id, "copy")}
+                          className="rounded-lg bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-800/50"
+                        >
+                          Select as test candidate
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="text-xs text-slate-500">Hook</p>
-                    <p className="mt-0.5 italic text-slate-200">&quot;{v.hook}&quot;</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Body</p>
-                    <p className="mt-0.5 text-slate-300">{v.body}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Call to Action</p>
-                    <p className="mt-0.5 font-medium text-violet-300">{v.callToAction}</p>
-                  </div>
-                </div>
-                {(approvalMap[v.id] ?? "draft") === "draft" && (
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onApprovalChange(v.id, "approved")}
-                      className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onApprovalChange(v.id, "rejected")}
-                      className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
-      {!isCopy && result.imageOutput && result.imageOutput.length > 0 && (
+      {!isCopy && imageVariations.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-medium text-slate-500">Final normalized image output (approval-ready):</p>
           <div className="grid gap-4 md:grid-cols-3">
-            {result.imageOutput.map((v) => (
-              <div key={v.id} className="rounded-xl border border-blue-800/40 bg-blue-950/20 p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">{v.title}</p>
-                  <ApprovalBadge status={approvalMap[v.id] ?? "draft"} />
+            {imageVariations.map((v) => {
+              const approvalStatus = approvalMap[v.id] ?? v.approvalStatus ?? "draft";
+              const isSelected = selectedImageId === v.id;
+              return (
+                <div key={v.id} className="rounded-xl border border-blue-800/40 bg-blue-950/20 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">{v.title}</p>
+                    <div className="flex items-center gap-2">
+                      {isSelected && (
+                        <span className="rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">Selected</span>
+                      )}
+                      <ApprovalBadge status={approvalStatus} />
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <p className="text-xs text-slate-500">Concept</p>
+                      <p className="mt-0.5 text-slate-200">{v.conceptSummary}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Visual Changes</p>
+                      <p className="mt-0.5 text-slate-300">{v.visualChanges}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Goal</p>
+                      <p className="mt-0.5 font-medium text-blue-300">{v.goal}</p>
+                    </div>
+                  </div>
+                  {runId && (approvalStatus === "draft" || approvalStatus === "approved") && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {approvalStatus === "draft" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onApprovalChange(runId, v.id, "image", "approved")}
+                            className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onApprovalChange(runId, v.id, "image", "rejected")}
+                            className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {approvalStatus === "approved" && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectVariant(runId, v.id, "image")}
+                          className="rounded-lg bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-800/50"
+                        >
+                          Select as test candidate
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="text-xs text-slate-500">Concept</p>
-                    <p className="mt-0.5 text-slate-200">{v.conceptSummary}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Visual Changes</p>
-                    <p className="mt-0.5 text-slate-300">{v.visualChanges}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Goal</p>
-                    <p className="mt-0.5 font-medium text-blue-300">{v.goal}</p>
-                  </div>
-                </div>
-                {(approvalMap[v.id] ?? "draft") === "draft" && (
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onApprovalChange(v.id, "approved")}
-                      className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onApprovalChange(v.id, "rejected")}
-                      className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1595,6 +1685,12 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
           and surfaces actionable variation concepts. All variations require human approval before use.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
+          <Link
+            href="/creative-history"
+            className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700/60 hover:text-slate-100"
+          >
+            Generation History
+          </Link>
           <div className="inline-flex items-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
             <span aria-hidden>⚠</span>
             <span>Mock provider — not connected to real LLM or image APIs</span>
