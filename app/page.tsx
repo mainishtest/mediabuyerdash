@@ -2,7 +2,8 @@ import { DashboardCard } from "./components/DashboardCard";
 import { MetricStat } from "./components/MetricStat";
 import { HourlyRow } from "./components/HourlyRow";
 import { FilterableAnalysis } from "./components/FilterableAnalysis";
-import { adAccounts, campaigns, creatives } from "../lib/sampleData";
+import { DataModelPreview } from "./components/DataModelPreview";
+import { adAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
 import { dailyMetrics, hourlyMetrics } from "../lib/sampleMetrics";
 import {
   totalSpend,
@@ -15,14 +16,14 @@ import {
 } from "../lib/metricUtils";
 
 export default function Page() {
-  const accountCount = adAccounts.length;
+  const accountCount  = adAccounts.length;
   const campaignCount = campaigns.length;
   const creativeCount = creatives.length;
 
-  const spend = totalSpend(dailyMetrics);
+  const spend       = totalSpend(dailyMetrics);
   const conversions = totalConversions(dailyMetrics);
-  const cpa = averageCpa(dailyMetrics);
-  const roas = averageRoas(dailyMetrics);
+  const cpa         = averageCpa(dailyMetrics);
+  const roas        = averageRoas(dailyMetrics);
 
   return (
     <>
@@ -60,10 +61,10 @@ export default function Page() {
           Performance Snapshot
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricStat label="Total Spend" value={formatCurrency(spend)} />
+          <MetricStat label="Total Spend"       value={formatCurrency(spend)} />
           <MetricStat label="Total Conversions" value={String(conversions)} />
-          <MetricStat label="Avg CPA" value={formatCurrency(cpa)} />
-          <MetricStat label="Avg ROAS" value={formatRoas(roas)} />
+          <MetricStat label="Avg CPA"           value={formatCurrency(cpa)} />
+          <MetricStat label="Avg ROAS"          value={formatRoas(roas)} />
         </div>
       </section>
 
@@ -81,7 +82,7 @@ export default function Page() {
           </div>
           {hourlyMetrics.slice(0, 5).map((m) => (
             <HourlyRow
-              key={`${m.date}-${m.hour}`}
+              key={m.id}
               hour={formatHour(m.hour)}
               spend={formatCurrency(m.spend)}
               conversions={m.conversions}
@@ -90,6 +91,20 @@ export default function Page() {
           ))}
         </div>
       </section>
+
+      {/* Normalized data model entity counts */}
+      <div className="mb-10">
+        <DataModelPreview
+          counts={{
+            accounts:     adAccounts.length,
+            campaigns:    campaigns.length,
+            adSets:       adSets.length,
+            ads:          ads.length,
+            creatives:    creatives.length,
+            hourlyMetrics: hourlyMetrics.length
+          }}
+        />
+      </div>
 
       {/* Filterable dayparting analysis + recommendations (client component) */}
       <FilterableAnalysis />

@@ -3,40 +3,54 @@ export interface AdAccount {
   name: string;
   platform: "facebook";
   currency: string;
+  timezone: string;
+  createdAt: string; // ISO date "YYYY-MM-DD"
 }
 
 export interface Campaign {
   id: string;
-  accountId: string;
+  accountId: string;   // FK → AdAccount.id
   name: string;
-  objective: "conversions" | "traffic" | "reach";
-  status: "active" | "paused";
+  objective: "conversions" | "traffic" | "reach" | "brand_awareness";
+  status: "active" | "paused" | "archived";
+  dailyBudget: number;
+  createdAt: string;
 }
 
 export interface AdSet {
   id: string;
-  campaignId: string;
+  campaignId: string;  // FK → Campaign.id
   name: string;
+  targeting: string;   // human-readable targeting description
   dailyBudget: number;
-  status: "active" | "paused";
+  status: "active" | "paused" | "archived";
+  startDate: string;
 }
 
 export interface Ad {
   id: string;
-  adSetId: string;
+  adSetId: string;    // FK → AdSet.id
+  creativeId: string; // FK → Creative.id
   name: string;
-  creativeId: string;
-  status: "active" | "paused";
+  status: "active" | "paused" | "archived";
+  createdAt: string;
 }
 
 export interface Creative {
   id: string;
   name: string;
   type: "image" | "video" | "carousel";
+  headline: string;
+  body: string;
+  callToAction: string;
+  createdAt: string;
 }
 
 export interface DailyMetric {
-  date: string;
+  id: string;
+  accountId: string;  // FK → AdAccount.id
+  campaignId: string; // FK → Campaign.id
+  date: string;       // "YYYY-MM-DD"
   spend: number;
   impressions: number;
   clicks: number;
@@ -56,9 +70,12 @@ export type Weekday =
   | "Sunday";
 
 export interface HourlyMetric {
-  date: string;
+  id: string;
+  accountId: string;  // FK → AdAccount.id
+  campaignId: string; // FK → Campaign.id
+  date: string;       // "YYYY-MM-DD"
   weekday: Weekday;
-  hour: number;
+  hour: number;       // 0–23
   spend: number;
   impressions: number;
   clicks: number;
