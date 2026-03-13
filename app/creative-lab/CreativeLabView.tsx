@@ -48,6 +48,11 @@ import type {
   ProviderResponseType,
   ParsedVariationPreview
 } from "../../types/providerParse";
+import { runMockGenerationPipeline } from "../../lib/pipeline";
+import type {
+  MockGenerationPipelineResult,
+  PipelineExecutionStatus
+} from "../../types/pipeline";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -1104,6 +1109,368 @@ function ParsedVariationDisplay({ preview }: { preview: ParsedVariationPreview }
   );
 }
 
+// ── End-to-End Generation Pipeline ───────────────────────────────────────────
+
+const PIPELINE_PROVIDER_OPTIONS: { value: ProviderAdapterType; label: string }[] = [
+  { value: "openai_text", label: "Mock OpenAI-style" },
+  { value: "anthropic_text", label: "Mock Anthropic-style" },
+  { value: "image_provider_placeholder", label: "Placeholder image provider" }
+];
+
+const PIPELINE_REQUEST_OPTIONS = [
+  { value: "copy_generation" as const, label: "Copy generation" },
+  { value: "image_variation_generation" as const, label: "Image variation" }
+];
+
+const STATUS_STYLES: Record<PipelineExecutionStatus, string> = {
+  idle:      "text-slate-400",
+  running:   "text-amber-400",
+  completed: "text-emerald-400",
+  failed:    "text-rose-400",
+  partial:   "text-amber-400"
+};
+
+function EndToEndPipelineSection({ entries }: { entries: CreativeLabEntry[] }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [requestType, setRequestType] = useState<"copy_generation" | "image_variation_generation">("copy_generation");
+  const [provider, setProvider] = useState<ProviderAdapterType>("openai_text");
+  const [result, setResult] = useState<MockGenerationPipelineResult | null>(null);
+  const [approvalMap, setApprovalMap] = useState<Record<string, CreativeApprovalStatus>>({});
+  const [traceOpen, setTraceOpen] = useState(false);
+
+  const entry = entries[selectedIndex] ?? null;
+
+  function handleRunCopy() {
+    if (!entry) return;
+    setResult(runMockGenerationPipeline({ entry, requestType: "copy_generation", provider }));
+    setApprovalMap({});
+  }
+
+  function handleRunImage() {
+    if (!entry) return;
+    setResult(runMockGenerationPipeline({ entry, requestType: "image_variation_generation", provider }));
+    setApprovalMap({});
+  }
+
+  function handleApprovalChange(variationId: string, status: CreativeApprovalStatus) {
+    setApprovalMap((prev) => ({ ...prev, [variationId]: status }));
+  }
+
+  return (
+    <section className="mb-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="mb-2 text-xl font-semibold text-slate-50">
+        End-to-End Generation Pipeline
+      </h2>
+      <p className="mb-4 text-sm text-slate-400">
+        Mock end-to-end flow: diagnosis → assembly → render → format → mock response → parse → approval-ready output. Not yet connected to live providers or publishing.
+      </p>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-500">No ads available.</p>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-400">Select ad:</label>
+            <select
+              value={selectedIndex}
+              onChange={(e) => {
+                setSelectedIndex(Number(e.target.value));
+                setResult(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {entries.map((e, i) => (
+                <option key={e.input.adId} value={i}>
+                  {e.input.adName} ({e.input.adId})
+                </option>
+              ))}
+            </select>
+            <label className="text-sm text-slate-400">Request type:</label>
+            <select
+              value={requestType}
+              onChange={(e) => {
+                setRequestType(e.target.value as "copy_generation" | "image_variation_generation");
+                setResult(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {PIPELINE_REQUEST_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <label className="text-sm text-slate-400">Provider:</label>
+            <select
+              value={provider}
+              onChange={(e) => {
+                setProvider(e.target.value as ProviderAdapterType);
+                setResult(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {PIPELINE_PROVIDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleRunCopy}
+              disabled={!entry || requestType !== "copy_generation" || provider === "image_provider_placeholder"}
+              className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
+            >
+              Run Mock Copy Pipeline
+            </button>
+            <button
+              type="button"
+              onClick={handleRunImage}
+              disabled={!entry || requestType !== "image_variation_generation" || provider !== "image_provider_placeholder"}
+              className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
+            >
+              Run Mock Image Pipeline
+            </button>
+          </div>
+
+          {result && (
+            <PipelineResultDisplay
+              result={result}
+              approvalMap={approvalMap}
+              onApprovalChange={handleApprovalChange}
+              traceOpen={traceOpen}
+              onTraceToggle={() => setTraceOpen((v) => !v)}
+            />
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function PipelineResultDisplay({
+  result,
+  approvalMap,
+  onApprovalChange,
+  traceOpen,
+  onTraceToggle
+}: {
+  result: MockGenerationPipelineResult;
+  approvalMap: Record<string, CreativeApprovalStatus>;
+  onApprovalChange: (variationId: string, status: CreativeApprovalStatus) => void;
+  traceOpen: boolean;
+  onTraceToggle: () => void;
+}) {
+  const status = result.status;
+  const isCopy = result.requestType === "copy_generation";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`text-sm font-medium ${STATUS_STYLES[status]}`}>
+          {status.charAt(0).toUpperCase() + status.slice(1)}
+        </span>
+        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+          {result.provider} · {result.requestType}
+        </span>
+      </div>
+
+      {result.errors.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-rose-400">Errors:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result.warnings.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Warnings:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-slate-500">Pipeline steps:</p>
+        <div className="flex flex-wrap gap-2">
+          {result.stepResults.map((s) => (
+            <span
+              key={s.step}
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                s.status === "ok" ? "bg-emerald-900/60 text-emerald-300" :
+                s.status === "failed" ? "bg-rose-900/60 text-rose-300" :
+                "bg-slate-700 text-slate-400"
+              }`}
+            >
+              {s.step.replace(/_/g, " ")}: {s.status}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {isCopy && result.copyOutput && result.copyOutput.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-medium text-slate-500">Final normalized copy output (approval-ready):</p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {result.copyOutput.map((v) => (
+              <div key={v.id} className="rounded-xl border border-violet-800/40 bg-violet-950/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">{v.title}</p>
+                  <ApprovalBadge status={approvalMap[v.id] ?? "draft"} />
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500">Hook</p>
+                    <p className="mt-0.5 italic text-slate-200">&quot;{v.hook}&quot;</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Body</p>
+                    <p className="mt-0.5 text-slate-300">{v.body}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Call to Action</p>
+                    <p className="mt-0.5 font-medium text-violet-300">{v.callToAction}</p>
+                  </div>
+                </div>
+                {(approvalMap[v.id] ?? "draft") === "draft" && (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onApprovalChange(v.id, "approved")}
+                      className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onApprovalChange(v.id, "rejected")}
+                      className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isCopy && result.imageOutput && result.imageOutput.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-medium text-slate-500">Final normalized image output (approval-ready):</p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {result.imageOutput.map((v) => (
+              <div key={v.id} className="rounded-xl border border-blue-800/40 bg-blue-950/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">{v.title}</p>
+                  <ApprovalBadge status={approvalMap[v.id] ?? "draft"} />
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500">Concept</p>
+                    <p className="mt-0.5 text-slate-200">{v.conceptSummary}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Visual Changes</p>
+                    <p className="mt-0.5 text-slate-300">{v.visualChanges}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Goal</p>
+                    <p className="mt-0.5 font-medium text-blue-300">{v.goal}</p>
+                  </div>
+                </div>
+                {(approvalMap[v.id] ?? "draft") === "draft" && (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onApprovalChange(v.id, "approved")}
+                      className="rounded-lg bg-emerald-900/50 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onApprovalChange(v.id, "rejected")}
+                      className="rounded-lg bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-800/50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <button
+          type="button"
+          onClick={onTraceToggle}
+          className="text-sm text-slate-400 hover:text-slate-200"
+        >
+          {traceOpen ? "▼ Hide" : "▶ Show"} pipeline trace
+        </button>
+        {traceOpen && (
+          <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+            {result.trace.diagnosis && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Diagnosis:</p>
+                <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
+                  {JSON.stringify(result.trace.diagnosis, null, 2)}
+                </pre>
+              </div>
+            )}
+            {result.trace.assembledContext && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Assembled context:</p>
+                <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
+                  {JSON.stringify(result.trace.assembledContext, null, 2)}
+                </pre>
+              </div>
+            )}
+            {result.trace.renderedPrompt && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Rendered prompt:</p>
+                <pre className="max-h-32 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300 whitespace-pre-wrap">
+                  {result.trace.renderedPrompt}
+                </pre>
+              </div>
+            )}
+            {result.trace.formattedPayload && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Formatted provider payload:</p>
+                <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
+                  {JSON.stringify(result.trace.formattedPayload, null, 2)}
+                </pre>
+              </div>
+            )}
+            {result.trace.rawMockResponse && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Raw mock response:</p>
+                <pre className="max-h-32 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
+                  {JSON.stringify(result.trace.rawMockResponse, null, 2)}
+                </pre>
+              </div>
+            )}
+            {result.trace.parsedOutput && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-500">Parsed normalized output:</p>
+                <pre className="max-h-32 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
+                  {JSON.stringify(result.trace.parsedOutput, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -1206,6 +1573,9 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
 
       {/* Provider Response Parsing Preview */}
       <ProviderResponseParsingSection />
+
+      {/* End-to-End Generation Pipeline */}
+      <EndToEndPipelineSection entries={entries} />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
