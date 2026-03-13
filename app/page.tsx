@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { DashboardCard } from "./components/DashboardCard";
 import { MetricStat } from "./components/MetricStat";
@@ -40,9 +42,9 @@ import {
 
 export default async function Page() {
   // Database-backed: client accounts and campaign counts
-  const dbAccounts = await prisma.clientAccount.findMany({
-    include: { _count: { select: { campaigns: true } } }
-  });
+  const dbAccounts = await prisma.clientAccount
+    .findMany({ include: { _count: { select: { campaigns: true } } } })
+    .catch(() => []);
 
   const campaignCount = campaigns.length;
   const creativeCount = creatives.length;

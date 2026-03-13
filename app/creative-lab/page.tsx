@@ -10,6 +10,8 @@ import { prisma } from "../../lib/db";
 import { getProviderConfigStatusAction } from "./actions";
 import { CreativeLabView } from "./CreativeLabView";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Creative Optimization Lab — Media Buying Dashboard"
 };
@@ -31,11 +33,10 @@ export default async function CreativeLabPage() {
 
   // Fetch generation jobs and approvals from DB
   const [jobs, approvals] = await Promise.all([
-    prisma.aIGenerationJob.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { approvals: true }
-    }),
-    prisma.creativeApproval.findMany()
+    prisma.aIGenerationJob
+      .findMany({ orderBy: { createdAt: "desc" }, include: { approvals: true } })
+      .catch(() => []),
+    prisma.creativeApproval.findMany().catch(() => []),
   ]);
 
   // Build jobsByAd: adId -> { copyJobs, imageJobs }
