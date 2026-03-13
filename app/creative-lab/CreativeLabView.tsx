@@ -141,7 +141,7 @@ function CopyVariationCard({
       <div className="space-y-2 text-sm">
         <div>
           <p className="text-xs text-slate-500">Hook</p>
-          <p className="mt-0.5 italic text-slate-200">"{v.hook}"</p>
+          <p className="mt-0.5 italic text-slate-200">&quot;{v.hook}&quot;</p>
         </div>
         <div>
           <p className="text-xs text-slate-500">Body</p>
