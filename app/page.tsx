@@ -6,7 +6,8 @@ import { FilterableAnalysis } from "./components/FilterableAnalysis";
 import { DataModelPreview } from "./components/DataModelPreview";
 import { IngestionPreview } from "./components/IngestionPreview";
 import { AggregatedPerformance } from "./components/AggregatedPerformance";
-import { clientAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
+import { prisma } from "../lib/db";
+import { campaigns, adSets, ads, creatives } from "../lib/sampleData";
 import { dailyMetrics, hourlyMetrics } from "../lib/sampleMetrics";
 import {
   totalSpend,
@@ -17,7 +18,6 @@ import {
   formatRoas,
   formatHour
 } from "../lib/metricUtils";
-import { getCampaignsByAccountId } from "../lib/selectors";
 import {
   mockRawAccounts,
   mockRawCampaigns,
@@ -38,7 +38,12 @@ import {
   aggregateByDate
 } from "../lib/aggregations";
 
-export default function Page() {
+export default async function Page() {
+  // Database-backed: client accounts and campaign counts
+  const dbAccounts = await prisma.clientAccount.findMany({
+    include: { _count: { select: { campaigns: true } } }
+  });
+
   const campaignCount = campaigns.length;
   const creativeCount = creatives.length;
 
@@ -68,7 +73,7 @@ export default function Page() {
         </p>
       </header>
 
-      {/* Client Optimization Workspace */}
+      {/* Client Optimization Workspace — data from database */}
       <section className="mb-10">
         <h2 className="mb-1 text-xl font-semibold text-slate-50">
           Client Optimization Workspace
@@ -77,31 +82,32 @@ export default function Page() {
           Select a client account to view their campaign hierarchy, performance
           data, and configure per-campaign ROAS and CPA optimization targets.
         </p>
+        <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+          <span aria-hidden>●</span>
+          <span>Data loaded from database (Prisma + SQLite)</span>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {clientAccounts.map((account) => {
-            const accountCampaigns = getCampaignsByAccountId(campaigns, account.id);
-            return (
-              <Link
-                key={account.id}
-                href={`/clients/${account.id}`}
-                className="group rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm shadow-slate-900/40 transition-colors hover:border-slate-600"
-              >
-                <h3 className="font-semibold text-slate-50 group-hover:text-white">
-                  {account.name}
-                </h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {account.platform} · {account.currency} · {account.timezone}
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  {accountCampaigns.length} campaign
-                  {accountCampaigns.length !== 1 ? "s" : ""}
-                </p>
-                <p className="mt-3 text-xs font-medium text-emerald-400 group-hover:text-emerald-300">
-                  View Workspace →
-                </p>
-              </Link>
-            );
-          })}
+          {dbAccounts.map((account) => (
+            <Link
+              key={account.id}
+              href={`/clients/${account.id}`}
+              className="group rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm shadow-slate-900/40 transition-colors hover:border-slate-600"
+            >
+              <h3 className="font-semibold text-slate-50 group-hover:text-white">
+                {account.name}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {account.platform} · {account.currency} · {account.timezone}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                {account._count.campaigns} campaign
+                {account._count.campaigns !== 1 ? "s" : ""}
+              </p>
+              <p className="mt-3 text-xs font-medium text-emerald-400 group-hover:text-emerald-300">
+                View Workspace →
+              </p>
+            </Link>
+          ))}
         </div>
       </section>
 
@@ -109,7 +115,7 @@ export default function Page() {
       <section className="mb-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <DashboardCard
           title="Account Overview"
-          description={`${clientAccounts.length} client account${clientAccounts.length === 1 ? "" : "s"} tracked. Click a workspace card above to drill in.`}
+          description={`${dbAccounts.length} client account${dbAccounts.length === 1 ? "" : "s"} tracked (from database). Click a workspace card above to drill in.`}
         />
         <DashboardCard
           title="Campaign Performance"
@@ -158,11 +164,11 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Normalized data model entity counts */}
+      {/* Normalized data model entity counts (accounts from DB, rest from sample data) */}
       <div className="mb-10">
         <DataModelPreview
           counts={{
-            accounts:      clientAccounts.length,
+            accounts:      dbAccounts.length,
             campaigns:     campaigns.length,
             adSets:        adSets.length,
             ads:           ads.length,

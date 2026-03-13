@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { clientAccounts, campaigns, adSets, ads } from "../../../lib/sampleData";
+import { prisma } from "../../../lib/db";
+import { campaigns, adSets, ads } from "../../../lib/sampleData";
 import { hourlyMetrics } from "../../../lib/sampleMetrics";
 import { adSetPerformance, adPerformance } from "../../../lib/data/index";
 import {
@@ -14,16 +15,33 @@ type PageProps = {
   params: { clientId: string };
 };
 
-export function generateMetadata({ params }: PageProps) {
-  const account = clientAccounts.find((a) => a.id === params.clientId);
+export async function generateMetadata({ params }: PageProps) {
+  const { clientId } = params;
+  const account = await prisma.clientAccount.findUnique({
+    where: { id: clientId }
+  });
   return {
     title: account ? `${account.name} — Media Buying Dashboard` : "Client Not Found"
   };
 }
 
-export default function ClientDetailPage({ params }: PageProps) {
+export default async function ClientDetailPage({ params }: PageProps) {
   const { clientId } = params;
-  const account = clientAccounts.find((a) => a.id === clientId);
+  const dbAccount = await prisma.clientAccount.findUnique({
+    where: { id: clientId }
+  });
+
+  // Map Prisma model to the shape ClientDetailView expects
+  const account = dbAccount
+    ? {
+        id: dbAccount.id,
+        name: dbAccount.name,
+        platform: dbAccount.platform as "facebook",
+        currency: dbAccount.currency,
+        timezone: dbAccount.timezone,
+        createdAt: dbAccount.createdAt.toISOString().slice(0, 10)
+      }
+    : null;
 
   if (!account) {
     return (
