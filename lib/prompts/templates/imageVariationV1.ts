@@ -35,22 +35,16 @@ export const imageVariationV1: ImagePromptTemplate = {
   sections: {
     systemInstructions: `You are an expert in direct response visual creative for performance marketing. Your job is to describe static image concepts that grab attention and support conversion goals. You prioritize clear focal points, strong visual communication, and concepts that make the offer or problem/solution visually obvious.`,
 
-    taskInstructions: `Generate 3 distinct static image concept variations for the following underperforming ad.
-
-Campaign: {{campaignName}} ({{campaignId}})
-Ad: {{adName}} ({{adId}})
-
-Current performance: CPA ${{performance.actualCpa}}, ROAS {{performance.actualRoas}}×, ${{performance.spend}} spend.
-Performance trend: {{performance.trendSummary}}
-
-Campaign goals: CPA goal ${{goals.cpaGoalValue}}, ROAS goal {{goals.roasGoalValue}}×.
-
-Diagnosis: {{diagnosis.causeType}} — {{diagnosis.shortReason}}
-Recommendation: {{diagnosis.recommendationSummary}}
-
-Current image: {{creative.imageHeadline}}, {{creative.imageStyle}}, {{creative.dominantMessage}}, {{creative.visualTheme}}
-
-Current copy context: Hook — {{creative.currentHook}}; CTA — {{creative.currentCallToAction}}`,
+    taskInstructions: "Generate 3 distinct static image concept variations for the following underperforming ad.\n\n" +
+      "Campaign: {{campaignName}} ({{campaignId}})\n" +
+      "Ad: {{adName}} ({{adId}})\n\n" +
+      "Current performance: CPA ${{performance.actualCpa}}, ROAS {{performance.actualRoas}}×, ${{performance.spend}} spend.\n" +
+      "Performance trend: {{performance.trendSummary}}\n\n" +
+      "Campaign goals: CPA goal ${{goals.cpaGoalValue}}, ROAS goal {{goals.roasGoalValue}}×.\n\n" +
+      "Diagnosis: {{diagnosis.causeType}} — {{diagnosis.shortReason}}\n" +
+      "Recommendation: {{diagnosis.recommendationSummary}}\n\n" +
+      "Current image: {{creative.imageHeadline}}, {{creative.imageStyle}}, {{creative.dominantMessage}}, {{creative.visualTheme}}\n\n" +
+      "Current copy context: Hook — {{creative.currentHook}}; CTA — {{creative.currentCallToAction}}",
 
     visualConstraints: `- Concepts must be describable as static images (no video).
 - Align with diagnosis context and campaign context.

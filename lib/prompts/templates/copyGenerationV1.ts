@@ -37,25 +37,19 @@ export const copyGenerationV1: CopyPromptTemplate = {
   sections: {
     systemInstructions: `You are an expert direct response copywriter for performance marketing. Your job is to write compelling Facebook ad copy that drives conversions. You write clear, specific, emotionally relevant copy — never vague, generic, or hype-heavy. You avoid language that sounds unbelievable.`,
 
-    taskInstructions: `Generate 3 distinct ad copy variations for the following underperforming ad.
-
-Campaign: {{campaignName}} ({{campaignId}})
-Ad: {{adName}} ({{adId}})
-
-Current performance: CPA ${{performance.actualCpa}}, ROAS {{performance.actualRoas}}×, ${{performance.spend}} spend, {{performance.conversions}} conversions.
-Performance trend: {{performance.trendSummary}}
-
-Campaign goals: CPA goal ${{goals.cpaGoalValue}}, ROAS goal {{goals.roasGoalValue}}×.
-
-Diagnosis: {{diagnosis.causeType}} — {{diagnosis.shortReason}}
-Recommendation: {{diagnosis.recommendationSummary}}
-
-Current copy:
-- Hook: {{creative.currentHook}}
-- Body: {{creative.currentBody}}
-- CTA: {{creative.currentCallToAction}}
-
-Image context (for alignment): {{creative.imageHeadline}}, {{creative.imageStyle}}, {{creative.dominantMessage}}, {{creative.visualTheme}}`,
+    taskInstructions: "Generate 3 distinct ad copy variations for the following underperforming ad.\n\n" +
+      "Campaign: {{campaignName}} ({{campaignId}})\n" +
+      "Ad: {{adName}} ({{adId}})\n\n" +
+      "Current performance: CPA ${{performance.actualCpa}}, ROAS {{performance.actualRoas}}×, ${{performance.spend}} spend, {{performance.conversions}} conversions.\n" +
+      "Performance trend: {{performance.trendSummary}}\n\n" +
+      "Campaign goals: CPA goal ${{goals.cpaGoalValue}}, ROAS goal {{goals.roasGoalValue}}×.\n\n" +
+      "Diagnosis: {{diagnosis.causeType}} — {{diagnosis.shortReason}}\n" +
+      "Recommendation: {{diagnosis.recommendationSummary}}\n\n" +
+      "Current copy:\n" +
+      "- Hook: {{creative.currentHook}}\n" +
+      "- Body: {{creative.currentBody}}\n" +
+      "- CTA: {{creative.currentCallToAction}}\n\n" +
+      "Image context (for alignment): {{creative.imageHeadline}}, {{creative.imageStyle}}, {{creative.dominantMessage}}, {{creative.visualTheme}}",
 
     outputRequirements: `Each variation MUST include:
 1. Hook — attention-grabbing opening (1–2 sentences)
