@@ -94,11 +94,13 @@ export interface ImageRecommendation {
 
 // A single copy test variation (hook / body / CTA).
 export interface CopyVariation {
-  id:           string;
-  title:        string;
-  hook:         string;
-  body:         string;
-  callToAction: string;
+  id:              string;
+  title:           string;
+  hook:            string;
+  body:            string;
+  callToAction:    string;
+  // Set when a variation has been persisted to the database.
+  approvalStatus?: string;
 }
 
 // A concept description for a new static image creative direction.
@@ -108,6 +110,8 @@ export interface ImageVariationConcept {
   conceptSummary:  string;   // what the creative tries to communicate
   visualChanges:   string;   // specific visual elements that differ from control
   goal:            string;   // hypothesis: what this change is trying to improve
+  // Set when a variation has been persisted to the database.
+  approvalStatus?: string;
 }
 
 // ── Aggregated output ─────────────────────────────────────────────────────────
