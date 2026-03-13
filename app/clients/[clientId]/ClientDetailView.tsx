@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import type { ClientAccount, Campaign, AdSet, Ad } from "../../../types/media";
 import type { CampaignSummary } from "../../../lib/aggregations";
+import type { AdSetPerformanceSummary } from "../../../lib/data/adSetPerformance";
+import type { AdPerformanceSummary } from "../../../lib/data/adPerformance";
+import { evaluateEntity } from "../../../lib/evaluationUtils";
+import { EvaluationTable } from "../../components/EvaluationTable";
 import { formatCurrency, formatRoas } from "../../../lib/metricUtils";
+
+// --- Local types -------------------------------------------------------------
 
 type GoalOverride = {
   roasGoalType: "high" | "low";
@@ -21,24 +27,32 @@ type Props = {
   adSets: AdSet[];
   ads: Ad[];
   campaignSummaries: CampaignSummary[];
+  adSetSummaries: AdSetPerformanceSummary[];
+  adSummaries: AdPerformanceSummary[];
 };
+
+// --- Style constants ---------------------------------------------------------
 
 const TH = "px-4 py-3 text-left text-xs font-medium uppercase tracking-widest text-slate-400";
 const TD = "px-4 py-3 text-sm text-slate-300";
 
-const statusBadge = (status: string) =>
+const entityStatusBadge = (status: string) =>
   `rounded-full px-2 py-0.5 text-xs font-medium ${
     status === "active"
       ? "bg-emerald-900/60 text-emerald-300"
       : "bg-slate-800 text-slate-400"
   }`;
 
+// --- Component ---------------------------------------------------------------
+
 export function ClientDetailView({
   account,
   campaigns,
   adSets,
   ads,
-  campaignSummaries
+  campaignSummaries,
+  adSetSummaries,
+  adSummaries
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -67,15 +81,86 @@ export function ClientDetailView({
     }));
   }
 
-  const summaryMap = Object.fromEntries(
+  // --- Derive evaluations from current goalOverrides (reactive) --------------
+
+  const campaignSummaryMap = Object.fromEntries(
     campaignSummaries.map((s) => [s.campaignId, s])
   );
 
+  const campaignEvaluations = campaigns.map((c) => {
+    const g = goalOverrides[c.id] ?? {
+      roasGoalType: c.roasGoalType, roasGoalValue: c.roasGoalValue,
+      cpaGoalType: c.cpaGoalType,   cpaGoalValue: c.cpaGoalValue
+    };
+    const s = campaignSummaryMap[c.id];
+    return evaluateEntity({
+      entityId:     c.id,
+      entityName:   c.name,
+      actualRoas:   s?.roas ?? 0,
+      actualCpa:    s?.cpa  ?? 0,
+      roasGoalType:  g.roasGoalType,
+      roasGoalValue: g.roasGoalValue,
+      cpaGoalType:   g.cpaGoalType,
+      cpaGoalValue:  g.cpaGoalValue
+    });
+  });
+
+  const adSetEvaluations = adSets.map((as) => {
+    const campaign = campaigns.find((c) => c.id === as.campaignId);
+    const g = campaign
+      ? goalOverrides[campaign.id] ?? {
+          roasGoalType: campaign.roasGoalType, roasGoalValue: campaign.roasGoalValue,
+          cpaGoalType: campaign.cpaGoalType,   cpaGoalValue: campaign.cpaGoalValue
+        }
+      : { roasGoalType: "high" as const, roasGoalValue: 0, cpaGoalType: "low" as const, cpaGoalValue: 0 };
+    const s = adSetSummaries.find((p) => p.adSetId === as.id);
+    return evaluateEntity({
+      entityId:           as.id,
+      entityName:         as.name,
+      parentCampaignId:   campaign?.id,
+      parentCampaignName: campaign?.name,
+      actualRoas:         s?.roas ?? 0,
+      actualCpa:          s?.cpa  ?? 0,
+      roasGoalType:        g.roasGoalType,
+      roasGoalValue:       g.roasGoalValue,
+      cpaGoalType:         g.cpaGoalType,
+      cpaGoalValue:        g.cpaGoalValue
+    });
+  });
+
+  const adEvaluations = ads.map((ad) => {
+    const adSet   = adSets.find((as) => as.id === ad.adSetId);
+    const campaign = campaigns.find((c) => c.id === adSet?.campaignId);
+    const g = campaign
+      ? goalOverrides[campaign.id] ?? {
+          roasGoalType: campaign.roasGoalType, roasGoalValue: campaign.roasGoalValue,
+          cpaGoalType: campaign.cpaGoalType,   cpaGoalValue: campaign.cpaGoalValue
+        }
+      : { roasGoalType: "high" as const, roasGoalValue: 0, cpaGoalType: "low" as const, cpaGoalValue: 0 };
+    const s = adSummaries.find((p) => p.adId === ad.id);
+    return evaluateEntity({
+      entityId:           ad.id,
+      entityName:         ad.name,
+      parentCampaignId:   campaign?.id,
+      parentCampaignName: campaign?.name,
+      actualRoas:         s?.roas ?? 0,
+      actualCpa:          s?.cpa  ?? 0,
+      roasGoalType:        g.roasGoalType,
+      roasGoalValue:       g.roasGoalValue,
+      cpaGoalType:         g.cpaGoalType,
+      cpaGoalValue:        g.cpaGoalValue
+    });
+  });
+
+  // --- Tab definitions -------------------------------------------------------
+
   const tabs: { id: ActiveTab; label: string; count: number }[] = [
-    { id: "campaigns", label: "Campaigns", count: campaigns.length },
-    { id: "adsets",    label: "Ad Sets",   count: adSets.length },
-    { id: "ads",       label: "Ads",       count: ads.length }
+    { id: "campaigns", label: "Campaign Evaluation", count: campaigns.length },
+    { id: "adsets",    label: "Ad Set Evaluation",   count: adSets.length },
+    { id: "ads",       label: "Ad Evaluation",       count: ads.length }
   ];
+
+  // --- Render ----------------------------------------------------------------
 
   return (
     <>
@@ -103,14 +188,12 @@ export function ClientDetailView({
         </div>
       </header>
 
-      {/* Campaign Goals */}
+      {/* Campaign Goals editor */}
       <section className="mb-10">
-        <h2 className="mb-1 text-lg font-semibold text-slate-50">
-          Campaign Goals
-        </h2>
+        <h2 className="mb-1 text-lg font-semibold text-slate-50">Campaign Goals</h2>
         <p className="mb-4 text-sm text-slate-400">
-          Per-campaign optimization targets. Changes here are local only until
-          persistence is added.
+          Edit targets below — evaluation results update instantly. Ad sets and ads
+          inherit their parent campaign goals.
         </p>
         <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm shadow-slate-900/40">
           <table className="min-w-full text-sm">
@@ -188,9 +271,13 @@ export function ClientDetailView({
         </div>
       </section>
 
-      {/* Level tabs */}
+      {/* Evaluation tabs */}
       <section>
-        <div className="mb-4 flex gap-2">
+        <h2 className="mb-4 text-lg font-semibold text-slate-50">
+          Performance Evaluation
+        </h2>
+
+        <div className="mb-4 flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -207,110 +294,55 @@ export function ClientDetailView({
           ))}
         </div>
 
-        {/* Campaigns tab */}
         {activeTab === "campaigns" && (
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm shadow-slate-900/40">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  {["Campaign", "Objective", "Status", "Budget", "Spend", "Conversions", "CPA", "ROAS"].map(
-                    (h) => <th key={h} className={TH}>{h}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((c, i) => {
-                  const s = summaryMap[c.id];
-                  return (
-                    <tr
-                      key={c.id}
-                      className={i < campaigns.length - 1 ? "border-b border-slate-800" : ""}
-                    >
-                      <td className={`${TD} font-medium text-slate-200`}>{c.name}</td>
-                      <td className={TD}>{c.objective}</td>
-                      <td className={TD}>
-                        <span className={statusBadge(c.status)}>{c.status}</span>
-                      </td>
-                      <td className={TD}>${c.dailyBudget}/day</td>
-                      <td className={TD}>{s ? formatCurrency(s.spend) : "—"}</td>
-                      <td className={TD}>{s ? s.conversions : "—"}</td>
-                      <td className={TD}>{s ? formatCurrency(s.cpa) : "—"}</td>
-                      <td className={TD}>{s ? formatRoas(s.roas) : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <EvaluationTable evaluations={campaignEvaluations} showParent={false} />
         )}
 
-        {/* Ad Sets tab */}
         {activeTab === "adsets" && (
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm shadow-slate-900/40">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  {["Ad Set", "Campaign", "Status", "Daily Budget", "Targeting"].map(
-                    (h) => <th key={h} className={TH}>{h}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {adSets.map((as, i) => {
-                  const campaign = campaigns.find((c) => c.id === as.campaignId);
-                  return (
-                    <tr
-                      key={as.id}
-                      className={i < adSets.length - 1 ? "border-b border-slate-800" : ""}
-                    >
-                      <td className={`${TD} font-medium text-slate-200`}>{as.name}</td>
-                      <td className={TD}>{campaign?.name ?? as.campaignId}</td>
-                      <td className={TD}>
-                        <span className={statusBadge(as.status)}>{as.status}</span>
-                      </td>
-                      <td className={TD}>${as.dailyBudget}/day</td>
-                      <td className={`${TD} max-w-xs truncate`}>{as.targeting}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <EvaluationTable evaluations={adSetEvaluations} showParent />
         )}
 
-        {/* Ads tab */}
         {activeTab === "ads" && (
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm shadow-slate-900/40">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  {["Ad", "Ad Set", "Creative", "Status", "Created"].map(
-                    (h) => <th key={h} className={TH}>{h}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {ads.map((ad, i) => {
-                  const adSet = adSets.find((as) => as.id === ad.adSetId);
-                  return (
-                    <tr
-                      key={ad.id}
-                      className={i < ads.length - 1 ? "border-b border-slate-800" : ""}
-                    >
-                      <td className={`${TD} font-medium text-slate-200`}>{ad.name}</td>
-                      <td className={TD}>{adSet?.name ?? ad.adSetId}</td>
-                      <td className={TD}>{ad.creativeId}</td>
-                      <td className={TD}>
-                        <span className={statusBadge(ad.status)}>{ad.status}</span>
-                      </td>
-                      <td className={TD}>{ad.createdAt}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <EvaluationTable evaluations={adEvaluations} showParent />
         )}
+      </section>
+
+      {/* Quick entity reference — collapsed into a simple summary row */}
+      <section className="mt-10">
+        <h2 className="mb-4 text-lg font-semibold text-slate-50">Entity Summary</h2>
+        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm shadow-slate-900/40">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                {["Campaign", "Objective", "Status", "Budget", "Spend", "Conversions", "CPA", "ROAS"].map(
+                  (h) => <th key={h} className={TH}>{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map((c, i) => {
+                const s = campaignSummaryMap[c.id];
+                return (
+                  <tr
+                    key={c.id}
+                    className={i < campaigns.length - 1 ? "border-b border-slate-800" : ""}
+                  >
+                    <td className={`${TD} font-medium text-slate-200`}>{c.name}</td>
+                    <td className={TD}>{c.objective}</td>
+                    <td className={TD}>
+                      <span className={entityStatusBadge(c.status)}>{c.status}</span>
+                    </td>
+                    <td className={TD}>${c.dailyBudget}/day</td>
+                    <td className={TD}>{s ? formatCurrency(s.spend) : "—"}</td>
+                    <td className={TD}>{s ? s.conversions : "—"}</td>
+                    <td className={TD}>{s ? formatCurrency(s.cpa) : "—"}</td>
+                    <td className={TD}>{s ? formatRoas(s.roas) : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </>
   );

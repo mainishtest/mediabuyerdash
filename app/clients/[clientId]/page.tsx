@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clientAccounts, campaigns, adSets, ads } from "../../../lib/sampleData";
 import { hourlyMetrics } from "../../../lib/sampleMetrics";
+import { adSetPerformance, adPerformance } from "../../../lib/data/index";
 import {
   getCampaignsByAccountId,
   getAdSetsByCampaignId,
@@ -50,6 +51,17 @@ export default function ClientDetailPage({ params }: PageProps) {
     hourlyMetrics.filter((m) => m.accountId === clientId)
   );
 
+  // Filter performance summaries to only entities belonging to this client.
+  const clientAdSetIds = new Set(clientAdSets.map((as) => as.id));
+  const clientAdIds    = new Set(clientAds.map((ad) => ad.id));
+
+  const clientAdSetPerformance = adSetPerformance.filter((s) =>
+    clientAdSetIds.has(s.adSetId)
+  );
+  const clientAdPerformance = adPerformance.filter((s) =>
+    clientAdIds.has(s.adId)
+  );
+
   return (
     <ClientDetailView
       account={account}
@@ -57,6 +69,8 @@ export default function ClientDetailPage({ params }: PageProps) {
       adSets={clientAdSets}
       ads={clientAds}
       campaignSummaries={campaignSummaries}
+      adSetSummaries={clientAdSetPerformance}
+      adSummaries={clientAdPerformance}
     />
   );
 }
