@@ -1,9 +1,15 @@
-// Mock Generation Pipeline
+// Generation Pipeline
 //
-// Exports for the end-to-end mock generation orchestration.
+// Exports for mock and real generation orchestration.
 
 export {
   runMockCopyGenerationPipeline,
   runMockImageGenerationPipeline,
   runMockGenerationPipeline
 } from "./mockGenerationPipeline";
+
+export {
+  runRealCopyGenerationPipeline,
+  runRealImageGenerationPipeline,
+  runRealGenerationPipeline
+} from "./realGenerationPipeline";

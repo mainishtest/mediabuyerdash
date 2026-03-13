@@ -14,7 +14,8 @@ import type { JobWithVariations, ApprovalMap, CreativeApprovalStatus } from "../
 import {
   generateCopyVariationsAction,
   generateImageVariationsAction,
-  setApprovalAction
+  setApprovalAction,
+  runRealPipelineAction
 } from "./actions";
 import {
   assembleCopyGenerationContext,
@@ -1130,26 +1131,60 @@ const STATUS_STYLES: Record<PipelineExecutionStatus, string> = {
   partial:   "text-amber-400"
 };
 
-function EndToEndPipelineSection({ entries }: { entries: CreativeLabEntry[] }) {
+function EndToEndPipelineSection({
+  entries,
+  providerConfig
+}: {
+  entries: CreativeLabEntry[];
+  providerConfig: ProviderConfig;
+}) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [requestType, setRequestType] = useState<"copy_generation" | "image_variation_generation">("copy_generation");
   const [provider, setProvider] = useState<ProviderAdapterType>("openai_text");
+  const [mode, setMode] = useState<"mock" | "real">("mock");
   const [result, setResult] = useState<MockGenerationPipelineResult | null>(null);
   const [approvalMap, setApprovalMap] = useState<Record<string, CreativeApprovalStatus>>({});
   const [traceOpen, setTraceOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const entry = entries[selectedIndex] ?? null;
+  const openaiReady = providerConfig.openai.ready;
+  const anthropicReady = providerConfig.anthropic.ready;
+  const providerReady =
+    provider === "openai_text" ? openaiReady :
+    provider === "anthropic_text" ? anthropicReady :
+    true;
 
-  function handleRunCopy() {
+  async function handleRunCopy() {
     if (!entry) return;
-    setResult(runMockGenerationPipeline({ entry, requestType: "copy_generation", provider }));
     setApprovalMap({});
+    if (mode === "mock") {
+      setResult(runMockGenerationPipeline({ entry, requestType: "copy_generation", provider }));
+    } else {
+      setLoading(true);
+      try {
+        const r = await runRealPipelineAction(entry, "copy_generation", provider);
+        setResult(r);
+      } finally {
+        setLoading(false);
+      }
+    }
   }
 
-  function handleRunImage() {
+  async function handleRunImage() {
     if (!entry) return;
-    setResult(runMockGenerationPipeline({ entry, requestType: "image_variation_generation", provider }));
     setApprovalMap({});
+    if (mode === "mock") {
+      setResult(runMockGenerationPipeline({ entry, requestType: "image_variation_generation", provider }));
+    } else {
+      setLoading(true);
+      try {
+        const r = await runRealPipelineAction(entry, "image_variation_generation", provider);
+        setResult(r);
+      } finally {
+        setLoading(false);
+      }
+    }
   }
 
   function handleApprovalChange(variationId: string, status: CreativeApprovalStatus) {
@@ -1162,8 +1197,28 @@ function EndToEndPipelineSection({ entries }: { entries: CreativeLabEntry[] }) {
         End-to-End Generation Pipeline
       </h2>
       <p className="mb-4 text-sm text-slate-400">
-        Mock end-to-end flow: diagnosis → assembly → render → format → mock response → parse → approval-ready output. Not yet connected to live providers or publishing.
+        {mode === "mock"
+          ? "Mock flow: diagnosis → assembly → render → format → mock response → parse. No live API calls."
+          : "Real flow: same pipeline with live provider execution. Requires API keys in .env.local."}
       </p>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-sm text-slate-400">Mode:</label>
+        <select
+          value={mode}
+          onChange={(e) => {
+            setMode(e.target.value as "mock" | "real");
+            setResult(null);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+        >
+          <option value="mock">Mock</option>
+          <option value="real">Real</option>
+        </select>
+        <span className="text-xs text-slate-500">
+          OpenAI: {openaiReady ? "✓" : "✗"} · Anthropic: {anthropicReady ? "✓" : "✗"}
+        </span>
+      </div>
 
       {entries.length === 0 ? (
         <p className="text-sm text-slate-500">No ads available.</p>
@@ -1214,20 +1269,38 @@ function EndToEndPipelineSection({ entries }: { entries: CreativeLabEntry[] }) {
             <button
               type="button"
               onClick={handleRunCopy}
-              disabled={!entry || requestType !== "copy_generation" || provider === "image_provider_placeholder"}
+              disabled={
+                !entry ||
+                requestType !== "copy_generation" ||
+                provider === "image_provider_placeholder" ||
+                (mode === "real" && !providerReady) ||
+                loading
+              }
               className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
             >
-              Run Mock Copy Pipeline
+              {loading ? "Running…" : mode === "mock" ? "Run Mock Copy" : "Run Real Copy"}
             </button>
             <button
               type="button"
               onClick={handleRunImage}
-              disabled={!entry || requestType !== "image_variation_generation" || provider !== "image_provider_placeholder"}
+              disabled={
+                !entry ||
+                requestType !== "image_variation_generation" ||
+                provider !== "image_provider_placeholder" ||
+                loading
+              }
               className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
             >
-              Run Mock Image Pipeline
+              {loading ? "Running…" : mode === "mock" ? "Run Mock Image" : "Run Real Image"}
             </button>
           </div>
+
+          {mode === "real" && !providerReady && (provider === "openai_text" || provider === "anthropic_text") && (
+            <div className="mb-4 rounded-lg border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-300">
+              {provider === "openai_text" && !openaiReady && providerConfig.openai.message}
+              {provider === "anthropic_text" && !anthropicReady && providerConfig.anthropic.message}
+            </div>
+          )}
 
           {result && (
             <PipelineResultDisplay
@@ -1236,6 +1309,7 @@ function EndToEndPipelineSection({ entries }: { entries: CreativeLabEntry[] }) {
               onApprovalChange={handleApprovalChange}
               traceOpen={traceOpen}
               onTraceToggle={() => setTraceOpen((v) => !v)}
+              mode={mode}
             />
           )}
         </>
@@ -1249,13 +1323,15 @@ function PipelineResultDisplay({
   approvalMap,
   onApprovalChange,
   traceOpen,
-  onTraceToggle
+  onTraceToggle,
+  mode
 }: {
   result: MockGenerationPipelineResult;
   approvalMap: Record<string, CreativeApprovalStatus>;
   onApprovalChange: (variationId: string, status: CreativeApprovalStatus) => void;
   traceOpen: boolean;
   onTraceToggle: () => void;
+  mode?: "mock" | "real";
 }) {
   const status = result.status;
   const isCopy = result.requestType === "copy_generation";
@@ -1269,6 +1345,11 @@ function PipelineResultDisplay({
         <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
           {result.provider} · {result.requestType}
         </span>
+        {mode && (
+          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+            {mode}
+          </span>
+        )}
       </div>
 
       {result.errors.length > 0 && (
@@ -1473,14 +1554,21 @@ function PipelineResultDisplay({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-type Props = {
-  entries:     CreativeLabEntry[];
-  jobsByAd:    Record<string, { copyJobs: JobWithVariations[]; imageJobs: JobWithVariations[] }>;
-  approvalMap: ApprovalMap;
-  allJobs:     JobWithVariations[];
+type ProviderConfig = {
+  openai:   { ready: boolean; message: string };
+  anthropic: { ready: boolean; message: string };
+  image:   { ready: boolean; message: string };
 };
 
-export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Props) {
+type Props = {
+  entries:        CreativeLabEntry[];
+  jobsByAd:       Record<string, { copyJobs: JobWithVariations[]; imageJobs: JobWithVariations[] }>;
+  approvalMap:    ApprovalMap;
+  allJobs:        JobWithVariations[];
+  providerConfig: ProviderConfig;
+};
+
+export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, providerConfig }: Props) {
   const router = useRouter();
 
   async function handleGenerateCopy(entry: CreativeLabEntry) {
@@ -1575,7 +1663,7 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
       <ProviderResponseParsingSection />
 
       {/* End-to-End Generation Pipeline */}
-      <EndToEndPipelineSection entries={entries} />
+      <EndToEndPipelineSection entries={entries} providerConfig={providerConfig} />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">

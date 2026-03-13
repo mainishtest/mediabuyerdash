@@ -3,8 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../lib/db";
 import { getCopyProvider, getImageProvider } from "../../lib/aiProvider";
+import { runRealGenerationPipeline } from "../../lib/pipeline";
+import {
+  getOpenAIConfig,
+  getAnthropicConfig,
+  getImagePlaceholderConfig
+} from "../../lib/providerExecution";
 import type { CreativeLabEntry } from "../../types/creativeDiagnosis";
 import type { CreativeApprovalStatus } from "../../types/aiProvider";
+import type { MockGenerationPipelineResult } from "../../types/pipeline";
 
 // ── Copy generation ──────────────────────────────────────────────────────────
 
@@ -135,4 +142,27 @@ export async function setApprovalAction(
   });
 
   revalidatePath("/creative-lab");
+}
+
+// ── Real generation pipeline ──────────────────────────────────────────────────
+
+export async function runRealPipelineAction(
+  entry: CreativeLabEntry,
+  requestType: "copy_generation" | "image_variation_generation",
+  provider: "openai_text" | "anthropic_text" | "image_provider_placeholder"
+): Promise<MockGenerationPipelineResult> {
+  return runRealGenerationPipeline({ entry, requestType, provider });
+}
+
+// ── Provider config status ────────────────────────────────────────────────────
+
+export async function getProviderConfigStatusAction() {
+  const openai = getOpenAIConfig();
+  const anthropic = getAnthropicConfig();
+  const image = getImagePlaceholderConfig();
+  return {
+    openai:   { ready: openai.ready, message: openai.message },
+    anthropic: { ready: anthropic.ready, message: anthropic.message },
+    image:    { ready: image.ready, message: image.message }
+  };
 }

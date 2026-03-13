@@ -4,9 +4,10 @@ import {
   generateCopyRecommendation,
   generateImageRecommendation
 } from "../../lib/creativeDiagnosisUtils";
-import type { CreativeLabEntry, CopyVariation, ImageVariationConcept } from "../../types/creativeDiagnosis";
+import type { CreativeLabEntry } from "../../types/creativeDiagnosis";
 import type { JobWithVariations, ApprovalMap } from "../../types/aiProvider";
 import { prisma } from "../../lib/db";
+import { getProviderConfigStatusAction } from "./actions";
 import { CreativeLabView } from "./CreativeLabView";
 
 export const metadata = {
@@ -77,12 +78,15 @@ export default async function CreativeLabPage() {
     };
   });
 
+  const providerConfig = await getProviderConfigStatusAction();
+
   return (
     <CreativeLabView
       entries={entries}
       jobsByAd={jobsByAd}
       approvalMap={approvalMap}
       allJobs={allJobs}
+      providerConfig={providerConfig}
     />
   );
 }
