@@ -7,7 +7,9 @@ import type { CampaignSummary } from "../../../lib/aggregations";
 import type { AdSetPerformanceSummary } from "../../../lib/data/adSetPerformance";
 import type { AdPerformanceSummary } from "../../../lib/data/adPerformance";
 import { evaluateEntity } from "../../../lib/evaluationUtils";
+import { generateOpportunities } from "../../../lib/optimizationUtils";
 import { EvaluationTable } from "../../components/EvaluationTable";
+import { OpportunityList } from "../../components/OpportunityList";
 import { formatCurrency, formatRoas } from "../../../lib/metricUtils";
 
 // --- Local types -------------------------------------------------------------
@@ -151,6 +153,14 @@ export function ClientDetailView({
       cpaGoalValue:        g.cpaGoalValue
     });
   });
+
+  // --- Derive optimization opportunities (reactive with goalOverrides) -------
+
+  const allOpportunities = [
+    ...generateOpportunities(campaignEvaluations, "campaign"),
+    ...generateOpportunities(adSetEvaluations, "adSet"),
+    ...generateOpportunities(adEvaluations, "ad")
+  ];
 
   // --- Tab definitions -------------------------------------------------------
 
@@ -305,6 +315,18 @@ export function ClientDetailView({
         {activeTab === "ads" && (
           <EvaluationTable evaluations={adEvaluations} showParent />
         )}
+      </section>
+
+      {/* Optimization Opportunities */}
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-semibold text-slate-50">
+          Optimization Opportunities
+        </h2>
+        <p className="mb-4 text-sm text-slate-400">
+          Deterministic actions derived from current goal evaluation. Updates
+          instantly when you change campaign goals above.
+        </p>
+        <OpportunityList opportunities={allOpportunities} />
       </section>
 
       {/* Quick entity reference — collapsed into a simple summary row */}
