@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import type { MetaAdAccountConnection, CRMConnection, UTMAttribution, CRMPerformanceMetric, ReconciliationRecord, ConnectionStatus } from "../../types/integrations";
+import type { CRMConnection, UTMAttribution, ReconciliationRecord, ConnectionStatus } from "../../types/integrations";
+import type { MetaConnectionSession, MetaAccessibleAdAccount, MetaSyncStatus } from "../../types/metaConnection";
+import { MetaConnectionFlow } from "../components/MetaConnectionFlow";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // --- Style helpers -----------------------------------------------------------
@@ -27,36 +28,28 @@ function statusBadge(status: ConnectionStatus) {
 // --- Props -------------------------------------------------------------------
 
 type Props = {
-  metaAccounts:         MetaAdAccountConnection[];
+  // Meta connection flow
+  metaSession:          MetaConnectionSession;
+  accessibleAccounts:   MetaAccessibleAdAccount[];
+  initialSelectedIds:   string[];
+  syncStatuses:         MetaSyncStatus[];
+  // CRM + reporting sections
   crmConnections:       CRMConnection[];
   utmRows:              UTMAttribution[];
-  crmMetrics:           CRMPerformanceMetric[];
   reconciliationRecords: ReconciliationRecord[];
 };
 
 // --- Component ---------------------------------------------------------------
 
 export function IntegrationsView({
-  metaAccounts,
+  metaSession,
+  accessibleAccounts,
+  initialSelectedIds,
+  syncStatuses,
   crmConnections,
   utmRows,
-  crmMetrics,
   reconciliationRecords
 }: Props) {
-  // Local state for Meta account selection — no persistence yet.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(metaAccounts.filter((a) => a.isSelected).map((a) => a.id))
-  );
-
-  function toggleAccount(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   return (
     <>
       {/* Page header */}
@@ -71,67 +64,30 @@ export function IntegrationsView({
           Integrations
         </h1>
         <p className="mt-2 max-w-xl text-sm text-slate-300">
-          Manage connections to Meta ad accounts, CRM platforms, and review
-          UTM attribution and reconciliation data.
+          Connect Meta ad accounts, configure CRM data sources, and review
+          UTM attribution and revenue reconciliation.
         </p>
       </header>
 
-      {/* ── 1. Meta Ad Account Connection ──────────────────────────────────── */}
+      {/* ── 1. Meta Connection Flow ────────────────────────────────────────── */}
       <section className="mb-10">
         <h2 className="mb-1 text-xl font-semibold text-slate-50">
-          Meta Ad Account Connection
+          Meta Connection Flow
         </h2>
         <p className="mb-5 text-sm text-slate-400">
-          In the full flow, a user will authenticate via Facebook OAuth and see
-          all ad accounts they have access to. Select which accounts to include
-          in this dashboard. Changes are local-only until persistence is added.
+          Connect your Facebook account to discover accessible ad accounts,
+          select which ones to sync, and keep metric data up to date.
+          OAuth and sync execution are mocked — no real API calls are made yet.
         </p>
-
-        <div className="flex flex-col gap-3">
-          {metaAccounts.map((account) => {
-            const selected = selectedIds.has(account.id);
-            return (
-              <div
-                key={account.id}
-                className={`flex flex-wrap items-center gap-4 rounded-xl border px-5 py-4 transition-colors ${
-                  selected
-                    ? "border-emerald-700/60 bg-emerald-950/20"
-                    : "border-slate-800 bg-slate-900/60"
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-50">{account.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {account.id} · {account.currency} · {account.timezone}
-                    {account.businessName && ` · ${account.businessName}`}
-                  </p>
-                </div>
-                {selected && (
-                  <span className="rounded-full bg-emerald-900/60 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-                    Selected
-                  </span>
-                )}
-                <button
-                  onClick={() => toggleAccount(account.id)}
-                  className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-                    selected
-                      ? "border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                      : "bg-slate-700 text-slate-50 hover:bg-slate-600"
-                  }`}
-                >
-                  {selected ? "Remove" : "Add to Dashboard"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        <p className="mt-3 text-xs text-slate-500">
-          {selectedIds.size} of {metaAccounts.length} accounts selected
-        </p>
+        <MetaConnectionFlow
+          session={metaSession}
+          accessibleAccounts={accessibleAccounts}
+          initialSelectedIds={initialSelectedIds}
+          syncStatuses={syncStatuses}
+        />
       </section>
 
-      {/* ── 2. CRM Connection ──────────────────────────────────────────────── */}
+      {/* ── 2. CRM Connections ─────────────────────────────────────────────── */}
       <section className="mb-10">
         <h2 className="mb-1 text-xl font-semibold text-slate-50">
           CRM Connections
@@ -150,7 +106,9 @@ export function IntegrationsView({
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-slate-50">{crm.label}</p>
                 <p className="mt-0.5 text-xs text-slate-400">
-                  {crm.platform === "shopify" ? `Store: ${crm.storeUrl}` : `Endpoint: ${crm.apiEndpoint}`}
+                  {crm.platform === "shopify"
+                    ? `Store: ${crm.storeUrl}`
+                    : `Endpoint: ${crm.apiEndpoint}`}
                 </p>
               </div>
               {statusBadge(crm.status)}
@@ -202,7 +160,7 @@ export function IntegrationsView({
         </div>
       </section>
 
-      {/* ── 4. Reconciliation Preview ─────────────────────────────────────── */}
+      {/* ── 4. Meta vs CRM Reconciliation ─────────────────────────────────── */}
       <section className="mb-10">
         <h2 className="mb-1 text-xl font-semibold text-slate-50">
           Meta vs CRM Reconciliation

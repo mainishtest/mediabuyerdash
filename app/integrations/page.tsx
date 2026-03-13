@@ -1,10 +1,14 @@
 import {
-  availableMetaAccounts,
   crmConnections,
   utmAttributionRows,
-  crmPerformanceMetrics,
   reconciliationRecords
 } from "../../lib/data/integrations/index";
+import {
+  mockMetaSession,
+  mockAccessibleAccounts,
+  mockInitialSelectedIds,
+  mockSyncStatuses
+} from "../../lib/data/metaConnection";
 import { IntegrationsView } from "./IntegrationsView";
 
 export const metadata = {
@@ -14,10 +18,12 @@ export const metadata = {
 export default function IntegrationsPage() {
   return (
     <IntegrationsView
-      metaAccounts={availableMetaAccounts}
+      metaSession={mockMetaSession}
+      accessibleAccounts={mockAccessibleAccounts}
+      initialSelectedIds={mockInitialSelectedIds}
+      syncStatuses={mockSyncStatuses}
       crmConnections={crmConnections}
       utmRows={utmAttributionRows}
-      crmMetrics={crmPerformanceMetrics}
       reconciliationRecords={reconciliationRecords}
     />
   );
