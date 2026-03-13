@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createLaunchDraftAction } from "../launch-drafts/actions";
 
 type Run = {
   id: string;
@@ -195,6 +196,25 @@ function RunRow({ run }: { run: Run }) {
 }
 
 function RunDetail({ run }: { run: Run }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [draftMsg, setDraftMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const hasApproved = run.approvalDecisions.some((d) => d.decision === "approved");
+
+  function handleCreateDraft() {
+    setDraftMsg(null);
+    startTransition(async () => {
+      const result = await createLaunchDraftAction(run.id);
+      if ("error" in result) {
+        setDraftMsg({ ok: false, text: result.error });
+      } else {
+        setDraftMsg({ ok: true, text: "Draft created!" });
+        router.push(`/launch-drafts/${result.draftId}`);
+      }
+    });
+  }
+
   return (
     <div className="space-y-4 text-sm">
       {run.promptSnapshot && (
@@ -292,6 +312,24 @@ function RunDetail({ run }: { run: Run }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Create Launch Draft */}
+      {hasApproved && (
+        <div className="flex items-center gap-3 border-t border-slate-800 pt-3">
+          <button
+            onClick={handleCreateDraft}
+            disabled={isPending}
+            className="rounded-lg bg-sky-700 px-4 py-2 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+          >
+            {isPending ? "Creating…" : "Create Launch Draft from Approved Variants"}
+          </button>
+          {draftMsg && (
+            <span className={`text-xs ${draftMsg.ok ? "text-emerald-400" : "text-rose-400"}`}>
+              {draftMsg.text}
+            </span>
+          )}
         </div>
       )}
     </div>

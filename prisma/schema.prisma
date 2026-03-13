@@ -360,3 +360,44 @@ model SelectedCreativeVariant {
 
   @@unique([generationRunId, variationType])
 }
+
+// ── Test Launch Workflow ───────────────────────────────────────────────────────
+
+// A launch draft packages one or more approved creative variants into a
+// launch-ready test. It is NOT published to Meta yet; it is preparation only.
+model LaunchDraft {
+  id              String   @id @default(cuid())
+  draftName       String
+  clientAccountId String?
+  campaignId      String
+  adSetId         String?
+  baseAdId        String
+  baseAdName      String
+  objectiveMetric String?
+  source          String   // generated_copy | generated_image | generated_both | manual
+  status          String   @default("draft") // draft | ready | archived
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variants LaunchDraftVariant[]
+}
+
+// A single creative variant within a launch draft.
+// Copy/image content is denormalized at creation for self-contained previews.
+// copyVariationId / imageVariationId trace back to the generation audit trail.
+model LaunchDraftVariant {
+  id                  String   @id @default(cuid())
+  launchDraftId       String
+  copyVariationId     String?
+  imageVariationId    String?
+  variantName         String
+  hook                String?
+  body                String?
+  callToAction        String?
+  imageConceptTitle   String?
+  imageConceptSummary String?
+  selectedForLaunch   Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  draft LaunchDraft @relation(fields: [launchDraftId], references: [id], onDelete: Cascade)
+}

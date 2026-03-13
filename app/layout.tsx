@@ -58,6 +58,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             Optimization Lab
           </Link>
+          <Link
+            href="/creative-history"
+            className="rounded-md px-3 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+          >
+            Gen History
+          </Link>
+          <Link
+            href="/launch-drafts"
+            className="rounded-md px-3 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+          >
+            Launch Drafts
+          </Link>
         </nav>
 
         <main className="app-main">
