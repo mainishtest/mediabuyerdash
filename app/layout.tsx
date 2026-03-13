@@ -70,6 +70,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             Launch Drafts
           </Link>
+          <Link
+            href="/creative-intelligence"
+            className="rounded-md px-3 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+          >
+            Intelligence
+          </Link>
         </nav>
 
         <main className="app-main">
