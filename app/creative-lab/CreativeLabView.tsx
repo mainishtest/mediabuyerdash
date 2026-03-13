@@ -16,6 +16,15 @@ import {
   generateImageVariationsAction,
   setApprovalAction
 } from "./actions";
+import {
+  assembleCopyGenerationContext,
+  assembleImageGenerationContext
+} from "../../lib/promptAssemblyUtils";
+import type {
+  CopyGenerationContext,
+  ImageGenerationContext,
+  PromptAssemblyResult
+} from "../../types/promptAssembly";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -408,6 +417,150 @@ function AdEntryCard({
   );
 }
 
+// ── AI Input Assembly Preview ─────────────────────────────────────────────────
+
+function AIAssemblyPreviewSection({ entries }: { entries: CreativeLabEntry[] }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [copyResult, setCopyResult] = useState<PromptAssemblyResult<CopyGenerationContext> | null>(null);
+  const [imageResult, setImageResult] = useState<PromptAssemblyResult<ImageGenerationContext> | null>(null);
+
+  const entry = entries[selectedIndex] ?? null;
+
+  function handleAssembleCopy() {
+    if (!entry) return;
+    setCopyResult(assembleCopyGenerationContext(entry));
+  }
+
+  function handleAssembleImage() {
+    if (!entry) return;
+    setImageResult(assembleImageGenerationContext(entry));
+  }
+
+  return (
+    <section className="mb-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="mb-2 text-xl font-semibold text-slate-50">
+        AI Input Assembly Preview
+      </h2>
+      <p className="mb-4 text-sm text-slate-400">
+        Assemble structured context for copy and image generation. This context will later be passed into real AI provider requests.
+      </p>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-500">No ads available to assemble.</p>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-400">Select ad:</label>
+            <select
+              value={selectedIndex}
+              onChange={(e) => {
+                setSelectedIndex(Number(e.target.value));
+                setCopyResult(null);
+                setImageResult(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {entries.map((e, i) => (
+                <option key={e.input.adId} value={i}>
+                  {e.input.adName} ({e.input.adId})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleAssembleCopy}
+              className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100"
+            >
+              Assemble Copy Input
+            </button>
+            <button
+              type="button"
+              onClick={handleAssembleImage}
+              className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100"
+            >
+              Assemble Image Input
+            </button>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Copy assembly result */}
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-violet-400">
+                Copy Generation Context
+              </h3>
+              {copyResult ? (
+                <AssemblyResultDisplay result={copyResult} type="copy" />
+              ) : (
+                <p className="text-sm text-slate-500">Click &quot;Assemble Copy Input&quot; to build context.</p>
+              )}
+            </div>
+
+            {/* Image assembly result */}
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-blue-400">
+                Image Generation Context
+              </h3>
+              {imageResult ? (
+                <AssemblyResultDisplay result={imageResult} type="image" />
+              ) : (
+                <p className="text-sm text-slate-500">Click &quot;Assemble Image Input&quot; to build context.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function AssemblyResultDisplay<T extends CopyGenerationContext | ImageGenerationContext>({
+  result,
+  type
+}: {
+  result: PromptAssemblyResult<T>;
+  type: "copy" | "image";
+}) {
+  const readyColor = result.ready ? "text-emerald-400" : "text-amber-400";
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-medium ${readyColor}`}>
+          {result.ready ? "Ready" : "Not ready"}
+        </span>
+        <span className="text-xs text-slate-500">
+          Source: ad {result.sourceIds.adId}, campaign {result.sourceIds.campaignId}
+        </span>
+      </div>
+      {result.missingFields.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Missing fields:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.missingFields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result.warnings.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Warnings:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <p className="mb-2 text-xs font-medium text-slate-500">Assembled context (JSON):</p>
+        <pre className="max-h-64 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 font-mono text-xs text-slate-300">
+          {JSON.stringify(result.context, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -498,6 +651,9 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
           </div>
         )}
       </section>
+
+      {/* AI Input Assembly Preview */}
+      <AIAssemblyPreviewSection entries={entries} />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
