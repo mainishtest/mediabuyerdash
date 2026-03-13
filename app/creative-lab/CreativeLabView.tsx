@@ -20,11 +20,14 @@ import {
   assembleCopyGenerationContext,
   assembleImageGenerationContext
 } from "../../lib/promptAssemblyUtils";
+import { getActiveTemplate } from "../../lib/prompts/registry";
+import { renderCopyPrompt, renderImagePrompt } from "../../lib/promptRenderUtils";
 import type {
   CopyGenerationContext,
   ImageGenerationContext,
   PromptAssemblyResult
 } from "../../types/promptAssembly";
+import type { PromptRenderResult } from "../../types/promptTemplate";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -561,6 +564,178 @@ function AssemblyResultDisplay<T extends CopyGenerationContext | ImageGeneration
   );
 }
 
+// ── Prompt Template Preview ──────────────────────────────────────────────────
+
+function PromptTemplatePreviewSection({ entries }: { entries: CreativeLabEntry[] }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [copyRenderResult, setCopyRenderResult] = useState<PromptRenderResult | null>(null);
+  const [imageRenderResult, setImageRenderResult] = useState<PromptRenderResult | null>(null);
+
+  const entry = entries[selectedIndex] ?? null;
+  const copyTemplate = getActiveTemplate("copy_generation");
+  const imageTemplate = getActiveTemplate("image_variation_generation");
+
+  function handleRenderCopy() {
+    if (!entry || !copyTemplate || copyTemplate.version.templateType !== "copy_generation") return;
+    const assembly = assembleCopyGenerationContext(entry);
+    const result = renderCopyPrompt(copyTemplate, assembly.context);
+    setCopyRenderResult(result);
+  }
+
+  function handleRenderImage() {
+    if (!entry || !imageTemplate || imageTemplate.version.templateType !== "image_variation_generation") return;
+    const assembly = assembleImageGenerationContext(entry);
+    const result = renderImagePrompt(imageTemplate, assembly.context);
+    setImageRenderResult(result);
+  }
+
+  return (
+    <section className="mb-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="mb-2 text-xl font-semibold text-slate-50">
+        Prompt Template Preview
+      </h2>
+      <p className="mb-4 text-sm text-slate-400">
+        Rendered prompts from versioned templates. This prompt layer will later feed provider-specific AI generation requests.
+      </p>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-500">No ads available.</p>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-400">Select ad:</label>
+            <select
+              value={selectedIndex}
+              onChange={(e) => {
+                setSelectedIndex(Number(e.target.value));
+                setCopyRenderResult(null);
+                setImageRenderResult(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {entries.map((e, i) => (
+                <option key={e.input.adId} value={i}>
+                  {e.input.adName} ({e.input.adId})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleRenderCopy}
+              disabled={!copyTemplate}
+              className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
+            >
+              Render Copy Prompt
+            </button>
+            <button
+              type="button"
+              onClick={handleRenderImage}
+              disabled={!imageTemplate}
+              className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
+            >
+              Render Image Prompt
+            </button>
+          </div>
+
+          <div className="mb-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-widest text-violet-400">
+                Active Copy Template
+              </h3>
+              {copyTemplate ? (
+                <div className="space-y-1 text-xs text-slate-400">
+                  <p><span className="text-slate-500">Title:</span> {copyTemplate.version.title}</p>
+                  <p><span className="text-slate-500">Version:</span> {copyTemplate.version.version}</p>
+                  <p><span className="text-slate-500">Principles:</span> {copyTemplate.metadata.creativePrinciplesIncluded.join(", ")}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No copy template available.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-widest text-blue-400">
+                Active Image Template
+              </h3>
+              {imageTemplate ? (
+                <div className="space-y-1 text-xs text-slate-400">
+                  <p><span className="text-slate-500">Title:</span> {imageTemplate.version.title}</p>
+                  <p><span className="text-slate-500">Version:</span> {imageTemplate.version.version}</p>
+                  <p><span className="text-slate-500">Principles:</span> {imageTemplate.metadata.creativePrinciplesIncluded.join(", ")}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No image template available.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-violet-400">
+                Rendered Copy Prompt
+              </h3>
+              {copyRenderResult ? (
+                <PromptRenderResultDisplay result={copyRenderResult} />
+              ) : (
+                <p className="text-sm text-slate-500">Click &quot;Render Copy Prompt&quot; to generate.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-blue-400">
+                Rendered Image Prompt
+              </h3>
+              {imageRenderResult ? (
+                <PromptRenderResultDisplay result={imageRenderResult} />
+              ) : (
+                <p className="text-sm text-slate-500">Click &quot;Render Image Prompt&quot; to generate.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function PromptRenderResultDisplay({ result }: { result: PromptRenderResult }) {
+  const hasIssues = result.missingFields.length > 0 || result.warnings.length > 0;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-medium ${hasIssues ? "text-amber-400" : "text-emerald-400"}`}>
+          {hasIssues ? "Rendered with warnings" : "Ready"}
+        </span>
+        <span className="text-xs text-slate-500">v{result.templateVersion}</span>
+      </div>
+      {result.missingFields.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Missing fields:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.missingFields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result.warnings.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Warnings:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {result.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <p className="mb-2 text-xs font-medium text-slate-500">Full prompt:</p>
+        <pre className="max-h-80 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 font-mono text-xs text-slate-300 whitespace-pre-wrap">
+          {result.fullPrompt}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -654,6 +829,9 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
 
       {/* AI Input Assembly Preview */}
       <AIAssemblyPreviewSection entries={entries} />
+
+      {/* Prompt Template Preview */}
+      <PromptTemplatePreviewSection entries={entries} />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
