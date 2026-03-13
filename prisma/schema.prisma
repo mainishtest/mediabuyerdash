@@ -211,3 +211,39 @@ model ReconciliationResult {
 
   clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id])
 }
+
+// ── AI generation & approval ───────────────────────────────────────────────────
+
+model AIGenerationJob {
+  id               String    @id @default(cuid())
+  entityType       String    // ad
+  entityId         String    // adId
+  requestType      String    // copy | image
+  provider         String    // mock | openai | anthropic | image_provider_placeholder
+  status           String    // idle | queued | running | completed | failed
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+  responseSnapshot String?   // JSON string of generated variations/concepts
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  approvals CreativeApproval[]
+}
+
+model CreativeApproval {
+  id          String   @id @default(cuid())
+  jobId       String
+  variationId String   // id of CopyVariation or ImageVariationConcept
+  entityType  String   // copy | image
+  adId        String
+  status      String   // draft | approved | rejected
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  job AIGenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, variationId])
+}
