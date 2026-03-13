@@ -9,6 +9,9 @@ import { imageVariationV1 } from "./templates/imageVariationV1";
 
 export type ActiveTemplate = CopyPromptTemplate | ImagePromptTemplate;
 
+export function getActiveTemplate(type: "copy_generation"): CopyPromptTemplate | null;
+export function getActiveTemplate(type: "image_variation_generation"): ImagePromptTemplate | null;
+export function getActiveTemplate(type: PromptTemplateType): ActiveTemplate | null;
 export function getActiveTemplate(type: PromptTemplateType): ActiveTemplate | null {
   switch (type) {
     case "copy_generation":
