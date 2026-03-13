@@ -22,12 +22,21 @@ import {
 } from "../../lib/promptAssemblyUtils";
 import { getActiveTemplate } from "../../lib/prompts/registry";
 import { renderCopyPrompt, renderImagePrompt } from "../../lib/promptRenderUtils";
+import {
+  formatForProvider,
+  toPayloadPreview
+} from "../../lib/providerFormat";
 import type {
   CopyGenerationContext,
   ImageGenerationContext,
   PromptAssemblyResult
 } from "../../types/promptAssembly";
 import type { PromptRenderResult } from "../../types/promptTemplate";
+import type {
+  ProviderAdapterType,
+  ProviderRequestType,
+  ProviderPayloadPreview
+} from "../../types/providerFormat";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -736,6 +745,187 @@ function PromptRenderResultDisplay({ result }: { result: PromptRenderResult }) {
   );
 }
 
+// ── Provider Payload Preview ───────────────────────────────────────────────────
+
+const PROVIDER_OPTIONS: { value: ProviderAdapterType; label: string }[] = [
+  { value: "openai_text", label: "OpenAI (text)" },
+  { value: "anthropic_text", label: "Anthropic (text)" },
+  { value: "image_provider_placeholder", label: "Image (placeholder)" }
+];
+
+const REQUEST_TYPE_OPTIONS: { value: ProviderRequestType; label: string }[] = [
+  { value: "copy_generation", label: "Copy generation" },
+  { value: "image_variation_generation", label: "Image variation" }
+];
+
+function ProviderPayloadPreviewSection({ entries }: { entries: CreativeLabEntry[] }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [provider, setProvider] = useState<ProviderAdapterType>("openai_text");
+  const [requestType, setRequestType] = useState<ProviderRequestType>("copy_generation");
+  const [preview, setPreview] = useState<ProviderPayloadPreview | null>(null);
+
+  const entry = entries[selectedIndex] ?? null;
+  const copyTemplate = getActiveTemplate("copy_generation");
+  const imageTemplate = getActiveTemplate("image_variation_generation");
+
+  function handleFormatCopy() {
+    if (!entry || !copyTemplate || copyTemplate.version.templateType !== "copy_generation") return;
+    const assembly = assembleCopyGenerationContext(entry);
+    const renderResult = renderCopyPrompt(copyTemplate, assembly.context);
+    const result = formatForProvider(renderResult, assembly.context, provider, "copy_generation");
+    if (result) {
+      setPreview(toPayloadPreview(result, renderResult.fullPrompt));
+    } else {
+      setPreview(null);
+    }
+  }
+
+  function handleFormatImage() {
+    if (!entry || !imageTemplate || imageTemplate.version.templateType !== "image_variation_generation") return;
+    const assembly = assembleImageGenerationContext(entry);
+    const renderResult = renderImagePrompt(imageTemplate, assembly.context);
+    const result = formatForProvider(renderResult, assembly.context, provider, "image_variation_generation");
+    if (result) {
+      setPreview(toPayloadPreview(result, renderResult.fullPrompt));
+    } else {
+      setPreview(null);
+    }
+  }
+
+  return (
+    <section className="mb-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="mb-2 text-xl font-semibold text-slate-50">
+        Provider Payload Preview
+      </h2>
+      <p className="mb-4 text-sm text-slate-400">
+        This layer keeps internal prompt logic separate from provider-specific request formatting. No real API calls.
+      </p>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-500">No ads available.</p>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-400">Select ad:</label>
+            <select
+              value={selectedIndex}
+              onChange={(e) => {
+                setSelectedIndex(Number(e.target.value));
+                setPreview(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {entries.map((e, i) => (
+                <option key={e.input.adId} value={i}>
+                  {e.input.adName} ({e.input.adId})
+                </option>
+              ))}
+            </select>
+            <label className="text-sm text-slate-400">Provider:</label>
+            <select
+              value={provider}
+              onChange={(e) => {
+                setProvider(e.target.value as ProviderAdapterType);
+                setPreview(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {PROVIDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <label className="text-sm text-slate-400">Request type:</label>
+            <select
+              value={requestType}
+              onChange={(e) => {
+                setRequestType(e.target.value as ProviderRequestType);
+                setPreview(null);
+              }}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              {REQUEST_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleFormatCopy}
+              disabled={!copyTemplate}
+              className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
+            >
+              Format Copy Request
+            </button>
+            <button
+              type="button"
+              onClick={handleFormatImage}
+              disabled={!imageTemplate}
+              className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
+            >
+              Format Image Request
+            </button>
+          </div>
+
+          {preview ? (
+            <ProviderPayloadDisplay preview={preview} />
+          ) : (
+            <p className="text-sm text-slate-500">
+              Select an ad, provider, and request type, then click &quot;Format Copy Request&quot; or &quot;Format Image Request&quot;.
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function ProviderPayloadDisplay({ preview }: { preview: ProviderPayloadPreview }) {
+  const hasIssues = preview.missingFields.length > 0 || preview.warnings.length > 0;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`text-sm font-medium ${hasIssues ? "text-amber-400" : "text-emerald-400"}`}>
+          {preview.readiness ? "Ready" : "Not ready"}
+        </span>
+        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+          {preview.provider} · {preview.requestType}
+        </span>
+      </div>
+      {preview.warnings.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Warnings:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {preview.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview.missingFields.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Missing fields:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {preview.missingFields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+        <p className="mb-2 text-xs font-medium text-slate-500">Internal prompt (rendered):</p>
+        <pre className="max-h-40 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 font-mono text-xs text-slate-300 whitespace-pre-wrap">
+          {preview.internalPrompt}
+        </pre>
+      </div>
+      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+        <p className="mb-2 text-xs font-medium text-slate-500">Formatted provider payload:</p>
+        <pre className="max-h-64 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 font-mono text-xs text-slate-300">
+          {preview.payloadJson}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -832,6 +1022,9 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
 
       {/* Prompt Template Preview */}
       <PromptTemplatePreviewSection entries={entries} />
+
+      {/* Provider Payload Preview */}
+      <ProviderPayloadPreviewSection entries={entries} />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
