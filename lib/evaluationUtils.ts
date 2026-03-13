@@ -1,6 +1,11 @@
 // Goal-aware evaluation logic.
 // Accepts plain inputs so the same core function works for campaigns,
 // ad sets, and ads without duplicating logic.
+//
+// MEASUREMENT POLICY: actualRoas and actualCpa passed to evaluateEntity()
+// must be sourced from CRM-verified data per the global measurement policy.
+// See lib/measurementPolicy.ts — use buildEvaluationMetricSet() to derive
+// these values so the CRM source-of-truth rule is enforced at the call site.
 
 // --- Types -------------------------------------------------------------------
 

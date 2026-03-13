@@ -1,3 +1,9 @@
+// MEASUREMENT POLICY: dayparting analysis must always operate in the
+// ad account's timezone. See getDaypartingTimezoneSource() in
+// lib/measurementPolicy.ts. When real Meta data is connected, ensure
+// HourlyMetric.hour values are normalized to the account timezone before
+// being passed into these functions.
+
 import type { HourlyMetric, Weekday } from "../types/media";
 import { formatCurrency, formatHour, formatRoas } from "./metricUtils";
 
