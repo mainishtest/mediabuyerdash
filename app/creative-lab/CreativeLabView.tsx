@@ -1587,7 +1587,7 @@ function PipelineResultDisplay({
         </button>
         {traceOpen && (
           <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-950/60 p-4">
-            {result.trace.diagnosis && (
+            {result.trace.diagnosis != null && (
               <div>
                 <p className="mb-1 text-xs font-medium text-slate-500">Diagnosis:</p>
                 <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
@@ -1595,7 +1595,7 @@ function PipelineResultDisplay({
                 </pre>
               </div>
             )}
-            {result.trace.assembledContext && (
+            {result.trace.assembledContext != null && (
               <div>
                 <p className="mb-1 text-xs font-medium text-slate-500">Assembled context:</p>
                 <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
@@ -1611,7 +1611,7 @@ function PipelineResultDisplay({
                 </pre>
               </div>
             )}
-            {result.trace.formattedPayload && (
+            {result.trace.formattedPayload != null && (
               <div>
                 <p className="mb-1 text-xs font-medium text-slate-500">Formatted provider payload:</p>
                 <pre className="max-h-24 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
@@ -1619,7 +1619,7 @@ function PipelineResultDisplay({
                 </pre>
               </div>
             )}
-            {result.trace.rawMockResponse && (
+            {result.trace.rawMockResponse != null && (
               <div>
                 <p className="mb-1 text-xs font-medium text-slate-500">Raw mock response:</p>
                 <pre className="max-h-32 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">
@@ -1627,7 +1627,7 @@ function PipelineResultDisplay({
                 </pre>
               </div>
             )}
-            {result.trace.parsedOutput && (
+            {result.trace.parsedOutput != null && (
               <div>
                 <p className="mb-1 text-xs font-medium text-slate-500">Parsed normalized output:</p>
                 <pre className="max-h-32 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-2 font-mono text-xs text-slate-300">

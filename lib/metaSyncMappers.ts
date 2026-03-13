@@ -72,6 +72,7 @@ export interface MappedUTMPerformanceRow {
   id:              string;
   clientAccountId: string;
   date:            string;
+  hour?:           number | null;
   campaignId:      string;
   campaignName:    string;
   adSetId:         string | null;

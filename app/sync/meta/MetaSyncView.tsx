@@ -255,7 +255,7 @@ export function MetaSyncView({ payload, job, batch, summary }: Props) {
                     className={i < batch.hourlyMetrics.length - 1 ? "border-b border-slate-800" : ""}
                   >
                     <td className={`${TD} text-slate-500`}>{m.date}</td>
-                    <td className={TD}>{m.hour}:00</td>
+                    <td className={TD}>{m.hour != null ? `${m.hour}:00` : "—"}</td>
                     <td className={`${TD} max-w-[160px] truncate`}>{m.campaignName}</td>
                     <td className={`${TD} max-w-[140px] truncate`}>{m.adSetName ?? "—"}</td>
                     <td className={TD}>{formatCurrency(m.spend)}</td>
