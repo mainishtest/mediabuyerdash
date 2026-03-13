@@ -3,6 +3,7 @@ import { MetricStat } from "./components/MetricStat";
 import { HourlyRow } from "./components/HourlyRow";
 import { FilterableAnalysis } from "./components/FilterableAnalysis";
 import { DataModelPreview } from "./components/DataModelPreview";
+import { IngestionPreview } from "./components/IngestionPreview";
 import { adAccounts, campaigns, adSets, ads, creatives } from "../lib/sampleData";
 import { dailyMetrics, hourlyMetrics } from "../lib/sampleMetrics";
 import {
@@ -14,16 +15,37 @@ import {
   formatRoas,
   formatHour
 } from "../lib/metricUtils";
+import {
+  mockRawAccounts,
+  mockRawCampaigns,
+  mockRawAdSets,
+  mockRawAds,
+  mockRawCreatives,
+  mockRawHourlyMetrics
+} from "../lib/mockRawData";
+import {
+  mapAllRawCampaigns,
+  mapAllRawAds,
+  mapAllRawHourlyMetrics,
+  mapRawCampaignToCampaign
+} from "../lib/adapters";
 
 export default function Page() {
+  // --- existing sample data counts ---
   const accountCount  = adAccounts.length;
   const campaignCount = campaigns.length;
   const creativeCount = creatives.length;
 
+  // --- existing metric summaries ---
   const spend       = totalSpend(dailyMetrics);
   const conversions = totalConversions(dailyMetrics);
   const cpa         = averageCpa(dailyMetrics);
   const roas        = averageRoas(dailyMetrics);
+
+  // --- adapter: map raw payload to internal models ---
+  const mappedCampaigns     = mapAllRawCampaigns(mockRawCampaigns);
+  const mappedAds           = mapAllRawAds(mockRawAds);
+  const mappedHourlyMetrics = mapAllRawHourlyMetrics(mockRawHourlyMetrics);
 
   return (
     <>
@@ -34,8 +56,8 @@ export default function Page() {
         </h1>
         <p className="mt-2 max-w-xl text-sm text-slate-300">
           Foundation overview of ad accounts, campaigns, creatives, performance
-          metrics, dayparting analysis, and rule-based optimization
-          recommendations.
+          metrics, dayparting analysis, rule-based recommendations, and
+          ingestion-ready adapter layer.
         </p>
       </header>
 
@@ -96,13 +118,34 @@ export default function Page() {
       <div className="mb-10">
         <DataModelPreview
           counts={{
-            accounts:     adAccounts.length,
-            campaigns:    campaigns.length,
-            adSets:       adSets.length,
-            ads:          ads.length,
-            creatives:    creatives.length,
+            accounts:      adAccounts.length,
+            campaigns:     campaigns.length,
+            adSets:        adSets.length,
+            ads:           ads.length,
+            creatives:     creatives.length,
             hourlyMetrics: hourlyMetrics.length
           }}
+        />
+      </div>
+
+      {/* Adapter ingestion preview */}
+      <div className="mb-10">
+        <IngestionPreview
+          rawCounts={{
+            accounts:     mockRawAccounts.length,
+            campaigns:    mockRawCampaigns.length,
+            adSets:       mockRawAdSets.length,
+            ads:          mockRawAds.length,
+            creatives:    mockRawCreatives.length,
+            hourlyMetrics: mockRawHourlyMetrics.length
+          }}
+          mappedCounts={{
+            campaigns:    mappedCampaigns.length,
+            ads:          mappedAds.length,
+            hourlyMetrics: mappedHourlyMetrics.length
+          }}
+          rawCampaignSample={mockRawCampaigns[0]}
+          mappedCampaignSample={mapRawCampaignToCampaign(mockRawCampaigns[0])}
         />
       </div>
 
