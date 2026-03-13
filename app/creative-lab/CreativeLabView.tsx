@@ -37,6 +37,17 @@ import type {
   ProviderRequestType,
   ProviderPayloadPreview
 } from "../../types/providerFormat";
+import {
+  parseProviderResponse,
+  toParsedPreview,
+  MOCK_OPENAI_COPY_RESPONSE,
+  MOCK_ANTHROPIC_COPY_RESPONSE,
+  MOCK_PLACEHOLDER_IMAGE_RESPONSE
+} from "../../lib/providerParse";
+import type {
+  ProviderResponseType,
+  ParsedVariationPreview
+} from "../../types/providerParse";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -926,6 +937,173 @@ function ProviderPayloadDisplay({ preview }: { preview: ProviderPayloadPreview }
   );
 }
 
+// ── Provider Response Parsing Preview ──────────────────────────────────────────
+
+const PARSE_PROVIDER_OPTIONS: { value: ProviderResponseType; label: string }[] = [
+  { value: "openai_text_response", label: "OpenAI (text)" },
+  { value: "anthropic_text_response", label: "Anthropic (text)" },
+  { value: "image_provider_placeholder_response", label: "Image (placeholder)" }
+];
+
+const PARSE_REQUEST_OPTIONS = [
+  { value: "copy_generation" as const, label: "Copy generation" },
+  { value: "image_variation_generation" as const, label: "Image variation" }
+];
+
+function ProviderResponseParsingSection() {
+  const [provider, setProvider] = useState<ProviderResponseType>("openai_text_response");
+  const [requestType, setRequestType] = useState<"copy_generation" | "image_variation_generation">("copy_generation");
+  const [preview, setPreview] = useState<ParsedVariationPreview | null>(null);
+
+  function handleParseCopy() {
+    const raw = provider === "openai_text_response" ? MOCK_OPENAI_COPY_RESPONSE : MOCK_ANTHROPIC_COPY_RESPONSE;
+    const result = parseProviderResponse(raw, provider, "copy_generation");
+    if (result) setPreview(toParsedPreview(result));
+    else setPreview(null);
+  }
+
+  function handleParseImage() {
+    const result = parseProviderResponse(MOCK_PLACEHOLDER_IMAGE_RESPONSE, "image_provider_placeholder_response", "image_variation_generation");
+    if (result) setPreview(toParsedPreview(result));
+    else setPreview(null);
+  }
+
+  return (
+    <section className="mb-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 className="mb-2 text-xl font-semibold text-slate-50">
+        Provider Response Parsing Preview
+      </h2>
+      <p className="mb-4 text-sm text-slate-400">
+        This parsing layer keeps provider-specific output handling separate from internal app models. No real API calls.
+      </p>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-sm text-slate-400">Provider:</label>
+        <select
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value as ProviderResponseType);
+            setPreview(null);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+        >
+          {PARSE_PROVIDER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <label className="text-sm text-slate-400">Response type:</label>
+        <select
+          value={requestType}
+          onChange={(e) => {
+            setRequestType(e.target.value as "copy_generation" | "image_variation_generation");
+            setPreview(null);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-slate-600 focus:outline-none"
+        >
+          {PARSE_REQUEST_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleParseCopy}
+          disabled={requestType !== "copy_generation" || provider === "image_provider_placeholder_response"}
+          className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
+        >
+          Parse Copy Response
+        </button>
+        <button
+          type="button"
+          onClick={handleParseImage}
+          disabled={requestType !== "image_variation_generation" || provider !== "image_provider_placeholder_response"}
+          className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
+        >
+          Parse Image Response
+        </button>
+      </div>
+
+      {preview ? (
+        <ParsedVariationDisplay preview={preview} />
+      ) : (
+        <p className="text-sm text-slate-500">
+          Select provider and response type, then click &quot;Parse Copy Response&quot; or &quot;Parse Image Response&quot;.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ParsedVariationDisplay({ preview }: { preview: ParsedVariationPreview }) {
+  const hasIssues = preview.errors.length > 0 || preview.warnings.length > 0;
+  const isCopy = preview.requestType === "copy_generation";
+  const variations = preview.variations;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`text-sm font-medium ${hasIssues ? "text-amber-400" : "text-emerald-400"}`}>
+          {preview.readiness ? "Ready" : "Not ready"}
+        </span>
+        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+          {preview.provider} · {preview.requestType}
+        </span>
+      </div>
+      {preview.errors.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-rose-400">Errors:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {preview.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview.warnings.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-amber-400">Warnings:</p>
+          <ul className="list-inside list-disc text-xs text-slate-400">
+            {preview.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+        <p className="mb-2 text-xs font-medium text-slate-500">Raw provider response:</p>
+        <pre className="max-h-48 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 font-mono text-xs text-slate-300">
+          {preview.rawPreview}
+        </pre>
+      </div>
+      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+        <p className="mb-2 text-xs font-medium text-slate-500">Parsed normalized output:</p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {isCopy
+            ? (variations as CopyVariation[]).map((v) => (
+                <div key={v.id} className="rounded-lg border border-violet-800/40 bg-violet-950/20 p-3">
+                  <p className="mb-2 text-xs font-semibold text-violet-400">{v.title}</p>
+                  <p className="mb-1 text-xs text-slate-400">Hook:</p>
+                  <p className="mb-2 text-sm italic text-slate-200">&quot;{v.hook}&quot;</p>
+                  <p className="mb-1 text-xs text-slate-400">Body:</p>
+                  <p className="mb-2 text-sm text-slate-300">{v.body}</p>
+                  <p className="text-xs font-medium text-violet-300">CTA: {v.callToAction}</p>
+                </div>
+              ))
+            : (variations as ImageVariationConcept[]).map((v) => (
+                <div key={v.id} className="rounded-lg border border-blue-800/40 bg-blue-950/20 p-3">
+                  <p className="mb-2 text-xs font-semibold text-blue-400">{v.title}</p>
+                  <p className="mb-1 text-xs text-slate-400">Concept:</p>
+                  <p className="mb-2 text-sm text-slate-200">{v.conceptSummary}</p>
+                  <p className="mb-1 text-xs text-slate-400">Visual changes:</p>
+                  <p className="mb-2 text-sm text-slate-300">{v.visualChanges}</p>
+                  <p className="text-xs font-medium text-blue-300">Goal: {v.goal}</p>
+                </div>
+              ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -1025,6 +1203,9 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs }: Pro
 
       {/* Provider Payload Preview */}
       <ProviderPayloadPreviewSection entries={entries} />
+
+      {/* Provider Response Parsing Preview */}
+      <ProviderResponseParsingSection />
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
