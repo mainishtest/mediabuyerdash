@@ -40,11 +40,12 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "System",
     items: [
-      { href: "/reconciliation", label: "Reconciliation" },
-      { href: "/reporting",      label: "Reporting"      },
-      { href: "/integrations",   label: "Integrations"   },
-      { href: "/sync/meta",      label: "Meta Sync"      },
-      { href: "/ui-preview",     label: "UI Preview"     },
+      { href: "/reconciliation",  label: "Reconciliation"    },
+      { href: "/reporting",       label: "Reporting"         },
+      { href: "/integrations",    label: "Integrations"      },
+      { href: "/integrations/meta", label: "Meta Ads"        },
+      { href: "/sync/meta",       label: "Meta Sync"         },
+      { href: "/ui-preview",      label: "UI Preview"        },
     ],
   },
 ];

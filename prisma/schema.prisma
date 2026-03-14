@@ -21,10 +21,11 @@ model ClientAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  campaigns            Campaign[]
-  utmPerformanceRows   UTMPerformanceRow[]
-  crmPerformanceRows   CRMPerformanceRow[]
+  campaigns             Campaign[]
+  utmPerformanceRows    UTMPerformanceRow[]
+  crmPerformanceRows    CRMPerformanceRow[]
   reconciliationResults ReconciliationResult[]
+  metaSelectedAccounts  MetaSelectedAdAccount[]
 }
 
 model Campaign {
@@ -98,33 +99,54 @@ model Creative {
 
 // ── Meta connection ──────────────────────────────────────────────────────────
 
+// One record per connected Meta user. In practice the app supports one active
+// connection at a time.
+// WARNING: accessToken is stored in plaintext. Encrypt with a KMS key before
+// handling real production tokens.
 model MetaConnection {
-  id          String   @id @default(cuid())
-  userId      String
-  userName    String
-  userEmail   String
-  accessToken String?
-  connectedAt DateTime @default(now())
-  expiresAt   DateTime
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String    @id @default(cuid())
+  metaUserId       String    @unique
+  userDisplayName  String
+  connectionStatus String    @default("active") // active | expired | revoked
+  accessToken      String
+  tokenExpiresAt   DateTime?
+  scopes           String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  adAccountSelections MetaAdAccountSelection[]
+  accessibleAccounts MetaAccessibleAdAccount[]
+  selectedAccounts   MetaSelectedAdAccount[]
 }
 
-model MetaAdAccountSelection {
-  id                String    @id @default(cuid())
-  metaConnectionId String
-  adAccountId       String   // Meta format: act_XXXXXX
-  clientAccountId  String?  // optional mapping to ClientAccount
-  syncEnabled      Boolean  @default(true)
-  addedAt          DateTime @default(now())
-  lastSyncedAt     DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+// Ad accounts returned from /me/adaccounts. Refreshed on demand.
+model MetaAccessibleAdAccount {
+  id                  String   @id @default(cuid())
+  metaConnectionId    String
+  externalAdAccountId String   // Meta format: "act_XXXXXXXXXX"
+  accountName         String
+  accountStatus       Int      @default(1)
+  currency            String   @default("USD")
+  timezoneName        String   @default("UTC")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  metaConnection MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+  connection      MetaConnection        @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+  selectedAccount MetaSelectedAdAccount?
+
+  @@unique([metaConnectionId, externalAdAccountId])
+}
+
+// The subset of accessible accounts the operator has selected for the dashboard.
+model MetaSelectedAdAccount {
+  id                    String   @id @default(cuid())
+  metaConnectionId      String
+  accessibleAdAccountId String   @unique
+  clientAccountId       String?
+  selectedAt            DateTime @default(now())
+
+  connection          MetaConnection          @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+  accessibleAdAccount MetaAccessibleAdAccount @relation(fields: [accessibleAdAccountId], references: [id], onDelete: Cascade)
+  clientAccount       ClientAccount?          @relation(fields: [clientAccountId], references: [id])
 }
 
 // ── Reporting & reconciliation ────────────────────────────────────────────────

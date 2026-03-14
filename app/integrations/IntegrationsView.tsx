@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { CRMConnection, UTMAttribution, ReconciliationRecord, ConnectionStatus } from "../../types/integrations";
 import type { MetaConnectionSession, MetaAccessibleAdAccount, MetaSyncStatus } from "../../types/metaConnection";
 import { MetaConnectionFlow } from "../components/MetaConnectionFlow";
@@ -51,22 +50,22 @@ export function IntegrationsView({
   reconciliationRecords
 }: Props) {
   return (
-    <>
+    <div className="mx-auto max-w-6xl px-6 py-8 space-y-10">
       {/* Page header */}
-      <header className="mb-10">
-        <Link
-          href="/"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
-        >
-          ← Back to Dashboard
-        </Link>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
+      <header>
+        <h1 className="text-xl font-semibold tracking-tight text-white">
           Integrations
         </h1>
-        <p className="mt-2 max-w-xl text-sm text-slate-300">
+        <p className="mt-1.5 max-w-xl text-sm text-slate-400">
           Connect Meta ad accounts, configure CRM data sources, and review
           UTM attribution and revenue reconciliation.
         </p>
+        <a
+          href="/integrations/meta"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+        >
+          Meta Integration →
+        </a>
       </header>
 
       {/* ── 1. Meta Connection Flow ────────────────────────────────────────── */}
@@ -218,6 +217,6 @@ export function IntegrationsView({
           </table>
         </div>
       </section>
-    </>
+    </div>
   );
 }
