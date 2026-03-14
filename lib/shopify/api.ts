@@ -134,7 +134,7 @@ export async function fetchRecentOrders(
   const pageSize              = 50;
 
   while (hasNextPage) {
-    const data = await shopifyGraphQL<OrdersQueryData>(
+    const data: OrdersQueryData = await shopifyGraphQL<OrdersQueryData>(
       shopDomain,
       accessToken,
       ORDERS_QUERY,
@@ -145,7 +145,7 @@ export async function fetchRecentOrders(
       }
     );
 
-    allOrders.push(...data.orders.edges.map((e) => e.node));
+    allOrders.push(...data.orders.edges.map((e: { node: RawShopifyOrder }) => e.node));
     hasNextPage = data.orders.pageInfo.hasNextPage;
     cursor      = data.orders.pageInfo.endCursor;
   }

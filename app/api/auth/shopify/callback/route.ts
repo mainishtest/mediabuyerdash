@@ -1,7 +1,7 @@
 import { cookies }             from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyShopifyHmac, exchangeShopifyCode } from "../../../../lib/shopify/auth";
-import { upsertShopifyConnection }               from "../../../../lib/shopify/db";
+import { verifyShopifyHmac, exchangeShopifyCode } from "../../../../../lib/shopify/auth";
+import { upsertShopifyConnection }               from "../../../../../lib/shopify/db";
 
 export async function GET(request: NextRequest) {
   const url    = new URL(request.url);
