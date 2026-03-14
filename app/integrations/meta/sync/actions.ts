@@ -1,0 +1,28 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { runMetaSync, type SyncSummary } from "../../../../lib/meta/sync";
+import { isMetaConfigured }             from "../../../../lib/meta/config";
+
+const PAGE = "/integrations/meta/sync";
+
+export async function runMetaSyncAction(): Promise<SyncSummary> {
+  if (!isMetaConfigured()) {
+    return {
+      status:            "failed",
+      accountsProcessed: 0,
+      campaignsSynced:   0,
+      adSetsSynced:      0,
+      adsSynced:         0,
+      creativesSynced:   0,
+      insightRowsSynced: 0,
+      errors:            ["Meta credentials not configured (META_APP_ID / META_APP_SECRET missing)"],
+      startedAt:         new Date().toISOString(),
+      completedAt:       new Date().toISOString(),
+    };
+  }
+
+  const summary = await runMetaSync();
+  revalidatePath(PAGE);
+  return summary;
+}

@@ -130,3 +130,67 @@ New models added:
 - `MetaConnection` — the connected Meta user + token
 - `MetaAccessibleAdAccount` — ad accounts returned from `/me/adaccounts`
 - `MetaSelectedAdAccount` — the operator's account selection
+- `MetaSyncLog` — audit record for each sync run
+- `MetaSyncedCampaign` — campaigns synced from Meta
+- `MetaSyncedAdSet` — ad sets synced from Meta
+- `MetaSyncedAd` — ads synced from Meta
+- `MetaSyncedCreative` — creative metadata synced from Meta
+- `MetaSyncedInsight` — daily insight rows synced from Meta
+
+---
+
+## Running Your First Sync
+
+1. Complete the OAuth flow at `/integrations/meta`
+2. Select the ad accounts you want to sync
+3. Visit `/integrations/meta/sync`
+4. Click **Run Sync**
+
+The sync will:
+- Fetch all campaigns, ad sets, and ads for each selected account
+- Extract creative metadata embedded in the ads response
+- Fetch the last 7 days of daily insight data at the ad level
+- Write everything to Supabase (upsert on external IDs)
+- Record a `MetaSyncLog` entry with counts and any errors
+
+---
+
+## What Is Synced in This Version
+
+| Entity | Endpoint | Fields |
+|--------|----------|--------|
+| Campaigns | `GET /act_{id}/campaigns` | id, name, status, objective, buying_type, created/updated time |
+| Ad Sets | `GET /act_{id}/adsets` | id, name, status, campaign_id, created/updated time |
+| Ads | `GET /act_{id}/ads` | id, name, status, adset_id, campaign_id, creative{...} |
+| Creatives | Embedded in ads response | id, name, title, body, call_to_action_type, image_url, thumbnail_url |
+| Insights | `GET /act_{id}/insights` | spend, impressions, clicks, CTR, CPM, frequency — last 7 days, ad level |
+
+## What Is NOT Yet Synced
+
+- Budget fields (spend limits, daily/lifetime budgets)
+- Targeting details (audiences, placements, demographics)
+- Ad scheduling
+- Bid strategies
+- Account-level spend summaries
+- Historical insights beyond 7 days
+- Video/carousel creative details
+- Custom conversions / conversion events
+
+---
+
+## Sync Architecture
+
+```
+lib/meta/api.ts      — raw Graph API client (paged fetcher)
+lib/meta/mappers.ts  — raw response → Prisma-ready shapes
+lib/meta/syncDb.ts   — Prisma writes (upsert campaigns/adsets/ads/creatives,
+                        replace insights, sync log)
+lib/meta/sync.ts     — orchestrator: calls api → mappers → syncDb
+app/integrations/meta/sync/
+  actions.ts         — runMetaSyncAction server action
+  page.tsx           — server component (loads DB state)
+  MetaSyncView.tsx   — client component (Run Sync button, tables)
+```
+
+All Meta API calls happen server-side. Access tokens never reach the browser.
+

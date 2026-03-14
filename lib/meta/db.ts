@@ -39,6 +39,21 @@ export async function deleteMetaConnection(id: string) {
   return prisma.metaConnection.delete({ where: { id } });
 }
 
+/**
+ * Loads the connection together with the selected accounts (including each
+ * account's externalAdAccountId) — the shape needed by the sync orchestrator.
+ */
+export async function getConnectionForSync() {
+  return prisma.metaConnection.findFirst({
+    orderBy: { createdAt: "desc" },
+    include: {
+      selectedAccounts: {
+        include: { accessibleAdAccount: true },
+      },
+    },
+  });
+}
+
 // ── Sync accessible accounts ──────────────────────────────────────────────────
 
 /**

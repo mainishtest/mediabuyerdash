@@ -116,6 +116,7 @@ model MetaConnection {
 
   accessibleAccounts MetaAccessibleAdAccount[]
   selectedAccounts   MetaSelectedAdAccount[]
+  syncLogs           MetaSyncLog[]
 }
 
 // Ad accounts returned from /me/adaccounts. Refreshed on demand.
@@ -422,4 +423,109 @@ model LaunchDraftVariant {
   createdAt           DateTime @default(now())
 
   draft LaunchDraft @relation(fields: [launchDraftId], references: [id], onDelete: Cascade)
+}
+
+// ── Meta sync ─────────────────────────────────────────────────────────────────
+
+// Audit record for each sync run.
+model MetaSyncLog {
+  id                String    @id @default(cuid())
+  metaConnectionId  String
+  status            String    // running | completed | partial | failed
+  accountsProcessed Int       @default(0)
+  campaignsSynced   Int       @default(0)
+  adSetsSynced      Int       @default(0)
+  adsSynced         Int       @default(0)
+  creativesSynced   Int       @default(0)
+  insightRowsSynced Int       @default(0)
+  errorMessages     String?   // JSON array of error strings
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  connection MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+}
+
+// Campaigns synced from Meta. Upserted on externalCampaignId.
+model MetaSyncedCampaign {
+  id                  String    @id @default(cuid())
+  externalAdAccountId String
+  externalCampaignId  String    @unique
+  name                String
+  status              String
+  objective           String?
+  buyingType          String?
+  metaCreatedAt       DateTime?
+  metaUpdatedAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// Ad sets synced from Meta. Upserted on externalAdSetId.
+model MetaSyncedAdSet {
+  id                  String    @id @default(cuid())
+  externalAdAccountId String
+  externalCampaignId  String
+  externalAdSetId     String    @unique
+  name                String
+  status              String
+  metaCreatedAt       DateTime?
+  metaUpdatedAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// Ads synced from Meta. Upserted on externalAdId.
+model MetaSyncedAd {
+  id                  String    @id @default(cuid())
+  externalAdAccountId String
+  externalCampaignId  String
+  externalAdSetId     String
+  externalAdId        String    @unique
+  externalCreativeId  String?
+  name                String
+  status              String
+  metaCreatedAt       DateTime?
+  metaUpdatedAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// Creative metadata synced from Meta. Upserted on externalCreativeId.
+model MetaSyncedCreative {
+  id                 String   @id @default(cuid())
+  externalCreativeId String   @unique
+  name               String?
+  title              String?
+  body               String?
+  callToAction       String?
+  imageUrl           String?
+  thumbnailUrl       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Daily insight rows. Refreshed (delete + recreate) on each sync for the
+// synced date window. Empty-string defaults allow the compound unique key to
+// work correctly in PostgreSQL even for nullable entity IDs.
+model MetaSyncedInsight {
+  id                  String  @id @default(cuid())
+  externalAdAccountId String
+  level               String  @default("ad") // campaign | adset | ad
+  externalCampaignId  String  @default("")
+  externalAdSetId     String  @default("")
+  externalAdId        String  @default("")
+  dateStart           String
+  dateStop            String  @default("")
+  spend               Float   @default(0)
+  impressions         Int     @default(0)
+  clicks              Int     @default(0)
+  ctr                 Float?
+  cpm                 Float?
+  frequency           Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([externalAdAccountId, level, externalCampaignId, externalAdSetId, externalAdId, dateStart])
+  @@index([externalAdAccountId, dateStart])
 }
