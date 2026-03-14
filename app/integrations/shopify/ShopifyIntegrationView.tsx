@@ -28,7 +28,9 @@ interface Connection {
   shopDomain:       string;
   connectionStatus: string;
   scopes:           string | null;
-  connectedAt:      Date;
+  installedAt:      Date;
+  clientAccountId:  string | null;
+  clientAccount:    { id: string; name: string } | null;
 }
 
 interface SyncLog {
@@ -146,9 +148,18 @@ export function ShopifyIntegrationView({
               </dd>
             </div>
             <div className="flex items-baseline gap-2">
-              <dt className="w-36 shrink-0 text-slate-500">Connected</dt>
+              <dt className="w-36 shrink-0 text-slate-500">Installed</dt>
               <dd className="text-slate-300">
-                {new Date(connection.connectedAt).toLocaleDateString()}
+                {new Date(connection.installedAt).toLocaleDateString()}
+              </dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="w-36 shrink-0 text-slate-500">Client account</dt>
+              <dd className="text-slate-300">
+                {connection.clientAccount
+                  ? <span className="font-medium text-slate-100">{connection.clientAccount.name}</span>
+                  : <span className="text-slate-500 text-xs italic">Not mapped — assign a client account in Settings</span>
+                }
               </dd>
             </div>
             {connection.scopes && (

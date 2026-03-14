@@ -9,22 +9,22 @@ export interface RawShopifyMoneyBag {
 export interface RawShopifyLineItem {
   id:       string;
   product?: { id: string };
-  variant?: { id: string };
+  variant?: { id: string; sku?: string };
   title:    string;
   quantity: number;
   originalUnitPriceSet: RawShopifyMoneyBag;
 }
 
 export interface RawShopifyOrder {
-  id:          string; // "gid://shopify/Order/12345"
-  name:        string; // "#1001"
-  processedAt: string;
+  id:           string; // "gid://shopify/Order/12345"
+  name:         string; // "#1001"
+  createdAt:    string; // ISO — when the order was created in Shopify
   currencyCode: string;
   totalPriceSet:      RawShopifyMoneyBag;
   subtotalPriceSet:   RawShopifyMoneyBag;
   totalTaxSet:        RawShopifyMoneyBag;
   totalDiscountsSet:  RawShopifyMoneyBag;
-  customer?: { id: string };
+  customer?: { id: string; email?: string };
   utmParameters?: {
     source?:   string;
     medium?:   string;
@@ -32,6 +32,8 @@ export interface RawShopifyOrder {
     content?:  string;
     term?:     string;
   };
+  landingSite?:   string;
+  referringSite?: string;
   lineItems: {
     edges: Array<{ node: RawShopifyLineItem }>;
   };
@@ -53,20 +55,22 @@ const ORDERS_QUERY = `
         node {
           id
           name
-          processedAt
+          createdAt
           currencyCode
           totalPriceSet      { shopMoney { amount } }
           subtotalPriceSet   { shopMoney { amount } }
           totalTaxSet        { shopMoney { amount } }
           totalDiscountsSet  { shopMoney { amount } }
-          customer           { id }
+          customer           { id email }
           utmParameters      { source medium campaign content term }
+          landingSite
+          referringSite
           lineItems(first: 50) {
             edges {
               node {
                 id
                 product { id }
-                variant { id }
+                variant { id sku }
                 title
                 quantity
                 originalUnitPriceSet { shopMoney { amount } }
@@ -141,7 +145,7 @@ export async function fetchRecentOrders(
       {
         first: pageSize,
         after: cursor,
-        query: `processed_at:>='${sinceStr}'`,
+        query: `created_at:>='${sinceStr}'`,
       }
     );
 

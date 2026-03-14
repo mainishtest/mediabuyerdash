@@ -47,7 +47,7 @@ export async function runShopifySync(connectionId: string): Promise<ShopifySyncS
 
     for (const rawOrder of rawOrders) {
       try {
-        const mapped = mapOrder(rawOrder, connectionId);
+        const mapped = mapOrder(rawOrder, connectionId, connection.clientAccountId ?? null);
         const saved  = await upsertOrder(mapped);
 
         const lineItems = mapLineItemsForOrder(rawOrder, saved.id);

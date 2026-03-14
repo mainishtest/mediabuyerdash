@@ -18,31 +18,42 @@ interface Connection {
 }
 
 interface SyncLog {
-  status:         string;
-  ordersSynced:   number;
+  status:          string;
+  ordersSynced:    number;
   lineItemsSynced: number;
-  errorMessages:  string | null;
-  startedAt:      Date;
-  completedAt:    Date | null;
+  errorMessages:   string | null;
+  startedAt:       Date;
+  completedAt:     Date | null;
 }
 
 interface Order {
-  id:          string;
-  orderNumber: string;
-  processedAt: Date;
-  currency:    string;
-  totalPrice:  number;
-  utmSource:   string | null;
-  utmMedium:   string | null;
-  utmCampaign: string | null;
+  id:            string;
+  orderNumber:   string;
+  orderCreatedAt: Date;
+  currency:      string;
+  totalPrice:    number;
+  customerEmail: string | null;
+  utmSource:     string | null;
+  utmCampaign:   string | null;
+  landingPage:   string | null;
+}
+
+interface LineItem {
+  id:            string;
+  title:         string;
+  sku:           string | null;
+  quantity:      number;
+  price:         number;
+  order: { orderNumber: string };
 }
 
 interface Props {
-  connection:    Connection | null;
-  syncLog:       SyncLog | null;
-  orderCount:    number;
-  lineItemCount: number;
-  recentOrders:  Order[];
+  connection:      Connection | null;
+  syncLog:         SyncLog | null;
+  orderCount:      number;
+  lineItemCount:   number;
+  recentOrders:    Order[];
+  recentLineItems: LineItem[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -66,6 +77,7 @@ export function ShopifySyncView({
   orderCount,
   lineItemCount,
   recentOrders,
+  recentLineItems,
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [lastResult, setLastResult]  = useState<ShopifySyncSummary | null>(null);
@@ -136,7 +148,7 @@ export function ShopifySyncView({
           {/* Sync control */}
           <SectionCard
             title="Sync Control"
-            description="Fetches orders from the last 30 days. Existing records are updated; new ones are created."
+            description="Fetches orders created in the last 30 days. Existing records are updated; new ones are created."
           >
             <div className="flex items-center gap-4">
               <ActionButton
@@ -196,7 +208,7 @@ export function ShopifySyncView({
               </div>
               {activeSyncLog.errorMessages && (
                 <div className="mt-3 rounded border border-red-900/60 bg-red-950/30 p-3 text-xs text-red-400">
-                  {JSON.parse(activeSyncLog.errorMessages).slice(0, 5).join("\n")}
+                  {(JSON.parse(activeSyncLog.errorMessages) as string[]).slice(0, 5).join("\n")}
                 </div>
               )}
             </SectionCard>
@@ -205,7 +217,7 @@ export function ShopifySyncView({
           {/* Recent orders table */}
           <SectionCard
             title="Recent Orders"
-            description={`Showing up to 20 most-recent orders from the last sync.`}
+            description="Up to 20 most-recent orders from the last sync."
           >
             {recentOrders.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-500">
@@ -219,6 +231,7 @@ export function ShopifySyncView({
                       <th className="py-2 text-left">Order</th>
                       <th className="py-2 text-left">Date</th>
                       <th className="py-2 text-right">Revenue</th>
+                      <th className="py-2 text-left">Email</th>
                       <th className="py-2 text-left">UTM Source</th>
                       <th className="py-2 text-left">UTM Campaign</th>
                     </tr>
@@ -233,16 +246,65 @@ export function ShopifySyncView({
                           {order.orderNumber}
                         </td>
                         <td className="py-2 text-slate-400">
-                          {new Date(order.processedAt).toLocaleDateString()}
+                          {new Date(order.orderCreatedAt).toLocaleDateString()}
                         </td>
                         <td className="py-2 text-right font-medium text-emerald-400">
                           {formatCurrency(order.totalPrice, order.currency)}
+                        </td>
+                        <td className="py-2 text-slate-400 text-xs">
+                          {order.customerEmail ?? <span className="text-slate-600">—</span>}
                         </td>
                         <td className="py-2 text-slate-400">
                           {order.utmSource ?? <span className="text-slate-600">—</span>}
                         </td>
                         <td className="py-2 text-slate-400">
                           {order.utmCampaign ?? <span className="text-slate-600">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Line items preview */}
+          <SectionCard
+            title="Recent Line Items"
+            description="Up to 20 most-recent line items from the last sync."
+          >
+            {recentLineItems.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-500">
+                No line items synced yet.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-xs font-semibold uppercase tracking-widest text-slate-500">
+                      <th className="py-2 text-left">Order</th>
+                      <th className="py-2 text-left">Product</th>
+                      <th className="py-2 text-left">SKU</th>
+                      <th className="py-2 text-right">Qty</th>
+                      <th className="py-2 text-right">Unit Price</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {recentLineItems.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="text-slate-300 hover:bg-slate-800/40"
+                      >
+                        <td className="py-2 text-slate-400 text-xs">
+                          {item.order.orderNumber}
+                        </td>
+                        <td className="py-2 text-slate-100">{item.title}</td>
+                        <td className="py-2 text-slate-400 font-mono text-xs">
+                          {item.sku ?? <span className="text-slate-600">—</span>}
+                        </td>
+                        <td className="py-2 text-right text-slate-300">{item.quantity}</td>
+                        <td className="py-2 text-right font-medium text-slate-200">
+                          {formatCurrency(item.price)}
                         </td>
                       </tr>
                     ))}

@@ -14,14 +14,20 @@ export async function completeSyncLog(
   counts: { ordersSynced: number; lineItemsSynced: number },
   errors: string[]
 ) {
+  const total = counts.ordersSynced;
+  const status =
+    errors.length === 0              ? "completed"
+    : total > 0                      ? "partial"
+    : "failed";
+
   return prisma.shopifySyncLog.update({
     where: { id },
     data: {
-      status:         errors.length === 0 ? "completed" : errors.length >= counts.ordersSynced ? "failed" : "partial",
-      ordersSynced:   counts.ordersSynced,
+      status,
+      ordersSynced:    counts.ordersSynced,
       lineItemsSynced: counts.lineItemsSynced,
-      errorMessages:  errors.length > 0 ? JSON.stringify(errors) : null,
-      completedAt:    new Date(),
+      errorMessages:   errors.length > 0 ? JSON.stringify(errors) : null,
+      completedAt:     new Date(),
     },
   });
 }
@@ -45,18 +51,22 @@ export async function upsertOrder(order: MappedOrder) {
     },
     create: order,
     update: {
-      orderNumber:  order.orderNumber,
-      processedAt:  order.processedAt,
-      totalPrice:   order.totalPrice,
-      subtotalPrice: order.subtotalPrice,
-      totalTax:     order.totalTax,
-      totalDiscount: order.totalDiscount,
-      customerId:   order.customerId,
-      utmSource:    order.utmSource,
-      utmMedium:    order.utmMedium,
-      utmCampaign:  order.utmCampaign,
-      utmContent:   order.utmContent,
-      utmTerm:      order.utmTerm,
+      orderNumber:    order.orderNumber,
+      orderCreatedAt: order.orderCreatedAt,
+      clientAccountId: order.clientAccountId,
+      totalPrice:     order.totalPrice,
+      subtotalPrice:  order.subtotalPrice,
+      totalTax:       order.totalTax,
+      totalDiscount:  order.totalDiscount,
+      customerId:     order.customerId,
+      customerEmail:  order.customerEmail,
+      utmSource:      order.utmSource,
+      utmMedium:      order.utmMedium,
+      utmCampaign:    order.utmCampaign,
+      utmContent:     order.utmContent,
+      utmTerm:        order.utmTerm,
+      landingPage:    order.landingPage,
+      referringSite:  order.referringSite,
     },
   });
 }
@@ -67,28 +77,31 @@ export async function replaceLineItems(
   lineItems: MappedLineItem[]
 ) {
   await prisma.shopifyOrderLineItem.deleteMany({ where: { shopifyOrderId } });
-
   if (lineItems.length === 0) return;
-
-  await prisma.shopifyOrderLineItem.createMany({
-    data: lineItems,
-  });
+  await prisma.shopifyOrderLineItem.createMany({ data: lineItems });
 }
 
-// ── Summary data for UI ────────────────────────────────────────────────────────
+// ── Summary data for the UI ────────────────────────────────────────────────────
 
 export async function getOrderSummary(shopifyConnectionId: string) {
-  const [orderCount, lineItemCount, recentOrders] = await Promise.all([
-    prisma.shopifyOrder.count({ where: { shopifyConnectionId } }),
-    prisma.shopifyOrderLineItem.count({
-      where: { order: { shopifyConnectionId } },
-    }),
-    prisma.shopifyOrder.findMany({
-      where:   { shopifyConnectionId },
-      orderBy: { processedAt: "desc" },
-      take:    20,
-    }),
-  ]);
+  const [orderCount, lineItemCount, recentOrders, recentLineItems] =
+    await Promise.all([
+      prisma.shopifyOrder.count({ where: { shopifyConnectionId } }),
+      prisma.shopifyOrderLineItem.count({
+        where: { order: { shopifyConnectionId } },
+      }),
+      prisma.shopifyOrder.findMany({
+        where:   { shopifyConnectionId },
+        orderBy: { orderCreatedAt: "desc" },
+        take:    20,
+      }),
+      prisma.shopifyOrderLineItem.findMany({
+        where:   { order: { shopifyConnectionId } },
+        orderBy: { createdAt:  "desc" },
+        take:    20,
+        include: { order: { select: { orderNumber: true } } },
+      }),
+    ]);
 
-  return { orderCount, lineItemCount, recentOrders };
+  return { orderCount, lineItemCount, recentOrders, recentLineItems };
 }

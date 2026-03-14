@@ -32,7 +32,21 @@ export default async function ShopifyIntegrationPage({
   return (
     <ShopifyIntegrationView
       isConfigured={configured}
-      connection={connection}
+      connection={
+        connection
+          ? {
+              id:               connection.id,
+              shopDomain:       connection.shopDomain,
+              connectionStatus: connection.connectionStatus,
+              scopes:           connection.scopes,
+              installedAt:      connection.installedAt,
+              clientAccountId:  connection.clientAccountId ?? null,
+              clientAccount:    connection.clientAccount
+                ? { id: connection.clientAccount.id, name: connection.clientAccount.name }
+                : null,
+            }
+          : null
+      }
       syncLog={syncLog}
       orderCount={orderSummary?.orderCount ?? 0}
       errorMessage={errorMessage}

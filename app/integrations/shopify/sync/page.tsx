@@ -14,20 +14,25 @@ export default async function ShopifySyncPage() {
 
   const [syncLog, summary] = await Promise.all([
     connection ? getLatestSyncLog(connection.id).catch(() => null) : Promise.resolve(null),
-    connection ? getOrderSummary(connection.id).catch(() => null) : Promise.resolve(null),
+    connection ? getOrderSummary(connection.id).catch(() => null)  : Promise.resolve(null),
   ]);
 
   return (
     <ShopifySyncView
       connection={
         connection
-          ? { id: connection.id, shopDomain: connection.shopDomain, connectionStatus: connection.connectionStatus }
+          ? {
+              id:               connection.id,
+              shopDomain:       connection.shopDomain,
+              connectionStatus: connection.connectionStatus,
+            }
           : null
       }
       syncLog={syncLog}
-      orderCount={summary?.orderCount ?? 0}
+      orderCount={summary?.orderCount      ?? 0}
       lineItemCount={summary?.lineItemCount ?? 0}
-      recentOrders={summary?.recentOrders ?? []}
+      recentOrders={summary?.recentOrders   ?? []}
+      recentLineItems={summary?.recentLineItems ?? []}
     />
   );
 }

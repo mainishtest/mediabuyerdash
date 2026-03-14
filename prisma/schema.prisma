@@ -27,6 +27,7 @@ model ClientAccount {
   reconciliationResults ReconciliationResult[]
   metaSelectedAccounts  MetaSelectedAdAccount[]
   shopifyConnections    ShopifyConnection[]
+  shopifyOrders         ShopifyOrder[]
 }
 
 model Campaign {
@@ -541,7 +542,7 @@ model ShopifyConnection {
   accessToken      String    // WARNING: encrypt in production
   connectionStatus String    @default("active") // active | disconnected | error
   scopes           String?
-  connectedAt      DateTime  @default(now())
+  installedAt      DateTime  @default(now())
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -554,39 +555,48 @@ model ShopifyConnection {
 model ShopifyOrder {
   id                  String   @id @default(cuid())
   shopifyConnectionId String
+  clientAccountId     String?
   externalOrderId     String   // "gid://shopify/Order/12345"
   orderNumber         String   // "#1001"
-  processedAt         DateTime
+  orderCreatedAt      DateTime
   currency            String
   totalPrice          Float    @default(0)
   subtotalPrice       Float    @default(0)
   totalTax            Float    @default(0)
   totalDiscount       Float    @default(0)
   customerId          String?
+  customerEmail       String?
   utmSource           String?
   utmMedium           String?
   utmCampaign         String?
   utmContent          String?
   utmTerm             String?
+  landingPage         String?
+  referringSite       String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  connection ShopifyConnection    @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
-  lineItems  ShopifyOrderLineItem[]
+  connection    ShopifyConnection    @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
+  clientAccount ClientAccount?       @relation(fields: [clientAccountId], references: [id])
+  lineItems     ShopifyOrderLineItem[]
 
   @@unique([shopifyConnectionId, externalOrderId])
-  @@index([shopifyConnectionId, processedAt])
+  @@index([shopifyConnectionId, orderCreatedAt])
+  @@index([clientAccountId, orderCreatedAt])
 }
 
 // Order line items. Deleted + recreated on every sync for the parent order.
 model ShopifyOrderLineItem {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   shopifyOrderId String
   productId      String?
   variantId      String?
+  sku            String?
   title          String
-  quantity       Int     @default(1)
-  price          Float   @default(0)
+  quantity       Int      @default(1)
+  price          Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
 }
