@@ -26,6 +26,7 @@ model ClientAccount {
   crmPerformanceRows    CRMPerformanceRow[]
   reconciliationResults ReconciliationResult[]
   metaSelectedAccounts  MetaSelectedAdAccount[]
+  shopifyConnections    ShopifyConnection[]
 }
 
 model Campaign {
@@ -528,4 +529,79 @@ model MetaSyncedInsight {
 
   @@unique([externalAdAccountId, level, externalCampaignId, externalAdSetId, externalAdId, dateStart])
   @@index([externalAdAccountId, dateStart])
+}
+
+// ── Shopify CRM integration ───────────────────────────────────────────────────
+
+// One Shopify store connection per shop domain.
+model ShopifyConnection {
+  id               String    @id @default(cuid())
+  clientAccountId  String?
+  shopDomain       String    @unique // e.g. "mystore.myshopify.com"
+  accessToken      String    // WARNING: encrypt in production
+  connectionStatus String    @default("active") // active | disconnected | error
+  scopes           String?
+  connectedAt      DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id])
+  orders        ShopifyOrder[]
+  syncLogs      ShopifySyncLog[]
+}
+
+// Shopify orders synced for the last 30 days. Upserted on externalOrderId.
+model ShopifyOrder {
+  id                  String   @id @default(cuid())
+  shopifyConnectionId String
+  externalOrderId     String   // "gid://shopify/Order/12345"
+  orderNumber         String   // "#1001"
+  processedAt         DateTime
+  currency            String
+  totalPrice          Float    @default(0)
+  subtotalPrice       Float    @default(0)
+  totalTax            Float    @default(0)
+  totalDiscount       Float    @default(0)
+  customerId          String?
+  utmSource           String?
+  utmMedium           String?
+  utmCampaign         String?
+  utmContent          String?
+  utmTerm             String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  connection ShopifyConnection    @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
+  lineItems  ShopifyOrderLineItem[]
+
+  @@unique([shopifyConnectionId, externalOrderId])
+  @@index([shopifyConnectionId, processedAt])
+}
+
+// Order line items. Deleted + recreated on every sync for the parent order.
+model ShopifyOrderLineItem {
+  id             String  @id @default(cuid())
+  shopifyOrderId String
+  productId      String?
+  variantId      String?
+  title          String
+  quantity       Int     @default(1)
+  price          Float   @default(0)
+
+  order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
+}
+
+// Audit log for each sync run.
+model ShopifySyncLog {
+  id                  String    @id @default(cuid())
+  shopifyConnectionId String
+  status              String    // running | completed | partial | failed
+  ordersSynced        Int       @default(0)
+  lineItemsSynced     Int       @default(0)
+  errorMessages       String?   // JSON array
+  startedAt           DateTime  @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+
+  connection ShopifyConnection @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
 }

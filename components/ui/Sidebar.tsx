@@ -38,14 +38,26 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Meta",
+    items: [
+      { href: "/integrations/meta",       label: "Meta Ads"  },
+      { href: "/integrations/meta/sync",  label: "Meta Sync" },
+    ],
+  },
+  {
+    label: "CRM",
+    items: [
+      { href: "/integrations/shopify",       label: "Shopify"      },
+      { href: "/integrations/shopify/sync",  label: "Shopify Sync" },
+    ],
+  },
+  {
     label: "System",
     items: [
-      { href: "/reconciliation",  label: "Reconciliation"    },
-      { href: "/reporting",       label: "Reporting"         },
-      { href: "/integrations",    label: "Integrations"      },
-      { href: "/integrations/meta", label: "Meta Ads"        },
-      { href: "/integrations/meta/sync", label: "Meta Sync"   },
-      { href: "/ui-preview",      label: "UI Preview"        },
+      { href: "/reconciliation", label: "Reconciliation" },
+      { href: "/reporting",      label: "Reporting"      },
+      { href: "/integrations",   label: "Integrations"   },
+      { href: "/ui-preview",     label: "UI Preview"     },
     ],
   },
 ];
