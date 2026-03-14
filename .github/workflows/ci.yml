@@ -16,9 +16,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Required for prisma generate (postinstall) and next build.
-      # SQLite path — no real database needed for type/lint/build checks.
-      DATABASE_URL: "file:./ci.db"
+      # Dummy PostgreSQL URL — satisfies prisma generate (postinstall) and
+      # next build without requiring a live database connection.
+      # Schema migrations are applied separately via Supabase, not in CI.
+      DATABASE_URL: "postgresql://postgres:ci@localhost:5432/ci_dummy"
 
     steps:
       - name: Checkout
@@ -29,13 +30,8 @@ jobs:
         with:
           node-version: "22"
 
-      # No package-lock.json in this repo — use npm install.
-      # Switch to `npm ci` once a lockfile is committed.
       - name: Install dependencies
         run: npm install
-
-      - name: Apply database schema
-        run: npx prisma db push --skip-generate --accept-data-loss
 
       - name: Type check
         run: npm run type-check
