@@ -21,13 +21,15 @@ model ClientAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  campaigns             Campaign[]
-  utmPerformanceRows    UTMPerformanceRow[]
-  crmPerformanceRows    CRMPerformanceRow[]
-  reconciliationResults ReconciliationResult[]
-  metaSelectedAccounts  MetaSelectedAdAccount[]
-  shopifyConnections    ShopifyConnection[]
-  shopifyOrders         ShopifyOrder[]
+  campaigns               Campaign[]
+  utmPerformanceRows      UTMPerformanceRow[]
+  crmPerformanceRows      CRMPerformanceRow[]
+  reconciliationResults   ReconciliationResult[]
+  reconciliationMatches   ReconciliationMatch[]
+  reconciliationSummaries ReconciliationSummary[]
+  metaSelectedAccounts    MetaSelectedAdAccount[]
+  shopifyConnections      ShopifyConnection[]
+  shopifyOrders           ShopifyOrder[]
 }
 
 model Campaign {
@@ -600,6 +602,72 @@ model ShopifyOrderLineItem {
 
   order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
 }
+
+// ── Reconciliation Engine (v1) ────────────────────────────────────────────────
+
+// One row per matched/unmatched pair per reconciliation run.
+// matchStatus values: matched | partial | unmatched_meta | unmatched_crm | ambiguous
+// evaluatedCpa  = metaSpend / crmOrders   (CRM is source of truth)
+// evaluatedRoas = crmRevenue / metaSpend  (CRM is source of truth)
+model ReconciliationMatch {
+  id                   String    @id @default(cuid())
+  clientAccountId      String
+  date                 String    // ISO date
+  attributionWindowDays Int      @default(7)
+  matchKey             String    // composite: clientId|date|utmCampaign|utmContent|utmTerm
+  // Meta entity refs (optional — absent for unmatched_crm rows)
+  metaCampaignId       String?
+  metaAdSetId          String?
+  metaAdId             String?
+  // UTM dimensions
+  utmCampaign          String?
+  utmContent           String?
+  utmTerm              String?
+  // Meta delivery metrics (source: Meta)
+  metaSpend            Float     @default(0)
+  metaClicks           Int?
+  metaImpressions      Int?
+  // CRM source-of-truth metrics (source: Shopify/CRM)
+  crmOrders            Int       @default(0)
+  crmRevenue           Float     @default(0)
+  // Evaluated performance — CRM is source of truth
+  evaluatedCpa         Float?    // metaSpend / crmOrders
+  evaluatedRoas        Float?    // crmRevenue / metaSpend
+  // Match quality
+  matchStatus          String    // matched | partial | unmatched_meta | unmatched_crm | ambiguous
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([clientAccountId, matchKey])
+  @@index([clientAccountId, date])
+}
+
+// Rolled-up summary across a date range for a client account.
+// One record per (clientAccountId, dateFrom, dateTo) reconciliation run.
+model ReconciliationSummary {
+  id               String   @id @default(cuid())
+  clientAccountId  String
+  dateFrom         String
+  dateTo           String
+  totalMetaSpend   Float    @default(0)
+  totalCrmRevenue  Float    @default(0)
+  totalCrmOrders   Int      @default(0)
+  evaluatedCpa     Float?   // totalMetaSpend / totalCrmOrders
+  evaluatedRoas    Float?   // totalCrmRevenue / totalMetaSpend
+  matchedRows      Int      @default(0)
+  unmatchedRows    Int      @default(0)  // unmatched_meta + unmatched_crm
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([clientAccountId, dateFrom, dateTo])
+  @@index([clientAccountId, dateFrom])
+}
+
+// ── Shopify sync log ──────────────────────────────────────────────────────────
 
 // Audit log for each sync run.
 model ShopifySyncLog {
