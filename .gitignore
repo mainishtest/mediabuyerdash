@@ -8,3 +8,6 @@ out
 # Prisma / SQLite
 prisma/*.db
 prisma/*.db-journal
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
