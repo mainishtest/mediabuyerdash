@@ -14,16 +14,15 @@ function WorkspaceHeader() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
 
-  // Don't render on the login page (the login page is a fixed overlay anyway,
-  // but this keeps the DOM clean).
-  if (pathname === "/login") return null;
+  // Don't render on auth pages (they are fixed overlays — keeps DOM clean).
+  if (pathname === "/login" || pathname === "/register") return null;
   if (status === "loading") return (
     <div className="hidden h-12 shrink-0 items-center border-b border-slate-800 bg-slate-900/30 px-6 lg:flex" />
   );
   if (!session) return null;
 
   const workspaceName = session.user.workspaceName ?? "Workspace";
-  const userEmail     = session.user.email ?? "";
+  const userName      = session.user.name || session.user.email || "";
 
   return (
     <div className="hidden h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/30 px-6 lg:flex">
@@ -37,7 +36,7 @@ function WorkspaceHeader() {
 
       {/* User + sign out */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-500">{userEmail}</span>
+        <span className="text-xs text-slate-500">{userName}</span>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-400

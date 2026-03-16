@@ -1,13 +1,20 @@
-// app/login/page.tsx
-// Login page — fixed full-screen overlay so the AppShell sidebar stays hidden.
+// app/register/page.tsx
+// Registration page — same fixed overlay approach as /login.
+// Already-authenticated users are redirected to /dashboard.
 
-import { LoginForm } from "./LoginForm";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
+import { RegisterForm } from "./RegisterForm";
 
 export const metadata = {
-  title: "Sign In — Media Buying Dashboard",
+  title: "Create Account — Media Buying Dashboard",
 };
 
-export default function LoginPage() {
+export default async function RegisterPage() {
+  const session = await getServerSession(authOptions);
+  if (session) redirect("/dashboard");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-sm">
@@ -18,23 +25,23 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-xl font-semibold tracking-tight text-white">
-              Media Buying OS
+              Create your account
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Sign in to your workspace
+              Get started with Media Buying OS
             </p>
           </div>
         </div>
 
-        <LoginForm />
+        <RegisterForm />
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Don&apos;t have an account?{" "}
+          Already have an account?{" "}
           <a
-            href="/register"
+            href="/login"
             className="text-emerald-500 transition-colors hover:text-emerald-400"
           >
-            Create one
+            Sign in
           </a>
         </p>
       </div>

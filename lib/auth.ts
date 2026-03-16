@@ -28,23 +28,15 @@ export const authOptions: NextAuthOptions = {
 
         const email = credentials.email.toLowerCase().trim();
 
-        // Find or create user.
-        let user = await prisma.user.findUnique({ where: { email } });
+        // Registration is handled on /register. Login only authenticates.
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) return null;
 
-        if (!user) {
-          // First login with this email — create the account.
-          const hash = await bcrypt.hash(credentials.password, 12);
-          user = await prisma.user.create({
-            data: { email, passwordHash: hash },
-          });
-        } else {
-          // Existing user — verify password.
-          if (!user.passwordHash) return null;
-          const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-          if (!valid) return null;
-        }
+        if (!user.passwordHash) return null;
+        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+        if (!valid) return null;
 
-        // Get or create a default workspace for this user.
+        // Ensure the user has a workspace (safety net for edge cases).
         let membership = await prisma.workspaceMembership.findFirst({
           where: { userId: user.id },
           include: { workspace: true },

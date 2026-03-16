@@ -2,7 +2,7 @@
 
 // app/login/LoginForm.tsx
 // Email + password sign-in form. Uses NextAuth credentials provider.
-// First-time users are automatically registered on their first sign-in.
+// New users should register at /register first.
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
@@ -30,12 +30,17 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid credentials. Please check your email and password.");
+      setError("Invalid email or password. Need an account? Create one below.");
     } else {
       router.push("/dashboard");
       router.refresh();
     }
   }
+
+  const inputClass =
+    "w-full rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm " +
+    "text-slate-100 placeholder-slate-600 transition-colors " +
+    "focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -55,9 +60,8 @@ export function LoginForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@youragency.com"
-          className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm
-            text-slate-100 placeholder-slate-600 transition-colors
-            focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+          disabled={loading}
+          className={inputClass}
         />
       </div>
 
@@ -77,9 +81,8 @@ export function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm
-            text-slate-100 placeholder-slate-600 transition-colors
-            focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+          disabled={loading}
+          className={inputClass}
         />
       </div>
 

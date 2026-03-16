@@ -31,7 +31,7 @@ function SidebarFooter() {
     );
   }
 
-  const email         = session.user.email ?? "";
+  const userName      = session.user.name || session.user.email || "";
   const workspaceName = session.user.workspaceName ?? "Workspace";
 
   return (
@@ -44,7 +44,7 @@ function SidebarFooter() {
           {workspaceName}
         </span>
       </div>
-      <p className="mb-2 truncate text-xs text-slate-500">{email}</p>
+      <p className="mb-2 truncate text-xs text-slate-500">{userName}</p>
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
         className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-400
