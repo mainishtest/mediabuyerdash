@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Badge, SectionCard } from "../../../components/ui";
 import type { ClientAccount, Campaign, AdSet, Ad } from "../../../types/media";
 import type { CampaignSummary } from "../../../lib/aggregations";
 import type { AdSetPerformanceSummary } from "../../../lib/data/adSetPerformance";
@@ -23,8 +24,22 @@ type GoalOverride = {
 
 type ActiveTab = "campaigns" | "adsets" | "ads";
 
+// Extended account type with fields from the new auth/client management layer
+type ClientAccountDetail = ClientAccount & {
+  brandName: string | null;
+  status:    string;
+  notes:     string | null;
+};
+
+type BadgeVariant = "success" | "warning" | "neutral";
+function clientStatusVariant(status: string): BadgeVariant {
+  if (status === "active")   return "success";
+  if (status === "paused")   return "warning";
+  return "neutral";
+}
+
 type Props = {
-  account: ClientAccount;
+  account: ClientAccountDetail;
   campaigns: Campaign[];
   adSets: AdSet[];
   ads: Ad[];
@@ -176,27 +191,74 @@ export function ClientDetailView({
     <>
       {/* Back link */}
       <Link
-        href="/"
+        href="/clients"
         className="mb-6 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
       >
-        ← Back to Dashboard
+        ← Back to Clients
       </Link>
 
       {/* Account header */}
       <header className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-          {account.name}
-        </h1>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">
-            {account.platform}
-          </span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
+              {account.name}
+            </h1>
+            {account.brandName && (
+              <p className="mt-1 text-sm text-slate-400">{account.brandName}</p>
+            )}
+          </div>
+          <Badge variant={clientStatusVariant(account.status)}>
+            {account.status.charAt(0).toUpperCase() + account.status.slice(1)}
+          </Badge>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">
             {account.currency}
           </span>
-          <span className="text-xs text-slate-500">ID: {account.id}</span>
+          <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">
+            {account.timezone}
+          </span>
+          <span className="text-xs text-slate-500">Added {account.createdAt}</span>
         </div>
+        {account.notes && (
+          <p className="mt-3 max-w-xl text-sm text-slate-400">{account.notes}</p>
+        )}
       </header>
+
+      {/* Placeholder: Meta Connections */}
+      <SectionCard
+        title="Meta Connections"
+        description="Connect this client's Meta ad account to pull delivery metrics."
+        className="mb-6"
+      >
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 px-4 py-5">
+          <span className="text-2xl">📘</span>
+          <div>
+            <p className="text-sm font-medium text-slate-300">No Meta account connected</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Meta connection setup coming soon.
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Placeholder: Shopify / CRM Connections */}
+      <SectionCard
+        title="Shopify / CRM Connections"
+        description="Connect your CRM or Shopify store for reconciled revenue and order data."
+        className="mb-6"
+      >
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 px-4 py-5">
+          <span className="text-2xl">🛍️</span>
+          <div>
+            <p className="text-sm font-medium text-slate-300">No CRM connected</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Shopify / CRM integration coming soon.
+            </p>
+          </div>
+        </div>
+      </SectionCard>
 
       {/* Campaign Goals editor */}
       <section className="mb-10">

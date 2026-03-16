@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 
 interface NavItem {
   href:  string;
@@ -63,6 +64,42 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+function SidebarFooter() {
+  const { data: session } = useSession();
+
+  if (!session) {
+    return (
+      <div className="shrink-0 border-t border-slate-800 px-5 py-3">
+        <p className="text-xs text-slate-600">v0.1 · development</p>
+      </div>
+    );
+  }
+
+  const email         = session.user.email ?? "";
+  const workspaceName = session.user.workspaceName ?? "Workspace";
+
+  return (
+    <div className="shrink-0 border-t border-slate-800 px-4 py-3">
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-emerald-700 text-xs font-bold text-white">
+          W
+        </div>
+        <span className="truncate text-xs font-medium text-slate-300">
+          {workspaceName}
+        </span>
+      </div>
+      <p className="mb-2 truncate text-xs text-slate-500">{email}</p>
+      <button
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-400
+          transition-colors hover:bg-slate-800 hover:text-slate-200"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+}
+
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
 
@@ -112,10 +149,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         ))}
       </div>
 
-      {/* Footer hint */}
-      <div className="shrink-0 border-t border-slate-800 px-5 py-3">
-        <p className="text-xs text-slate-600">v0.1 · development</p>
-      </div>
+      {/* Footer — user info + sign out */}
+      <SidebarFooter />
     </nav>
   );
 }

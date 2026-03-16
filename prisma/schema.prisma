@@ -10,17 +10,62 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Ad hierarchy ────────────────────────────────────────────────────────────
+// ── Auth & workspace ─────────────────────────────────────────────────────────
 
-model ClientAccount {
+// Application user. Passwords are hashed with bcryptjs (salt 12).
+// passwordHash is null for future OAuth-only users.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships WorkspaceMembership[]
+}
+
+// An agency workspace groups clients and users.
+model Workspace {
   id        String   @id @default(cuid())
   name      String
-  platform  String   @default("facebook")
-  currency  String
-  timezone  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  memberships    WorkspaceMembership[]
+  clientAccounts ClientAccount[]
+}
+
+// User ↔ Workspace with role. v1 roles: owner | manager.
+model WorkspaceMembership {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("owner") // owner | manager
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+// ── Ad hierarchy ────────────────────────────────────────────────────────────
+
+model ClientAccount {
+  id          String   @id @default(cuid())
+  workspaceId String?  // nullable for existing records; required for new ones
+  name        String
+  brandName   String?
+  platform    String   @default("facebook")
+  currency    String   @default("USD")
+  timezone    String   @default("America/New_York")
+  status      String   @default("active") // active | paused | archived
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace               Workspace?             @relation(fields: [workspaceId], references: [id])
   campaigns               Campaign[]
   utmPerformanceRows      UTMPerformanceRow[]
   crmPerformanceRows      CRMPerformanceRow[]

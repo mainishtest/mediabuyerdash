@@ -36,12 +36,15 @@ export default async function ClientDetailPage({ params }: PageProps) {
   // Map Prisma model to the shape ClientDetailView expects
   const account = dbAccount
     ? {
-        id: dbAccount.id,
-        name: dbAccount.name,
-        platform: dbAccount.platform as "facebook",
-        currency: dbAccount.currency,
-        timezone: dbAccount.timezone,
-        createdAt: dbAccount.createdAt.toISOString().slice(0, 10)
+        id:        dbAccount.id,
+        name:      dbAccount.name,
+        brandName: dbAccount.brandName ?? null,
+        status:    dbAccount.status ?? "active",
+        notes:     dbAccount.notes ?? null,
+        platform:  dbAccount.platform as "facebook",
+        currency:  dbAccount.currency,
+        timezone:  dbAccount.timezone,
+        createdAt: dbAccount.createdAt.toISOString().slice(0, 10),
       }
     : null;
 
@@ -50,10 +53,10 @@ export default async function ClientDetailPage({ params }: PageProps) {
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-lg text-slate-300">Client account not found.</p>
         <Link
-          href="/"
+          href="/clients"
           className="mt-4 text-sm text-slate-400 hover:text-slate-200"
         >
-          ← Back to Dashboard
+          ← Back to Clients
         </Link>
       </div>
     );
