@@ -250,6 +250,27 @@ export function ClientDetailView({
         syncStatus={syncStatus}
       />
 
+      {/* Campaign Performance — link to dedicated campaigns route */}
+      <section className="mb-10">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Campaign Performance</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Live ROAS, CPA, and goal evaluation for all synced campaigns.
+              CRM is source of truth. 7-day attribution window.
+            </p>
+          </div>
+          <Link
+            href={`/clients/${account.id}/campaigns`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800
+              px-4 py-2 text-sm font-medium text-slate-200 transition-colors
+              hover:bg-slate-700 hover:text-white"
+          >
+            View Campaigns →
+          </Link>
+        </div>
+      </section>
+
       {/* Campaign Goals editor */}
       <section className="mb-10">
         <h2 className="mb-1 text-lg font-semibold text-slate-50">Campaign Goals</h2>
