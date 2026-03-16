@@ -5,7 +5,7 @@
 // Creates the user record, a default workspace, and the owner membership.
 // Session issuance happens client-side via signIn() after this returns success.
 
-import { prisma } from "@/lib/db";
+import { prisma } from "../../lib/db";
 import bcrypt from "bcryptjs";
 
 export type RegisterResult =
