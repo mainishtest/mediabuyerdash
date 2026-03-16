@@ -18,5 +18,14 @@ export const adSets: AdSet[] = [
     dailyBudget: 100,
     status: "active",
     startDate: "2024-01-01"
+  },
+  {
+    id: "adset_3",
+    campaignId: "camp_2",
+    name: "US - Retargeting Core",
+    targeting: "US, Website visitors last 30 days",
+    dailyBudget: 60,
+    status: "active",
+    startDate: "2024-01-01"
   }
 ];

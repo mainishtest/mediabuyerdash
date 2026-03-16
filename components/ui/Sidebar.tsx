@@ -24,6 +24,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Optimization",
     items: [
+      { href: "/optimization",       label: "Optimization"      },
       { href: "/optimization-lab",   label: "Optimization Lab"  },
       { href: "/measurement-policy", label: "Measurement Policy" },
     ],

@@ -16,5 +16,13 @@ export const ads: Ad[] = [
     name: "Static V1 - Interest",
     status: "active",
     createdAt: "2024-01-01"
+  },
+  {
+    id: "ad_3",
+    adSetId: "adset_3",
+    creativeId: "creative_3",
+    name: "Carousel V1 - Retargeting",
+    status: "active",
+    createdAt: "2024-01-01"
   }
 ];
