@@ -12,6 +12,8 @@ import { generateOpportunities } from "../../../lib/optimizationUtils";
 import { EvaluationTable } from "../../components/EvaluationTable";
 import { OpportunityList } from "../../components/OpportunityList";
 import { formatCurrency, formatRoas } from "../../../lib/metricUtils";
+import type { ClientIntegrationStatus } from "../../../lib/clientIntegrations";
+import { ClientIntegrationsSection } from "./ClientIntegrationsSection";
 
 // --- Local types -------------------------------------------------------------
 
@@ -39,13 +41,14 @@ function clientStatusVariant(status: string): BadgeVariant {
 }
 
 type Props = {
-  account: ClientAccountDetail;
-  campaigns: Campaign[];
-  adSets: AdSet[];
-  ads: Ad[];
+  account:           ClientAccountDetail;
+  campaigns:         Campaign[];
+  adSets:            AdSet[];
+  ads:               Ad[];
   campaignSummaries: CampaignSummary[];
-  adSetSummaries: AdSetPerformanceSummary[];
-  adSummaries: AdPerformanceSummary[];
+  adSetSummaries:    AdSetPerformanceSummary[];
+  adSummaries:       AdPerformanceSummary[];
+  integrations:      ClientIntegrationStatus;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -69,7 +72,8 @@ export function ClientDetailView({
   ads,
   campaignSummaries,
   adSetSummaries,
-  adSummaries
+  adSummaries,
+  integrations,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -226,39 +230,11 @@ export function ClientDetailView({
         )}
       </header>
 
-      {/* Placeholder: Meta Connections */}
-      <SectionCard
-        title="Meta Connections"
-        description="Connect this client's Meta ad account to pull delivery metrics."
-        className="mb-6"
-      >
-        <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 px-4 py-5">
-          <span className="text-2xl">📘</span>
-          <div>
-            <p className="text-sm font-medium text-slate-300">No Meta account connected</p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Meta connection setup coming soon.
-            </p>
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* Placeholder: Shopify / CRM Connections */}
-      <SectionCard
-        title="Shopify / CRM Connections"
-        description="Connect your CRM or Shopify store for reconciled revenue and order data."
-        className="mb-6"
-      >
-        <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-700 px-4 py-5">
-          <span className="text-2xl">🛍️</span>
-          <div>
-            <p className="text-sm font-medium text-slate-300">No CRM connected</p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Shopify / CRM integration coming soon.
-            </p>
-          </div>
-        </div>
-      </SectionCard>
+      {/* Client Integrations — Meta + Shopify mapping */}
+      <ClientIntegrationsSection
+        clientId={account.id}
+        integrations={integrations}
+      />
 
       {/* Campaign Goals editor */}
       <section className="mb-10">
