@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   PageHeader,
+  PageContainer,
   SectionCard,
   Badge,
   EmptyState,
@@ -258,7 +259,7 @@ export function ClientsView({ clients, workspaceId }: Props) {
   const noWorkspace = !workspaceId;
 
   return (
-    <div className="space-y-0">
+    <PageContainer>
       <PageHeader
         title="Clients"
         description="Manage client accounts in your workspace. Each client has its own Meta connections, Shopify integration, and campaign data."
@@ -332,6 +333,6 @@ export function ClientsView({ clients, workspaceId }: Props) {
           onSuccess={handleSuccess}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

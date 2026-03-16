@@ -4,10 +4,11 @@
 // Operator command center — stat overview, recent clients, quick actions.
 
 import Link from "next/link";
-import { StatCard } from "../../components/ui/StatCard";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { SectionCard } from "../../components/ui/SectionCard";
-import { Badge } from "../../components/ui/Badge";
+import { StatCard }      from "../../components/ui/StatCard";
+import { PageHeader }    from "../../components/ui/PageHeader";
+import { PageContainer } from "../../components/ui/PageContainer";
+import { SectionCard }   from "../../components/ui/SectionCard";
+import { Badge }         from "../../components/ui/Badge";
 import type { BadgeVariant } from "../../components/ui/Badge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,7 +73,7 @@ export function DashboardView({
   const { clientCount, metaCount, shopifyCount, lastSyncAt } = stats;
 
   return (
-    <>
+    <PageContainer>
       <PageHeader
         title="Dashboard"
         description={workspaceName}
@@ -156,53 +157,79 @@ export function DashboardView({
             </Link>
           </div>
         ) : (
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-800">
-                {["Client", "Brand", "Status", "Added"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3 text-left text-xs font-semibold uppercase
-                      tracking-widest text-slate-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentClients.map((client, i) => (
-                <tr
-                  key={client.id}
-                  className={
-                    i < recentClients.length - 1
-                      ? "border-b border-slate-800/60"
-                      : ""
-                  }
-                >
-                  <td className="px-5 py-3">
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="divide-y divide-slate-800 sm:hidden">
+              {recentClients.map((client) => (
+                <div key={client.id} className="flex items-center justify-between px-5 py-4 gap-3">
+                  <div className="min-w-0">
                     <Link
                       href={`/clients/${client.id}`}
-                      className="font-medium text-slate-200 hover:text-white transition-colors"
+                      className="block text-sm font-medium text-slate-200 hover:text-white transition-colors truncate"
                     >
                       {client.name}
                     </Link>
-                  </td>
-                  <td className="px-5 py-3 text-slate-400">
-                    {client.brandName ?? <span className="text-slate-600">—</span>}
-                  </td>
-                  <td className="px-5 py-3">
-                    <Badge variant={statusVariant(client.status)}>
-                      {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500 text-xs">
-                    {formatDate(client.createdAt)}
-                  </td>
-                </tr>
+                    {client.brandName && (
+                      <p className="mt-0.5 text-xs text-slate-500 truncate">{client.brandName}</p>
+                    )}
+                    <p className="mt-0.5 text-xs text-slate-600">{formatDate(client.createdAt)}</p>
+                  </div>
+                  <Badge variant={statusVariant(client.status)}>
+                    {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
+                  </Badge>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Desktop: table */}
+            <table className="hidden min-w-full text-sm sm:table">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  {["Client", "Brand", "Status", "Added"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-5 py-3 text-left text-xs font-semibold uppercase
+                        tracking-widest text-slate-500"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recentClients.map((client, i) => (
+                  <tr
+                    key={client.id}
+                    className={
+                      i < recentClients.length - 1
+                        ? "border-b border-slate-800/60"
+                        : ""
+                    }
+                  >
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/clients/${client.id}`}
+                        className="font-medium text-slate-200 hover:text-white transition-colors"
+                      >
+                        {client.name}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3 text-slate-400">
+                      {client.brandName ?? <span className="text-slate-600">—</span>}
+                    </td>
+                    <td className="px-5 py-3">
+                      <Badge variant={statusVariant(client.status)}>
+                        {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-3 text-slate-500 text-xs">
+                      {formatDate(client.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </SectionCard>
 
@@ -270,6 +297,6 @@ export function DashboardView({
           </ul>
         </div>
       )}
-    </>
+    </PageContainer>
   );
 }

@@ -136,7 +136,7 @@ function MappedMetaRow({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-slate-800/40 px-4 py-3">
+    <div className="flex flex-col gap-2 rounded-lg bg-slate-800/40 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-200 truncate">
           {account.accountName}
@@ -182,7 +182,7 @@ function AvailableMetaRow({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg px-4 py-3 ${
+      className={`flex flex-col gap-2 rounded-lg px-4 py-3 sm:flex-row sm:items-center sm:gap-3 ${
         isMappedElsewhere ? "opacity-50" : "bg-slate-800/20"
       }`}
     >
@@ -353,7 +353,7 @@ function ShopifyConnectionRow({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg px-4 py-3 ${
+      className={`flex flex-col gap-2 rounded-lg px-4 py-3 sm:flex-row sm:items-center sm:gap-3 ${
         isMapped
           ? "bg-emerald-950/20 border border-emerald-900/40"
           : isMappedElsewhere

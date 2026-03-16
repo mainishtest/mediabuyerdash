@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge, SectionCard } from "../../../components/ui";
+import { Badge, PageContainer, SectionCard } from "../../../components/ui";
 import type { ClientAccount, Campaign, AdSet, Ad } from "../../../types/media";
 import type { CampaignSummary } from "../../../lib/aggregations";
 import type { AdSetPerformanceSummary } from "../../../lib/data/adSetPerformance";
@@ -192,7 +192,7 @@ export function ClientDetailView({
   // --- Render ----------------------------------------------------------------
 
   return (
-    <>
+    <PageContainer>
       {/* Back link */}
       <Link
         href="/clients"
@@ -404,6 +404,6 @@ export function ClientDetailView({
           </table>
         </div>
       </section>
-    </>
+    </PageContainer>
   );
 }

@@ -13,6 +13,8 @@ export { EmptyState }     from "./EmptyState";
 
 export { FilterBar, FilterLabel, FilterSelect } from "./FilterBar";
 
+export { PageContainer }  from "./PageContainer";
+
 export { PageHeader }     from "./PageHeader";
 
 export { SectionCard }    from "./SectionCard";
