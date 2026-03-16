@@ -11,8 +11,10 @@ import {
   getAdsByAdSetId
 } from "../../../lib/selectors";
 import { aggregateByCampaign } from "../../../lib/aggregations";
-import { ClientDetailView }          from "./ClientDetailView";
-import { getClientIntegrationStatus } from "../../../lib/clientIntegrations";
+import { ClientDetailView }              from "./ClientDetailView";
+import { getClientIntegrationStatus }   from "../../../lib/clientIntegrations";
+import { getClientReadiness }           from "../../../lib/clientSync/readiness";
+import { getClientSyncStatusSummary }   from "../../../lib/clientSync/db";
 
 type PageProps = {
   params: { clientId: string };
@@ -64,7 +66,11 @@ export default async function ClientDetailPage({ params }: PageProps) {
   }
 
   // Fetch integration mapping status (Meta ad accounts + Shopify connections)
-  const integrations = await getClientIntegrationStatus(clientId);
+  const [integrations, readiness, syncStatus] = await Promise.all([
+    getClientIntegrationStatus(clientId),
+    getClientReadiness(clientId),
+    getClientSyncStatusSummary(clientId),
+  ]);
 
   const clientCampaigns = getCampaignsByAccountId(campaigns, clientId);
   const clientAdSets    = clientCampaigns.flatMap((c) =>
@@ -99,6 +105,8 @@ export default async function ClientDetailPage({ params }: PageProps) {
       adSetSummaries={clientAdSetPerformance}
       adSummaries={clientAdPerformance}
       integrations={integrations}
+      readiness={readiness}
+      syncStatus={syncStatus}
     />
   );
 }

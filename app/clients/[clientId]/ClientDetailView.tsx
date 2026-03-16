@@ -13,7 +13,10 @@ import { EvaluationTable } from "../../components/EvaluationTable";
 import { OpportunityList } from "../../components/OpportunityList";
 import { formatCurrency, formatRoas } from "../../../lib/metricUtils";
 import type { ClientIntegrationStatus } from "../../../lib/clientIntegrations";
+import type { ClientReadiness }         from "../../../lib/clientSync/readiness";
+import type { ClientSyncStatusSummary } from "../../../lib/clientSync/types";
 import { ClientIntegrationsSection } from "./ClientIntegrationsSection";
+import { SyncStatusSection }         from "./SyncStatusSection";
 
 // --- Local types -------------------------------------------------------------
 
@@ -49,6 +52,8 @@ type Props = {
   adSetSummaries:    AdSetPerformanceSummary[];
   adSummaries:       AdPerformanceSummary[];
   integrations:      ClientIntegrationStatus;
+  readiness:         ClientReadiness;
+  syncStatus:        ClientSyncStatusSummary;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -74,6 +79,8 @@ export function ClientDetailView({
   adSetSummaries,
   adSummaries,
   integrations,
+  readiness,
+  syncStatus,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -234,6 +241,13 @@ export function ClientDetailView({
       <ClientIntegrationsSection
         clientId={account.id}
         integrations={integrations}
+      />
+
+      {/* Sync Status — readiness, last sync, and action buttons */}
+      <SyncStatusSection
+        clientId={account.id}
+        readiness={readiness}
+        syncStatus={syncStatus}
       />
 
       {/* Campaign Goals editor */}

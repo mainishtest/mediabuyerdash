@@ -75,6 +75,7 @@ model ClientAccount {
   metaSelectedAccounts    MetaSelectedAdAccount[]
   shopifyConnections      ShopifyConnection[]
   shopifyOrders           ShopifyOrder[]
+  clientSyncRuns          ClientSyncRun[]
 }
 
 model Campaign {
@@ -710,6 +711,40 @@ model ReconciliationSummary {
 
   @@unique([clientAccountId, dateFrom, dateTo])
   @@index([clientAccountId, dateFrom])
+}
+
+// ── Client-scoped sync runs ───────────────────────────────────────────────────
+
+// One record per client sync operation (meta | shopify | full).
+model ClientSyncRun {
+  id              String    @id @default(cuid())
+  clientAccountId String
+  syncType        String    // meta | shopify | full
+  status          String    // running | completed | failed | partial
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  clientAccount ClientAccount      @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  steps         ClientSyncRunStep[]
+
+  @@index([clientAccountId, startedAt])
+}
+
+// Individual step within a sync run (one per data source synced).
+model ClientSyncRunStep {
+  id              String    @id @default(cuid())
+  clientSyncRunId String
+  stepType        String    // meta_account | shopify_orders
+  status          String    // running | completed | failed | partial
+  summaryJson     String?   // JSON: counts per step type
+  errorMessage    String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  syncRun ClientSyncRun @relation(fields: [clientSyncRunId], references: [id], onDelete: Cascade)
 }
 
 // ── Shopify sync log ──────────────────────────────────────────────────────────
