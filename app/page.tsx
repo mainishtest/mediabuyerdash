@@ -1,5 +1,10 @@
-export const dynamic = "force-dynamic";
+// app/page.tsx — redirect root to /dashboard
+import { redirect } from "next/navigation";
+export default function RootPage() { redirect("/dashboard"); }
 
+// ── Legacy dashboard (kept for reference, unreachable after redirect) ─────────
+export const dynamic = "force-dynamic";
+// @ts-ignore — kept for reference only
 import Link from "next/link";
 import { DashboardCard } from "./components/DashboardCard";
 import { HourlyRow } from "./components/HourlyRow";
@@ -43,7 +48,8 @@ import { StatCard }    from "../components/ui/StatCard";
 import { SectionCard } from "../components/ui/SectionCard";
 import { Badge }       from "../components/ui/Badge";
 
-export default async function Page() {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _LegacyPage() {
   const dbAccounts = await prisma.clientAccount
     .findMany({ include: { _count: { select: { campaigns: true } } } })
     .catch(() => []);

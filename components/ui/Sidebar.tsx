@@ -9,59 +9,15 @@ interface NavItem {
   label: string;
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Analytics",
-    items: [
-      { href: "/",        label: "Dashboard" },
-      { href: "/clients", label: "Clients"   },
-    ],
-  },
-  {
-    label: "Optimization",
-    items: [
-      { href: "/optimization",       label: "Optimization"      },
-      { href: "/optimization-lab",   label: "Optimization Lab"  },
-      { href: "/measurement-policy", label: "Measurement Policy" },
-    ],
-  },
-  {
-    label: "Creative",
-    items: [
-      { href: "/creative-lab",          label: "Creative Lab"         },
-      { href: "/creative-history",      label: "Generation History"   },
-      { href: "/launch-drafts",         label: "Launch Drafts"        },
-      { href: "/creative-intelligence", label: "Creative Intelligence" },
-    ],
-  },
-  {
-    label: "Meta",
-    items: [
-      { href: "/integrations/meta",       label: "Meta Ads"  },
-      { href: "/integrations/meta/sync",  label: "Meta Sync" },
-    ],
-  },
-  {
-    label: "CRM",
-    items: [
-      { href: "/integrations/shopify",       label: "Shopify"      },
-      { href: "/integrations/shopify/sync",  label: "Shopify Sync" },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { href: "/reconciliation", label: "Reconciliation" },
-      { href: "/reporting",      label: "Reporting"      },
-      { href: "/integrations",   label: "Integrations"   },
-      { href: "/ui-preview",     label: "UI Preview"     },
-    ],
-  },
+// Primary nav — only routes that exist and matter to the agency owner.
+const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard",      label: "Dashboard"     },
+  { href: "/clients",        label: "Clients"       },
+  { href: "/integrations",   label: "Integrations"  },
+  { href: "/reconciliation", label: "Reconciliation" },
+  { href: "/optimization",   label: "Optimization"  },
+  { href: "/creative-lab",   label: "Creative Lab"  },
 ];
 
 function SidebarFooter() {
@@ -104,7 +60,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    pathname === href || pathname.startsWith(href + "/");
 
   return (
     <nav className="flex h-full flex-col">
@@ -121,32 +77,25 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </span>
       </div>
 
-      {/* Nav groups */}
-      <div className="flex-1 overflow-y-auto py-4">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mb-5 px-3">
-            <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-widest text-slate-600">
-              {group.label}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onClose}
-                    className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
-                      isActive(item.href)
-                        ? "bg-slate-800 font-medium text-white"
-                        : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      {/* Nav items */}
+      <div className="flex-1 overflow-y-auto py-3">
+        <ul className="space-y-0.5 px-3">
+          {NAV_ITEMS.map((item) => (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                onClick={onClose}
+                className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isActive(item.href)
+                    ? "bg-slate-800 font-medium text-white"
+                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                }`}
+              >
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Footer — user info + sign out */}
