@@ -798,3 +798,64 @@ model ShopifySyncLog {
 
   connection ShopifyConnection @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
 }
+
+// ── Creative Lab: uploaded image creatives ────────────────────────────────────
+
+// An image file uploaded by the user for creative analysis and iteration.
+model UploadedCreativeImage {
+  id               String   @id @default(cuid())
+  workspaceId      String?
+  clientAccountId  String?
+  fileName         String
+  mimeType         String
+  fileSize         Int      // bytes
+  storagePath      String   // relative path, e.g. "/uploads/creatives/[id].jpg"
+  uploadedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  analysis   UploadedCreativeAnalysis?
+  iterations GeneratedImageIterationConcept[]
+
+  @@index([workspaceId])
+  @@index([clientAccountId])
+}
+
+// First-pass analysis of an uploaded creative image.
+// Deterministic/mock in v1. Swap analysisEngine for real AI next step.
+model UploadedCreativeAnalysis {
+  id                              String   @id @default(cuid())
+  uploadedCreativeImageId         String   @unique
+  analysisStatus                  String   @default("pending") // pending | completed | failed
+  analysisEngine                  String   @default("mock_v1") // mock_v1 | vision_api
+  visualHeadline                  String?  // inferred headline or focal text
+  detectedStyle                   String?  // e.g. "product-focus", "lifestyle", "text-heavy"
+  dominantMessage                 String?  // e.g. "discount offer", "product benefit"
+  visualTheme                     String?  // e.g. "minimalist", "busy", "high-contrast"
+  clarityScore                    Int?     // 1-10: how readable is the main message
+  attentionScore                  Int?     // 1-10: how likely to stop the scroll
+  directResponseObservationsJson  String?  // JSON array of observation strings
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  image UploadedCreativeImage @relation(fields: [uploadedCreativeImageId], references: [id], onDelete: Cascade)
+}
+
+// A generated image iteration concept for a given uploaded creative.
+// v1: deterministic. v2: AI-generated real image edits.
+model GeneratedImageIterationConcept {
+  id                    String   @id @default(cuid())
+  uploadedCreativeImageId String
+  title                 String
+  conceptSummary        String
+  visualChanges         String
+  goal                  String
+  directResponseAngle   String?  // e.g. "stronger offer clarity"
+  approvalStatus        String   @default("draft") // draft | approved | rejected
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  image UploadedCreativeImage @relation(fields: [uploadedCreativeImageId], references: [id], onDelete: Cascade)
+
+  @@index([uploadedCreativeImageId])
+}
