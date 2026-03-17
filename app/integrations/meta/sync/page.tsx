@@ -1,13 +1,20 @@
 export const dynamic = "force-dynamic";
 
-import { getMetaConnection }    from "../../../../lib/meta/db";
+import { getServerSession }  from "next-auth";
+import { authOptions }       from "../../../../lib/auth";
+import { getMetaConnection } from "../../../../lib/meta/db";
 import { getLatestSyncLog, getSyncedDataSummary } from "../../../../lib/meta/syncDb";
 import { MetaSyncView, type SyncPageProps }       from "./MetaSyncView";
 
 export const metadata = { title: "Meta Sync — Media Buying Dashboard" };
 
 export default async function MetaSyncPage() {
-  const connection = await getMetaConnection().catch(() => null);
+  const [session, connection] = await Promise.all([
+    getServerSession(authOptions).catch(() => null),
+    getMetaConnection().catch(() => null),
+  ]);
+
+  const workspaceId = session?.user?.workspaceId ?? null;
 
   const selectedAccountIds: string[] = connection
     ? connection.accessibleAccounts
@@ -20,7 +27,7 @@ export default async function MetaSyncPage() {
       ? getLatestSyncLog(connection.id).catch(() => null)
       : Promise.resolve(null),
     selectedAccountIds.length > 0
-      ? getSyncedDataSummary(selectedAccountIds).catch(() => null)
+      ? getSyncedDataSummary(selectedAccountIds, workspaceId).catch(() => null)
       : Promise.resolve(null),
   ]);
 

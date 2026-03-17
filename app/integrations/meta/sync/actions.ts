@@ -1,8 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { getServerSession }  from "next-auth";
+import { revalidatePath }    from "next/cache";
+import { authOptions }       from "../../../../lib/auth";
 import { runMetaSync, type SyncSummary } from "../../../../lib/meta/sync";
-import { isMetaConfigured }             from "../../../../lib/meta/config";
+import { isMetaConfigured }  from "../../../../lib/meta/config";
 
 const PAGE = "/integrations/meta/sync";
 
@@ -22,7 +24,10 @@ export async function runMetaSyncAction(): Promise<SyncSummary> {
     };
   }
 
-  const summary = await runMetaSync();
+  const session    = await getServerSession(authOptions);
+  const workspaceId = session?.user?.workspaceId ?? null;
+
+  const summary = await runMetaSync(workspaceId);
   revalidatePath(PAGE);
   return summary;
 }

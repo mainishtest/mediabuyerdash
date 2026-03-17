@@ -55,6 +55,7 @@ export async function upsertCampaigns(
       where:  { externalCampaignId: c.externalCampaignId },
       create: c,
       update: {
+        workspaceId:   c.workspaceId,  // backfill if previously null
         name:          c.name,
         status:        c.status,
         objective:     c.objective,
@@ -72,6 +73,7 @@ export async function upsertAdSets(adSets: MappedAdSet[]): Promise<number> {
       where:  { externalAdSetId: a.externalAdSetId },
       create: a,
       update: {
+        workspaceId:   a.workspaceId,
         name:          a.name,
         status:        a.status,
         metaUpdatedAt: a.metaUpdatedAt,
@@ -87,10 +89,11 @@ export async function upsertAds(ads: MappedAd[]): Promise<number> {
       where:  { externalAdId: a.externalAdId },
       create: a,
       update: {
-        name:              a.name,
-        status:            a.status,
+        workspaceId:        a.workspaceId,
+        name:               a.name,
+        status:             a.status,
         externalCreativeId: a.externalCreativeId,
-        metaUpdatedAt:     a.metaUpdatedAt,
+        metaUpdatedAt:      a.metaUpdatedAt,
       },
     });
   }
@@ -107,9 +110,15 @@ export async function upsertCreatives(
     await prisma.metaSyncedCreative.upsert({
       where:  { externalCreativeId: c.externalCreativeId },
       create: c,
-      update: { name: c.name, title: c.title, body: c.body,
-        callToAction: c.callToAction, imageUrl: c.imageUrl,
-        thumbnailUrl: c.thumbnailUrl },
+      update: {
+        workspaceId:  c.workspaceId,
+        name:         c.name,
+        title:        c.title,
+        body:         c.body,
+        callToAction: c.callToAction,
+        imageUrl:     c.imageUrl,
+        thumbnailUrl: c.thumbnailUrl,
+      },
     });
   }
   return unique.length;
@@ -142,27 +151,51 @@ export async function replaceInsights(
 
 /**
  * Returns entity counts and recent rows for the given ad account IDs.
- * Used to populate the sync page without N+1 queries.
+ * Optionally scoped by workspaceId for multi-workspace safety.
  */
 export async function getSyncedDataSummary(
-  externalAdAccountIds: string[]
+  externalAdAccountIds: string[],
+  workspaceId?: string | null
 ) {
-  const where = { externalAdAccountId: { in: externalAdAccountIds } };
+  // When workspaceId is provided, include it to prevent cross-workspace data leaks.
+  // The OR clause handles legacy rows that pre-date workspaceId being populated.
+  const buildWhere = (extra?: object) => ({
+    externalAdAccountId: { in: externalAdAccountIds },
+    ...(workspaceId
+      ? { OR: [{ workspaceId }, { workspaceId: null }] }
+      : {}),
+    ...extra,
+  });
 
   const [
     campaignCount, adSetCount, adCount, creativeCount, insightCount,
     topCampaigns, topAdSets, topAds, topInsights,
   ] = await Promise.all([
-    prisma.metaSyncedCampaign.count({ where }),
-    prisma.metaSyncedAdSet.count({ where }),
-    prisma.metaSyncedAd.count({ where }),
-    prisma.metaSyncedCreative.count(),
-    prisma.metaSyncedInsight.count({ where }),
-    prisma.metaSyncedCampaign.findMany({ where, take: 20, orderBy: { updatedAt: "desc" } }),
-    prisma.metaSyncedAdSet.findMany({ where, take: 20, orderBy: { updatedAt: "desc" } }),
-    prisma.metaSyncedAd.findMany({ where, take: 20, orderBy: { updatedAt: "desc" } }),
+    prisma.metaSyncedCampaign.count({ where: buildWhere() }),
+    prisma.metaSyncedAdSet.count({ where: buildWhere() }),
+    prisma.metaSyncedAd.count({ where: buildWhere() }),
+    // creatives are deduped globally; scope them by workspaceId if set
+    workspaceId
+      ? prisma.metaSyncedCreative.count({ where: { OR: [{ workspaceId }, { workspaceId: null }] } })
+      : prisma.metaSyncedCreative.count(),
+    prisma.metaSyncedInsight.count({ where: buildWhere() }),
+    prisma.metaSyncedCampaign.findMany({
+      where:   buildWhere(),
+      take:    20,
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.metaSyncedAdSet.findMany({
+      where:   buildWhere(),
+      take:    20,
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.metaSyncedAd.findMany({
+      where:   buildWhere(),
+      take:    20,
+      orderBy: { updatedAt: "desc" },
+    }),
     prisma.metaSyncedInsight.findMany({
-      where,
+      where:   buildWhere(),
       take:    20,
       orderBy: { spend: "desc" },
     }),

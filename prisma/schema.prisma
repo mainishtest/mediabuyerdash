@@ -499,6 +499,7 @@ model MetaSyncLog {
 // Campaigns synced from Meta. Upserted on externalCampaignId.
 model MetaSyncedCampaign {
   id                  String    @id @default(cuid())
+  workspaceId         String?   // set on sync; null for legacy rows
   externalAdAccountId String
   externalCampaignId  String    @unique
   name                String
@@ -509,11 +510,15 @@ model MetaSyncedCampaign {
   metaUpdatedAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([workspaceId, externalAdAccountId])
 }
 
 // Ad sets synced from Meta. Upserted on externalAdSetId.
 model MetaSyncedAdSet {
   id                  String    @id @default(cuid())
+  workspaceId         String?
   externalAdAccountId String
   externalCampaignId  String
   externalAdSetId     String    @unique
@@ -523,11 +528,14 @@ model MetaSyncedAdSet {
   metaUpdatedAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  @@index([workspaceId])
 }
 
 // Ads synced from Meta. Upserted on externalAdId.
 model MetaSyncedAd {
   id                  String    @id @default(cuid())
+  workspaceId         String?
   externalAdAccountId String
   externalCampaignId  String
   externalAdSetId     String
@@ -539,11 +547,14 @@ model MetaSyncedAd {
   metaUpdatedAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  @@index([workspaceId])
 }
 
 // Creative metadata synced from Meta. Upserted on externalCreativeId.
 model MetaSyncedCreative {
   id                 String   @id @default(cuid())
+  workspaceId        String?
   externalCreativeId String   @unique
   name               String?
   title              String?
@@ -553,6 +564,8 @@ model MetaSyncedCreative {
   thumbnailUrl       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([workspaceId])
 }
 
 // Daily insight rows. Refreshed (delete + recreate) on each sync for the
@@ -560,6 +573,7 @@ model MetaSyncedCreative {
 // work correctly in PostgreSQL even for nullable entity IDs.
 model MetaSyncedInsight {
   id                  String  @id @default(cuid())
+  workspaceId         String?
   externalAdAccountId String
   level               String  @default("ad") // campaign | adset | ad
   externalCampaignId  String  @default("")
@@ -578,6 +592,7 @@ model MetaSyncedInsight {
 
   @@unique([externalAdAccountId, level, externalCampaignId, externalAdSetId, externalAdId, dateStart])
   @@index([externalAdAccountId, dateStart])
+  @@index([workspaceId, dateStart])
 }
 
 // ── Shopify CRM integration ───────────────────────────────────────────────────

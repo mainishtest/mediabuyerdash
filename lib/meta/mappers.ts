@@ -9,6 +9,7 @@ import type {
 // ── Mapped (Prisma-ready) types ───────────────────────────────────────────────
 
 export interface MappedCampaign {
+  workspaceId:         string | null;
   externalAdAccountId: string;
   externalCampaignId:  string;
   name:                string;
@@ -20,6 +21,7 @@ export interface MappedCampaign {
 }
 
 export interface MappedAdSet {
+  workspaceId:         string | null;
   externalAdAccountId: string;
   externalCampaignId:  string;
   externalAdSetId:     string;
@@ -30,6 +32,7 @@ export interface MappedAdSet {
 }
 
 export interface MappedAd {
+  workspaceId:         string | null;
   externalAdAccountId: string;
   externalCampaignId:  string;
   externalAdSetId:     string;
@@ -42,6 +45,7 @@ export interface MappedAd {
 }
 
 export interface MappedCreative {
+  workspaceId:        string | null;
   externalCreativeId: string;
   name:               string | null;
   title:              string | null;
@@ -52,6 +56,7 @@ export interface MappedCreative {
 }
 
 export interface MappedInsight {
+  workspaceId:         string | null;
   externalAdAccountId: string;
   level:               string;
   externalCampaignId:  string;
@@ -71,9 +76,11 @@ export interface MappedInsight {
 
 export function mapCampaign(
   raw: RawMetaCampaign,
-  externalAdAccountId: string
+  externalAdAccountId: string,
+  workspaceId: string | null = null
 ): MappedCampaign {
   return {
+    workspaceId,
     externalAdAccountId,
     externalCampaignId: raw.id,
     name:               raw.name,
@@ -87,9 +94,11 @@ export function mapCampaign(
 
 export function mapAdSet(
   raw: RawMetaAdSet,
-  externalAdAccountId: string
+  externalAdAccountId: string,
+  workspaceId: string | null = null
 ): MappedAdSet {
   return {
+    workspaceId,
     externalAdAccountId,
     externalCampaignId: raw.campaign_id,
     externalAdSetId:    raw.id,
@@ -102,9 +111,11 @@ export function mapAdSet(
 
 export function mapAd(
   raw: RawMetaAd,
-  externalAdAccountId: string
+  externalAdAccountId: string,
+  workspaceId: string | null = null
 ): MappedAd {
   return {
+    workspaceId,
     externalAdAccountId,
     externalCampaignId: raw.campaign_id,
     externalAdSetId:    raw.adset_id,
@@ -117,8 +128,12 @@ export function mapAd(
   };
 }
 
-export function mapCreative(raw: RawMetaCreativeEmbedded): MappedCreative {
+export function mapCreative(
+  raw: RawMetaCreativeEmbedded,
+  workspaceId: string | null = null
+): MappedCreative {
   return {
+    workspaceId,
     externalCreativeId: raw.id,
     name:               raw.name               ?? null,
     title:              raw.title              ?? null,
@@ -131,9 +146,11 @@ export function mapCreative(raw: RawMetaCreativeEmbedded): MappedCreative {
 
 export function mapInsight(
   raw: RawMetaInsight,
-  externalAdAccountId: string
+  externalAdAccountId: string,
+  workspaceId: string | null = null
 ): MappedInsight {
   return {
+    workspaceId,
     externalAdAccountId,
     level:              "ad",
     externalCampaignId: raw.campaign_id ?? "",
@@ -141,9 +158,9 @@ export function mapInsight(
     externalAdId:       raw.ad_id       ?? "",
     dateStart:          raw.date_start,
     dateStop:           raw.date_stop,
-    spend:              parseFloat(raw.spend)       || 0,
+    spend:              parseFloat(raw.spend)         || 0,
     impressions:        parseInt(raw.impressions, 10) || 0,
-    clicks:             parseInt(raw.clicks, 10)     || 0,
+    clicks:             parseInt(raw.clicks, 10)      || 0,
     ctr:                raw.ctr       ? parseFloat(raw.ctr)       : null,
     cpm:                raw.cpm       ? parseFloat(raw.cpm)       : null,
     frequency:          raw.frequency ? parseFloat(raw.frequency) : null,

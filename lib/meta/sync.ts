@@ -31,6 +31,7 @@ export interface SyncSummary {
 async function syncAccount(
   externalAdAccountId: string,
   accessToken: string,
+  workspaceId: string | null,
   counts: {
     campaignsSynced:   number;
     adSetsSynced:      number;
@@ -42,25 +43,27 @@ async function syncAccount(
   // Campaigns
   const rawCampaigns = await fetchCampaigns(externalAdAccountId, accessToken);
   const mappedCampaigns = rawCampaigns.map((c) =>
-    mapCampaign(c, externalAdAccountId)
+    mapCampaign(c, externalAdAccountId, workspaceId)
   );
   counts.campaignsSynced += await upsertCampaigns(mappedCampaigns);
 
   // Ad sets
   const rawAdSets = await fetchAdSets(externalAdAccountId, accessToken);
-  const mappedAdSets = rawAdSets.map((a) => mapAdSet(a, externalAdAccountId));
+  const mappedAdSets = rawAdSets.map((a) =>
+    mapAdSet(a, externalAdAccountId, workspaceId)
+  );
   counts.adSetsSynced += await upsertAdSets(mappedAdSets);
 
   // Ads (with embedded creative data)
   const rawAds = await fetchAds(externalAdAccountId, accessToken);
-  const mappedAds = rawAds.map((a) => mapAd(a, externalAdAccountId));
+  const mappedAds = rawAds.map((a) => mapAd(a, externalAdAccountId, workspaceId));
   counts.adsSynced += await upsertAds(mappedAds);
 
   // Creatives extracted from ad responses
   const rawCreatives = rawAds
     .filter((a) => a.creative?.id)
     .map((a) => a.creative!);
-  const mappedCreatives = rawCreatives.map(mapCreative);
+  const mappedCreatives = rawCreatives.map((c) => mapCreative(c, workspaceId));
   counts.creativesSynced += await upsertCreatives(mappedCreatives);
 
   // Insights — last 7 days at ad level
@@ -70,7 +73,7 @@ async function syncAccount(
     7
   );
   const mappedInsights = rawInsights.map((r) =>
-    mapInsight(r, externalAdAccountId)
+    mapInsight(r, externalAdAccountId, workspaceId)
   );
   counts.insightRowsSynced += await replaceInsights(
     externalAdAccountId,
@@ -89,7 +92,8 @@ async function syncAccount(
  */
 export async function runMetaSyncForAccounts(
   adAccounts: Array<{ externalAdAccountId: string; accessToken: string }>,
-  connectionId: string
+  connectionId: string,
+  workspaceId: string | null = null
 ): Promise<SyncSummary> {
   const startedAt = new Date();
 
@@ -121,7 +125,12 @@ export async function runMetaSyncForAccounts(
 
   for (const account of adAccounts) {
     try {
-      await syncAccount(account.externalAdAccountId, account.accessToken, counts);
+      await syncAccount(
+        account.externalAdAccountId,
+        account.accessToken,
+        workspaceId,
+        counts
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${account.externalAdAccountId}: ${msg}`);
@@ -146,9 +155,11 @@ export async function runMetaSyncForAccounts(
   };
 }
 
-// ── Workspace-wide orchestrator (existing behaviour) ─────────────────────────
+// ── Workspace-wide orchestrator ───────────────────────────────────────────────
 
-export async function runMetaSync(): Promise<SyncSummary> {
+export async function runMetaSync(
+  workspaceId: string | null = null
+): Promise<SyncSummary> {
   const startedAt = new Date();
 
   const connection = await getConnectionForSync();
@@ -188,5 +199,5 @@ export async function runMetaSync(): Promise<SyncSummary> {
     };
   }
 
-  return runMetaSyncForAccounts(selected, connection.id);
+  return runMetaSyncForAccounts(selected, connection.id, workspaceId);
 }
