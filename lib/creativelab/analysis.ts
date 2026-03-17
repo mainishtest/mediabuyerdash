@@ -1,123 +1,93 @@
 // lib/creativelab/analysis.ts
-// First-pass creative image analysis.
+// Creative image analysis using Claude Vision (claude-opus-4-6).
 //
-// v1 engine: deterministic/mock — structured to be swapped for a real
-// vision API (GPT-4o Vision, Claude Vision, etc.) in the next step.
-//
-// The analysis is framed around Facebook direct-response ad best practices.
-// It does NOT imply guaranteed conversion outcomes.
+// Sends the uploaded image to Claude with a direct-response–focused prompt and
+// parses the structured JSON response into UploadedCreativeAnalysis.
 
+import fs from "fs";
+import path from "path";
+import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db";
+
+// ── Anthropic client ───────────────────────────────────────────────────────────
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export interface AnalysisResult {
-  visualHeadline:                 string | null;
-  detectedStyle:                  string;
-  dominantMessage:                string;
-  visualTheme:                    string;
-  clarityScore:                   number; // 1–10
-  attentionScore:                 number; // 1–10
-  directResponseObservations:     string[];
+interface VisionAnalysisResult {
+  detectedStyle:                 string;
+  dominantMessage:               string;
+  visualTheme:                   string;
+  clarityScore:                  number;   // 1–10
+  attentionScore:                number;   // 1–10
+  directResponseObservations:    string[]; // 4–6 observations
 }
 
-// ── Direct-response observation library ───────────────────────────────────────
+// ── Prompt ────────────────────────────────────────────────────────────────────
 
-const CLARITY_OBSERVATIONS = [
-  "Message hierarchy may not be immediately clear to a cold audience",
-  "Primary offer or benefit could be made more visually dominant",
-  "Consider reducing visual elements competing with the main message",
-  "Text legibility may benefit from higher contrast or larger type",
-  "Key value proposition appears clear and upfront",
-  "Offer clarity is strong — benefit is easy to identify at a glance",
-  "Main message competes with background elements",
-];
+const SYSTEM_PROMPT = `You are a senior direct-response creative strategist specialising in Facebook and Instagram paid social advertising. Your role is to analyse ad creatives and provide structured, actionable feedback grounded in DR best practices.
 
-const ATTENTION_OBSERVATIONS = [
-  "Focal point strength could be improved to stop the scroll faster",
-  "Visual hierarchy guides the eye toward the primary message",
-  "High-contrast composition likely to attract attention in feed",
-  "Image may benefit from a stronger single focal point",
-  "Color contrast appears strong for feed visibility",
-  "Layout density may reduce attention speed on mobile",
-  "Composition feels balanced but could be more arresting",
-];
+When you receive an image, analyse it and respond with ONLY a valid JSON object — no prose, no markdown fences, just the raw JSON.`;
 
-const DR_STRENGTH_OBSERVATIONS = [
-  "Direct-response hook is not immediately visible",
-  "Action cue (CTA) would benefit from higher visual prominence",
-  "Offer or urgency signal is not strongly present",
-  "Product or benefit appears to be the primary visual focus",
-  "Consider adding or amplifying a visual urgency element",
-  "Social proof or authority signal could strengthen conversion intent",
-  "Emotional hook appears present — relatability may be high",
-  "Product benefit visibility is a strength of this creative",
-];
+function buildUserPrompt(): string {
+  return `Analyse this ad creative for direct-response effectiveness. Return ONLY a JSON object with these exact keys:
 
-// ── Style classifier (deterministic from filename/mime hints) ─────────────────
-
-function classifyStyle(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  if (lower.includes("lifestyle") || lower.includes("person") || lower.includes("model")) {
-    return "lifestyle";
-  }
-  if (lower.includes("product") || lower.includes("item") || lower.includes("pack")) {
-    return "product-focus";
-  }
-  if (lower.includes("text") || lower.includes("copy") || lower.includes("offer")) {
-    return "text-heavy";
-  }
-  if (lower.includes("before") || lower.includes("after")) {
-    return "before-after";
-  }
-  return "general-static";
+{
+  "detectedStyle": one of "lifestyle" | "product-focus" | "text-heavy" | "before-after" | "general-static",
+  "dominantMessage": short phrase describing the primary message or offer (e.g. "discount offer", "product benefit showcase"),
+  "visualTheme": one of "dark" | "light-minimal" | "high-contrast" | "neutral",
+  "clarityScore": integer 1–10 (how clear and readable is the main message to a cold audience),
+  "attentionScore": integer 1–10 (how likely is this to stop the scroll in a busy feed),
+  "directResponseObservations": array of 4–6 concise observation strings, each addressing a specific DR strength or weakness (offer visibility, CTA prominence, focal point, social proof, emotional hook, text legibility, visual hierarchy, urgency signal)
 }
 
-function classifyTheme(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  if (lower.includes("dark") || lower.includes("black")) return "dark";
-  if (lower.includes("light") || lower.includes("white") || lower.includes("clean")) return "light-minimal";
-  if (lower.includes("bright") || lower.includes("color") || lower.includes("vivid")) return "high-contrast";
-  return "neutral";
+Scoring guide:
+- clarityScore 8–10: offer/benefit immediately obvious; 5–7: requires a moment; 1–4: unclear or cluttered
+- attentionScore 8–10: strong single focal point, high contrast, arresting composition; 5–7: decent but not striking; 1–4: blends into feed
+
+Respond with the JSON object only. No explanation, no markdown.`;
 }
 
-function inferMessage(style: string): string {
-  switch (style) {
-    case "lifestyle":      return "aspirational benefit or product-in-use";
-    case "product-focus":  return "product showcase or feature highlight";
-    case "text-heavy":     return "offer or discount driven";
-    case "before-after":   return "transformation or problem-solution";
-    default:               return "general brand or product awareness";
+// ── MIME → Anthropic media_type ───────────────────────────────────────────────
+
+type SupportedMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+function toAnthropicMediaType(mimeType: string): SupportedMediaType {
+  const allowed: SupportedMediaType[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  if (allowed.includes(mimeType as SupportedMediaType)) {
+    return mimeType as SupportedMediaType;
   }
+  return "image/jpeg";
 }
 
-// ── Seeded pseudo-random for deterministic-per-image scores ───────────────────
+// ── Parse Claude's JSON response ──────────────────────────────────────────────
 
-function seededInt(seed: string, min: number, max: number): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    hash |= 0;
-  }
-  const normalised = Math.abs(hash) / 2147483647;
-  return Math.round(min + normalised * (max - min));
-}
+function parseVisionResponse(text: string): VisionAnalysisResult {
+  // Strip any accidental markdown fences just in case
+  const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const parsed = JSON.parse(cleaned) as Partial<VisionAnalysisResult>;
 
-function pickItems<T>(arr: T[], seed: string, count: number): T[] {
-  const results: T[] = [];
-  for (let i = 0; i < count; i++) {
-    const idx = seededInt(seed + i, 0, arr.length - 1);
-    results.push(arr[idx]);
-  }
-  return results;
+  return {
+    detectedStyle:              String(parsed.detectedStyle              ?? "general-static"),
+    dominantMessage:            String(parsed.dominantMessage            ?? "general product"),
+    visualTheme:                String(parsed.visualTheme                ?? "neutral"),
+    clarityScore:               Math.min(10, Math.max(1, Number(parsed.clarityScore  ?? 5))),
+    attentionScore:             Math.min(10, Math.max(1, Number(parsed.attentionScore ?? 5))),
+    directResponseObservations: Array.isArray(parsed.directResponseObservations)
+      ? parsed.directResponseObservations.map(String)
+      : [],
+  };
 }
 
 // ── Main analysis function ────────────────────────────────────────────────────
 
 /**
- * Run a first-pass analysis on an uploaded creative image and persist to DB.
- * v1: deterministic mock. Replace the body of this function with a real
- * vision API call (GPT-4o, Claude Vision) to upgrade to AI analysis.
+ * Run Claude Vision analysis on an uploaded creative image and persist to DB.
+ * Reads the image from the local filesystem, sends it to claude-opus-4-6,
+ * and upserts the result into UploadedCreativeAnalysis.
  */
 export async function analyzeCreativeImage(imageId: string): Promise<void> {
   const image = await prisma.uploadedCreativeImage.findUnique({
@@ -125,39 +95,69 @@ export async function analyzeCreativeImage(imageId: string): Promise<void> {
   });
   if (!image) throw new Error("Image not found");
 
-  const style         = classifyStyle(image.fileName);
-  const theme         = classifyTheme(image.fileName);
-  const message       = inferMessage(style);
-  const clarityScore  = seededInt(imageId + "clarity",   5, 9);
-  const attentionScore = seededInt(imageId + "attention", 4, 9);
+  // Mark as in-progress
+  await prisma.uploadedCreativeAnalysis.upsert({
+    where:  { uploadedCreativeImageId: imageId },
+    create: { uploadedCreativeImageId: imageId, analysisStatus: "pending", analysisEngine: "claude_vision" },
+    update: { analysisStatus: "pending" },
+  });
 
-  const observations = [
-    ...pickItems(CLARITY_OBSERVATIONS,    imageId + "c", 2),
-    ...pickItems(ATTENTION_OBSERVATIONS,  imageId + "a", 2),
-    ...pickItems(DR_STRENGTH_OBSERVATIONS, imageId + "d", 2),
-  ];
+  // Read image from disk (storagePath is relative to project root, e.g. /uploads/creatives/abc.jpg)
+  const absolutePath = path.join(process.cwd(), "public", image.storagePath);
+  const imageBuffer  = fs.readFileSync(absolutePath);
+  const base64Data   = imageBuffer.toString("base64");
+  const mediaType    = toAnthropicMediaType(image.mimeType);
+
+  // Call Claude Vision
+  const response = await anthropic.messages.create({
+    model:      "claude-opus-4-6",
+    max_tokens: 1024,
+    thinking:   { type: "adaptive" },
+    system:     SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type:   "image",
+            source: { type: "base64", media_type: mediaType, data: base64Data },
+          },
+          { type: "text", text: buildUserPrompt() },
+        ],
+      },
+    ],
+  });
+
+  // Extract text from response (skip thinking blocks)
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Claude Vision returned no text block");
+  }
+
+  const result = parseVisionResponse(textBlock.text);
 
   await prisma.uploadedCreativeAnalysis.upsert({
     where:  { uploadedCreativeImageId: imageId },
     create: {
       uploadedCreativeImageId:        imageId,
       analysisStatus:                 "completed",
-      analysisEngine:                 "mock_v1",
-      detectedStyle:                  style,
-      dominantMessage:                message,
-      visualTheme:                    theme,
-      clarityScore,
-      attentionScore,
-      directResponseObservationsJson: JSON.stringify(observations),
+      analysisEngine:                 "claude_vision",
+      detectedStyle:                  result.detectedStyle,
+      dominantMessage:                result.dominantMessage,
+      visualTheme:                    result.visualTheme,
+      clarityScore:                   result.clarityScore,
+      attentionScore:                 result.attentionScore,
+      directResponseObservationsJson: JSON.stringify(result.directResponseObservations),
     },
     update: {
       analysisStatus:                 "completed",
-      detectedStyle:                  style,
-      dominantMessage:                message,
-      visualTheme:                    theme,
-      clarityScore,
-      attentionScore,
-      directResponseObservationsJson: JSON.stringify(observations),
+      analysisEngine:                 "claude_vision",
+      detectedStyle:                  result.detectedStyle,
+      dominantMessage:                result.dominantMessage,
+      visualTheme:                    result.visualTheme,
+      clarityScore:                   result.clarityScore,
+      attentionScore:                 result.attentionScore,
+      directResponseObservationsJson: JSON.stringify(result.directResponseObservations),
     },
   });
 }
