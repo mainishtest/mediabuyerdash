@@ -15,8 +15,10 @@ import { formatCurrency, formatRoas } from "../../../lib/metricUtils";
 import type { ClientIntegrationStatus } from "../../../lib/clientIntegrations";
 import type { ClientReadiness }         from "../../../lib/clientSync/readiness";
 import type { ClientSyncStatusSummary } from "../../../lib/clientSync/types";
-import { ClientIntegrationsSection } from "./ClientIntegrationsSection";
-import { SyncStatusSection }         from "./SyncStatusSection";
+import type { ClientMetaData }          from "../../../lib/meta/clientMetaService";
+import { ClientIntegrationsSection }    from "./ClientIntegrationsSection";
+import { SyncStatusSection }            from "./SyncStatusSection";
+import { LiveMetaCampaignsSection }     from "./LiveMetaCampaignsSection";
 
 // --- Local types -------------------------------------------------------------
 
@@ -54,6 +56,7 @@ type Props = {
   integrations:      ClientIntegrationStatus;
   readiness:         ClientReadiness;
   syncStatus:        ClientSyncStatusSummary;
+  clientMetaData:    ClientMetaData;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -81,6 +84,7 @@ export function ClientDetailView({
   integrations,
   readiness,
   syncStatus,
+  clientMetaData,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -248,6 +252,12 @@ export function ClientDetailView({
         clientId={account.id}
         readiness={readiness}
         syncStatus={syncStatus}
+      />
+
+      {/* Live Meta Campaigns — synced campaign data for mapped accounts */}
+      <LiveMetaCampaignsSection
+        clientId={account.id}
+        data={clientMetaData}
       />
 
       {/* Campaign Performance — link to dedicated campaigns route */}
