@@ -327,7 +327,7 @@ function SectionHeading() {
         Live Meta Campaigns
       </h2>
       <p className="mb-5 text-sm text-slate-400">
-        Synced Meta campaign delivery data for this client's mapped ad accounts.
+        Synced Meta campaign delivery data for this client&apos;s mapped ad accounts.
         Spend and metrics cover the last 30 days.
       </p>
     </>
