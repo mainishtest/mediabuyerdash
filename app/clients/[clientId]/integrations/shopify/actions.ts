@@ -11,6 +11,110 @@ import { runShopifySyncForClient } from "../../../../../lib/shopify/sync";
 import type { ShopifySyncSummary } from "../../../../../lib/shopify/sync";
 import { prisma }                  from "../../../../../lib/db";
 
+/**
+ * Connect a Shopify store using the client_credentials OAuth grant.
+ * Shopify docs: POST https://{shop}/admin/oauth/access_token
+ *   Content-Type: application/x-www-form-urlencoded
+ *   grant_type=client_credentials&client_id=...&client_secret=...
+ */
+export async function connectShopifyClientCredentialsAction(
+  clientId: string,
+  formData: FormData
+): Promise<{ error?: string }> {
+  const rawDomain = formData.get("shopDomain");
+  const rawClientId     = formData.get("clientId");
+  const rawClientSecret = formData.get("clientSecret");
+
+  if (typeof rawDomain !== "string" || !rawDomain.trim()) {
+    return { error: "Please enter a shop domain." };
+  }
+  if (typeof rawClientId !== "string" || !rawClientId.trim()) {
+    return { error: "Please enter a client ID." };
+  }
+  if (typeof rawClientSecret !== "string" || !rawClientSecret.trim()) {
+    return { error: "Please enter a client secret." };
+  }
+
+  const shopDomain   = normaliseShopDomain(rawDomain);
+  const clientIdVal  = rawClientId.trim();
+  const clientSecret = rawClientSecret.trim();
+
+  // Exchange client credentials for an access token
+  let accessToken: string;
+  let scopes: string | undefined;
+  try {
+    const tokenRes = await fetch(
+      `https://${shopDomain}/admin/oauth/access_token`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body:    new URLSearchParams({
+          grant_type:    "client_credentials",
+          client_id:     clientIdVal,
+          client_secret: clientSecret,
+        }),
+        cache: "no-store",
+      }
+    );
+
+    if (!tokenRes.ok) {
+      const text = await tokenRes.text().catch(() => "");
+      return {
+        error: `Shopify rejected the credentials (HTTP ${tokenRes.status}). Check your client ID and secret. ${text}`.trim(),
+      };
+    }
+
+    const json = await tokenRes.json() as { access_token?: string; scope?: string; error_description?: string };
+    if (!json.access_token) {
+      return { error: `Shopify did not return an access token. Response: ${JSON.stringify(json)}` };
+    }
+    accessToken = json.access_token;
+    scopes      = json.scope;
+  } catch (err: unknown) {
+    return { error: `Could not reach ${shopDomain}. Check the domain and your internet connection.` };
+  }
+
+  // Verify the token actually works
+  try {
+    const verifyRes = await fetch(
+      `https://${shopDomain}/admin/api/2024-10/shop.json`,
+      { headers: { "X-Shopify-Access-Token": accessToken }, cache: "no-store" }
+    );
+    if (!verifyRes.ok) {
+      return { error: `Got a token but the API rejected it (HTTP ${verifyRes.status}). The credentials may lack Admin API access.` };
+    }
+  } catch {
+    return { error: "Got a token but could not verify it against the Shopify Admin API." };
+  }
+
+  // Persist
+  try {
+    await prisma.shopifyConnection.upsert({
+      where:  { shopDomain },
+      create: {
+        shopDomain,
+        accessToken,
+        connectionStatus: "active",
+        scopes:           scopes ?? "client_credentials",
+        clientAccountId:  clientId,
+      },
+      update: {
+        accessToken,
+        connectionStatus: "active",
+        scopes:           scopes ?? "client_credentials",
+        clientAccountId:  clientId,
+      },
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: `Database error: ${msg}` };
+  }
+
+  revalidatePath(`/clients/${clientId}/integrations/shopify`);
+  revalidatePath(`/clients/${clientId}`);
+  redirect(`/clients/${clientId}/integrations/shopify?connected=1`);
+}
+
 /** Connect a Shopify store manually using a private-app access token (no OAuth). */
 export async function connectShopifyManuallyAction(
   clientId: string,
