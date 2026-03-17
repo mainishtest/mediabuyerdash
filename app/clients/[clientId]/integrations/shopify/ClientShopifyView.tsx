@@ -9,6 +9,7 @@ import { ActionButton } from "../../../../../components/ui/ActionButton";
 import { StatCard }     from "../../../../../components/ui/StatCard";
 import {
   startClientShopifyOAuthAction,
+  connectShopifyManuallyAction,
   unmapShopifyFromClientPageAction,
   runClientShopifySyncAction,
 } from "./actions";
@@ -162,11 +163,14 @@ export function ClientShopifyView({
   totalRevenue,
   recentOrders,
 }: Props) {
-  const [shopInput,    setShopInput]    = useState("");
-  const [lastResult,   setLastResult]   = useState<ShopifySyncSummary | null>(null);
-  const [oauthPending, startOAuth]      = useTransition();
-  const [syncPending,  startSync]       = useTransition();
-  const [unmapPending, startUnmap]      = useTransition();
+  const [shopInput,      setShopInput]      = useState("");
+  const [tokenInput,     setTokenInput]     = useState("");
+  const [manualError,    setManualError]    = useState<string | null>(null);
+  const [lastResult,     setLastResult]     = useState<ShopifySyncSummary | null>(null);
+  const [oauthPending,   startOAuth]        = useTransition();
+  const [manualPending,  startManual]       = useTransition();
+  const [syncPending,    startSync]         = useTransition();
+  const [unmapPending,   startUnmap]        = useTransition();
 
   // Read error / success from URL (server-rendered, so use window.location on client)
   const searchParams =
@@ -220,15 +224,6 @@ export function ClientShopifyView({
       {humanError && (
         <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
           {humanError}
-        </div>
-      )}
-      {!isConfigured && (
-        <div className="rounded-lg border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-400">
-          <strong>Shopify credentials not configured.</strong>{" "}
-          Set <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_APP_KEY</code>,{" "}
-          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_APP_SECRET</code>, and{" "}
-          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_REDIRECT_URI</code>{" "}
-          environment variables.
         </div>
       )}
 
@@ -369,54 +364,144 @@ export function ClientShopifyView({
       ) : (
         /* ── Connect form ── */
         <SectionCard title="Connect a Shopify Store">
-          <p className="mb-5 text-sm text-slate-400">
-            Connect a Shopify store to map it directly to{" "}
-            <strong className="font-medium text-slate-300">{clientName}</strong>.
-            You will be redirected to Shopify to authorise read-only access to orders and customer data.
-          </p>
+          {isConfigured ? (
+            <>
+              <p className="mb-5 text-sm text-slate-400">
+                Connect a Shopify store to map it directly to{" "}
+                <strong className="font-medium text-slate-300">{clientName}</strong>.
+                You will be redirected to Shopify to authorise read-only access to orders and customer data.
+              </p>
 
-          <form
-            action={(fd) => {
-              startOAuth(() => startClientShopifyOAuthAction(clientId, fd));
-            }}
-            className="flex flex-col gap-4 sm:flex-row sm:items-end"
-          >
-            <div className="flex-1">
-              <label
-                htmlFor="shopDomain"
-                className="mb-1.5 block text-xs font-medium text-slate-400"
+              <form
+                action={(fd) => {
+                  startOAuth(() => startClientShopifyOAuthAction(clientId, fd));
+                }}
+                className="flex flex-col gap-4 sm:flex-row sm:items-end"
               >
-                Shop domain
-              </label>
-              <input
-                id="shopDomain"
-                name="shopDomain"
-                type="text"
-                placeholder="your-store.myshopify.com"
-                value={shopInput}
-                onChange={(e) => setShopInput(e.target.value)}
-                disabled={!isConfigured || oauthPending}
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
-                  text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
-                  disabled:opacity-50"
-              />
-            </div>
-            <ActionButton
-              type="submit"
-              variant="primary"
-              disabled={!isConfigured || oauthPending || !shopInput.trim()}
-            >
-              {oauthPending ? "Redirecting…" : "Connect Shopify"}
-            </ActionButton>
-          </form>
+                <div className="flex-1">
+                  <label
+                    htmlFor="shopDomain"
+                    className="mb-1.5 block text-xs font-medium text-slate-400"
+                  >
+                    Shop domain
+                  </label>
+                  <input
+                    id="shopDomain"
+                    name="shopDomain"
+                    type="text"
+                    placeholder="your-store.myshopify.com"
+                    value={shopInput}
+                    onChange={(e) => setShopInput(e.target.value)}
+                    disabled={oauthPending}
+                    required
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                      text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                      disabled:opacity-50"
+                  />
+                </div>
+                <ActionButton
+                  type="submit"
+                  variant="primary"
+                  disabled={oauthPending || !shopInput.trim()}
+                >
+                  {oauthPending ? "Redirecting…" : "Connect Shopify"}
+                </ActionButton>
+              </form>
 
-          <p className="mt-3 text-xs text-slate-500">
-            Only{" "}
-            <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
-            <strong className="font-medium text-slate-400">read_customers</strong>{" "}
-            scopes are requested. No write access is granted.
-          </p>
+              <p className="mt-3 text-xs text-slate-500">
+                Only{" "}
+                <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
+                <strong className="font-medium text-slate-400">read_customers</strong>{" "}
+                scopes are requested. No write access is granted.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mb-5 text-sm text-slate-400">
+                Enter your client&apos;s Shopify store domain and a{" "}
+                <strong className="font-medium text-slate-300">private-app access token</strong>{" "}
+                to connect without OAuth. You can create a token in your Shopify admin under{" "}
+                <em>Apps → Develop apps</em>.
+              </p>
+
+              {manualError && (
+                <div className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+                  {manualError}
+                </div>
+              )}
+
+              <form
+                action={async (fd) => {
+                  setManualError(null);
+                  startManual(async () => {
+                    const result = await connectShopifyManuallyAction(clientId, fd);
+                    if (result?.error) setManualError(result.error);
+                  });
+                }}
+                className="flex flex-col gap-4"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="shopDomain"
+                      className="mb-1.5 block text-xs font-medium text-slate-400"
+                    >
+                      Shop domain
+                    </label>
+                    <input
+                      id="shopDomain"
+                      name="shopDomain"
+                      type="text"
+                      placeholder="your-store.myshopify.com"
+                      value={shopInput}
+                      onChange={(e) => setShopInput(e.target.value)}
+                      disabled={manualPending}
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                        text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                        disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="accessToken"
+                    className="mb-1.5 block text-xs font-medium text-slate-400"
+                  >
+                    Admin API access token
+                  </label>
+                  <input
+                    id="accessToken"
+                    name="accessToken"
+                    type="password"
+                    placeholder="shpat_xxxxxxxxxxxxxxxxxxxx"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    disabled={manualPending}
+                    required
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                      text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                      disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <ActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={manualPending || !shopInput.trim() || !tokenInput.trim()}
+                  >
+                    {manualPending ? "Connecting…" : "Connect Shopify"}
+                  </ActionButton>
+                </div>
+              </form>
+
+              <p className="mt-3 text-xs text-slate-500">
+                The token needs <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
+                <strong className="font-medium text-slate-400">read_customers</strong> scopes.
+                No write access is used.
+              </p>
+            </>
+          )}
 
           <p className="mt-2 text-xs text-slate-500">
             Already connected a store?{" "}
