@@ -17,10 +17,12 @@ import type { ClientReadiness }         from "../../../lib/clientSync/readiness"
 import type { ClientSyncStatusSummary } from "../../../lib/clientSync/types";
 import type { ClientMetaData }          from "../../../lib/meta/clientMetaService";
 import type { MetaImportStatus }        from "../../../lib/meta/metaImportStatus";
+import type { ClientMetaValidation }    from "../../../lib/meta/clientMetaValidation";
 import { ClientIntegrationsSection }    from "./ClientIntegrationsSection";
 import { SyncStatusSection }            from "./SyncStatusSection";
 import { LiveMetaCampaignsSection }     from "./LiveMetaCampaignsSection";
 import { MetaImportDebugPanel }         from "./MetaImportDebugPanel";
+import { MetaVerificationSection }      from "./MetaVerificationSection";
 
 // --- Local types -------------------------------------------------------------
 
@@ -60,6 +62,7 @@ type Props = {
   syncStatus:        ClientSyncStatusSummary;
   clientMetaData:    ClientMetaData;
   metaImportStatus:  MetaImportStatus;
+  metaValidation:    ClientMetaValidation;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -89,6 +92,7 @@ export function ClientDetailView({
   syncStatus,
   clientMetaData,
   metaImportStatus,
+  metaValidation,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -258,11 +262,19 @@ export function ClientDetailView({
         syncStatus={syncStatus}
       />
 
-      {/* Meta Import Pipeline Debug — collapsible diagnostic panel */}
-      <MetaImportDebugPanel
+      {/* Meta Data Verification — always-visible user-facing status section */}
+      <MetaVerificationSection
         clientId={account.id}
-        status={metaImportStatus}
+        validation={metaValidation}
       />
+
+      {/* Meta Import Pipeline Debug — collapsible developer diagnostic panel */}
+      <div id="debug">
+        <MetaImportDebugPanel
+          clientId={account.id}
+          status={metaImportStatus}
+        />
+      </div>
 
       {/* Live Meta Campaigns — synced campaign data for mapped accounts */}
       <LiveMetaCampaignsSection

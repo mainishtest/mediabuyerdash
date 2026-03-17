@@ -17,6 +17,7 @@ import { getClientReadiness }           from "../../../lib/clientSync/readiness"
 import { getClientSyncStatusSummary }   from "../../../lib/clientSync/db";
 import { getClientMetaData }            from "../../../lib/meta/clientMetaService";
 import { getMetaImportStatus }         from "../../../lib/meta/metaImportStatus";
+import { getClientMetaValidation }     from "../../../lib/meta/clientMetaValidation";
 import { getServerSession }             from "next-auth";
 import { authOptions }                  from "../../../lib/auth";
 
@@ -74,12 +75,13 @@ export default async function ClientDetailPage({ params }: PageProps) {
   const workspaceId = session?.user?.workspaceId ?? null;
 
   // Fetch integration mapping status (Meta ad accounts + Shopify connections)
-  const [integrations, readiness, syncStatus, clientMetaData, metaImportStatus] = await Promise.all([
+  const [integrations, readiness, syncStatus, clientMetaData, metaImportStatus, metaValidation] = await Promise.all([
     getClientIntegrationStatus(clientId),
     getClientReadiness(clientId),
     getClientSyncStatusSummary(clientId),
     getClientMetaData(clientId, workspaceId),
     getMetaImportStatus(clientId, workspaceId),
+    getClientMetaValidation(clientId, workspaceId),
   ]);
 
   const clientCampaigns = getCampaignsByAccountId(campaigns, clientId);
@@ -119,6 +121,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
       syncStatus={syncStatus}
       clientMetaData={clientMetaData}
       metaImportStatus={metaImportStatus}
+      metaValidation={metaValidation}
     />
   );
 }
