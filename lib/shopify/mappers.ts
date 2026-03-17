@@ -3,6 +3,7 @@ import type { RawShopifyOrder, RawShopifyLineItem } from "./api";
 // ── Mapped (Prisma-ready) types ────────────────────────────────────────────────
 
 export interface MappedOrder {
+  workspaceId:         string | null;
   shopifyConnectionId: string;
   clientAccountId:     string | null;
   externalOrderId:     string;
@@ -43,9 +44,11 @@ function money(bag: { shopMoney: { amount: string } }): number {
 export function mapOrder(
   raw: RawShopifyOrder,
   shopifyConnectionId: string,
-  clientAccountId: string | null = null
+  clientAccountId: string | null = null,
+  workspaceId: string | null = null
 ): MappedOrder {
   return {
+    workspaceId,
     shopifyConnectionId,
     clientAccountId,
     externalOrderId: raw.id,

@@ -16,8 +16,8 @@ export async function completeSyncLog(
 ) {
   const total = counts.ordersSynced;
   const status =
-    errors.length === 0              ? "completed"
-    : total > 0                      ? "partial"
+    errors.length === 0 ? "completed"
+    : total > 0         ? "partial"
     : "failed";
 
   return prisma.shopifySyncLog.update({
@@ -51,22 +51,23 @@ export async function upsertOrder(order: MappedOrder) {
     },
     create: order,
     update: {
-      orderNumber:    order.orderNumber,
-      orderCreatedAt: order.orderCreatedAt,
+      workspaceId:     order.workspaceId,
+      orderNumber:     order.orderNumber,
+      orderCreatedAt:  order.orderCreatedAt,
       clientAccountId: order.clientAccountId,
-      totalPrice:     order.totalPrice,
-      subtotalPrice:  order.subtotalPrice,
-      totalTax:       order.totalTax,
-      totalDiscount:  order.totalDiscount,
-      customerId:     order.customerId,
-      customerEmail:  order.customerEmail,
-      utmSource:      order.utmSource,
-      utmMedium:      order.utmMedium,
-      utmCampaign:    order.utmCampaign,
-      utmContent:     order.utmContent,
-      utmTerm:        order.utmTerm,
-      landingPage:    order.landingPage,
-      referringSite:  order.referringSite,
+      totalPrice:      order.totalPrice,
+      subtotalPrice:   order.subtotalPrice,
+      totalTax:        order.totalTax,
+      totalDiscount:   order.totalDiscount,
+      customerId:      order.customerId,
+      customerEmail:   order.customerEmail,
+      utmSource:       order.utmSource,
+      utmMedium:       order.utmMedium,
+      utmCampaign:     order.utmCampaign,
+      utmContent:      order.utmContent,
+      utmTerm:         order.utmTerm,
+      landingPage:     order.landingPage,
+      referringSite:   order.referringSite,
     },
   });
 }
@@ -83,6 +84,7 @@ export async function replaceLineItems(
 
 // ── Summary data for the UI ────────────────────────────────────────────────────
 
+/** Summary scoped to a connection (used by global integrations page). */
 export async function getOrderSummary(shopifyConnectionId: string) {
   const [orderCount, lineItemCount, recentOrders, recentLineItems] =
     await Promise.all([
@@ -97,11 +99,33 @@ export async function getOrderSummary(shopifyConnectionId: string) {
       }),
       prisma.shopifyOrderLineItem.findMany({
         where:   { order: { shopifyConnectionId } },
-        orderBy: { createdAt:  "desc" },
+        orderBy: { createdAt: "desc" },
         take:    20,
         include: { order: { select: { orderNumber: true } } },
       }),
     ]);
 
   return { orderCount, lineItemCount, recentOrders, recentLineItems };
+}
+
+/** Summary scoped to a client account (used by client-scoped pages). */
+export async function getClientOrderSummary(clientAccountId: string) {
+  const [orderCount, lineItemCount, recentOrders] = await Promise.all([
+    prisma.shopifyOrder.count({ where: { clientAccountId } }),
+    prisma.shopifyOrderLineItem.count({
+      where: { order: { clientAccountId } },
+    }),
+    prisma.shopifyOrder.findMany({
+      where:   { clientAccountId },
+      orderBy: { orderCreatedAt: "desc" },
+      take:    20,
+      include: {
+        lineItems: { select: { id: true } },
+      },
+    }),
+  ]);
+
+  const totalRevenue = recentOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+
+  return { orderCount, lineItemCount, recentOrders, totalRevenue };
 }

@@ -77,9 +77,19 @@ function ReadinessChecklist({ readiness }: { readiness: ClientReadiness }) {
         : "Map a Shopify store above",
     },
     {
-      label: "Ready for sync",
-      done:  readiness.eligibleForFullSync,
-      hint:  readiness.eligibleForFullSync ? "All sources active" : "Connect both sources",
+      label: "Shopify synced",
+      done:  readiness.shopifySynced,
+      hint:  readiness.shopifySynced
+        ? `${readiness.shopifyOrderCount} order${readiness.shopifyOrderCount !== 1 ? "s" : ""} as source of truth`
+        : "Run a Shopify sync to import orders",
+    },
+    {
+      label: "Ready for reconciliation",
+      done:  readiness.eligibleForFullSync && readiness.shopifySynced,
+      hint:
+        readiness.eligibleForFullSync && readiness.shopifySynced
+          ? "All sources active and synced"
+          : "Complete steps above",
     },
   ];
 

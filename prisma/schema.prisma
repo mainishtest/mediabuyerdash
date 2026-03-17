@@ -615,6 +615,7 @@ model MetaSyncedInsight {
 // One Shopify store connection per shop domain.
 model ShopifyConnection {
   id               String    @id @default(cuid())
+  workspaceId      String?   // set when connected from a workspace context
   clientAccountId  String?
   shopDomain       String    @unique // e.g. "mystore.myshopify.com"
   accessToken      String    // WARNING: encrypt in production
@@ -627,11 +628,14 @@ model ShopifyConnection {
   clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id])
   orders        ShopifyOrder[]
   syncLogs      ShopifySyncLog[]
+
+  @@index([workspaceId])
 }
 
 // Shopify orders synced for the last 30 days. Upserted on externalOrderId.
 model ShopifyOrder {
   id                  String   @id @default(cuid())
+  workspaceId         String?  // set on sync; null for legacy rows
   shopifyConnectionId String
   clientAccountId     String?
   externalOrderId     String   // "gid://shopify/Order/12345"
@@ -661,6 +665,7 @@ model ShopifyOrder {
   @@unique([shopifyConnectionId, externalOrderId])
   @@index([shopifyConnectionId, orderCreatedAt])
   @@index([clientAccountId, orderCreatedAt])
+  @@index([workspaceId, orderCreatedAt])
 }
 
 // Order line items. Deleted + recreated on every sync for the parent order.

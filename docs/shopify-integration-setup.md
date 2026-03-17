@@ -67,20 +67,26 @@ No write access is ever requested.
 
 ## OAuth Flow Summary
 
+### Global flow (`/integrations/shopify`)
 ```
-1. User enters shop domain on /integrations/shopify
-2. Server sets CSRF state + shop cookies, redirects to:
-   https://{shop}/admin/oauth/authorize?client_id=...&scope=...&redirect_uri=...&state=...
-3. Shop owner approves → Shopify redirects to:
-   /api/auth/shopify/callback?code=…&hmac=…&shop=…&state=…
-4. Callback:
-   - Verifies HMAC signature (crypto HMAC-SHA256)
-   - Verifies state cookie (CSRF protection)
-   - Verifies shop domain matches stored cookie
-   - Exchanges code for permanent access token via POST /admin/oauth/access_token
-   - Saves ShopifyConnection to database
-   - Redirects to /integrations/shopify?connected=1
+1. User enters shop domain
+2. Server sets CSRF state cookie + shop domain cookie, redirects to Shopify OAuth
+3. Shop owner approves → Shopify redirects to /api/auth/shopify/callback
+4. Callback: verifies HMAC + state + shop, exchanges code for token, saves connection
+5. Redirects to /integrations/shopify?connected=1
 ```
+
+### Client-scoped flow (`/clients/[clientId]/integrations/shopify`)
+```
+1. User enters shop domain on the client detail Shopify page
+2. Server sets CSRF state + shop + clientId cookies, redirects to Shopify OAuth
+3. Same callback at /api/auth/shopify/callback
+4. Callback reads clientId cookie → resolves workspaceId from DB
+5. Saves ShopifyConnection with clientAccountId + workspaceId pre-populated
+6. Redirects to /clients/[clientId]/integrations/shopify?connected=1
+```
+
+The `clientId` cookie is the only mechanism that links the OAuth flow to a specific client. It expires in 10 minutes alongside the CSRF cookies.
 
 ---
 
@@ -115,19 +121,43 @@ No write access is ever requested.
 
 ---
 
-## Running the Prisma Schema Push
+## Database Setup
 
-After setting `DATABASE_URL` in `.env`:
+### Initial tables (run in Neon SQL editor if not yet created)
+See `prisma/migrations/20250317000000_add_auth_tables/migration.sql`
 
-```bash
-npx prisma db push --accept-data-loss
+### Shopify workspaceId fields (run after deploying this update)
+```sql
+-- From prisma/migrations/20250317000001_add_shopify_workspace/migration.sql
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'ShopifyConnection' AND column_name = 'workspaceId')
+  THEN ALTER TABLE "ShopifyConnection" ADD COLUMN "workspaceId" TEXT; END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'ShopifyOrder' AND column_name = 'workspaceId')
+  THEN ALTER TABLE "ShopifyOrder" ADD COLUMN "workspaceId" TEXT; END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS "ShopifyConnection_workspaceId_idx" ON "ShopifyConnection"("workspaceId");
+CREATE INDEX IF NOT EXISTS "ShopifyOrder_workspaceId_orderCreatedAt_idx" ON "ShopifyOrder"("workspaceId", "orderCreatedAt");
 ```
 
-New tables created:
-- `ShopifyConnection`
-- `ShopifyOrder`
-- `ShopifyOrderLineItem`
-- `ShopifySyncLog`
+### Prisma schema models
+- `ShopifyConnection` — one per store, scoped by workspaceId + clientAccountId
+- `ShopifyOrder` — last 30 days, scoped by workspaceId + clientAccountId
+- `ShopifyOrderLineItem` — line items per order
+- `ShopifySyncLog` — audit log per sync run
+
+---
+
+## Pages & Routes
+
+| Route | Description |
+|---|---|
+| `/integrations/shopify` | Global connection page (workspace-level) |
+| `/integrations/shopify/sync` | Order sync page (workspace-level) |
+| `/clients/[clientId]/integrations/shopify` | Client-scoped connection, sync, and order preview |
+
+Use the client-scoped page for day-to-day operation. The global page is for initial setup and workspace management.
 
 ---
 
@@ -137,14 +167,16 @@ New tables created:
 lib/shopify/
   config.ts   — env vars, normaliseShopDomain
   auth.ts     — buildOAuthUrl, exchangeCode, verifyHmac
-  api.ts      — GraphQL client, fetchRecentOrders (paginated)
-  mappers.ts  — raw API → Prisma-ready DTOs
-  db.ts       — ShopifyConnection CRUD
-  syncDb.ts   — upsertOrder, replaceLineItems, SyncLog writes
-  sync.ts     — runShopifySync() orchestrator
+  api.ts      — GraphQL client, fetchRecentOrders (paginated, cursor-based)
+  mappers.ts  — raw API → Prisma-ready DTOs (includes workspaceId, clientAccountId)
+  db.ts       — ShopifyConnection CRUD + getClientShopifyConnection
+  syncDb.ts   — upsertOrder, replaceLineItems, SyncLog writes, getClientOrderSummary
+  sync.ts     — runShopifySync(connectionId) and runShopifySyncForClient(clientAccountId)
 ```
 
-The orchestrator is called by `/integrations/shopify/sync/actions.ts` (server action). UI never calls Shopify directly.
+`runShopifySyncForClient` resolves the connection from the client mapping automatically — use it for client-triggered syncs. `runShopifySync` is used by the global sync page.
+
+The orchestrators are called from server actions. UI never calls Shopify or the database directly.
 
 ---
 
