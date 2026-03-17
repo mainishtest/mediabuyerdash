@@ -1,5 +1,5 @@
 // Media Buying Dashboard — Prisma schema
-// Production: PostgreSQL (Supabase). Local dev: set DATABASE_URL in .env.local
+// Production: PostgreSQL (Neon). Set DATABASE_URL in .env
 
 generator client {
   provider = "prisma-client-js"
