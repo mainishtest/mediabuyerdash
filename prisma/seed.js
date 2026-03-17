@@ -308,20 +308,19 @@ async function main() {
   });
 
   // ── Meta connection (1 sample) ──────────────────────────────────────────────
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 60);
+  const tokenExpiresAt = new Date();
+  tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 60);
   await prisma.metaConnection.upsert({
-    where: { id: "meta_conn_1" },
+    where: { metaUserId: "demo_meta_user_1" },
     update: {},
     create: {
       id: "meta_conn_1",
-      userId: "fb_user_1",
-      userName: "Demo User",
-      userEmail: "demo@example.com",
-      connectedAt: new Date(),
-      expiresAt,
-      isActive: true,
-      metaUserId: "demo_meta_user_1"
+      metaUserId: "demo_meta_user_1",
+      userDisplayName: "Demo User",
+      connectionStatus: "active",
+      accessToken: "demo_access_token",
+      tokenExpiresAt,
+      scopes: "ads_read,ads_management"
     }
   });
 
