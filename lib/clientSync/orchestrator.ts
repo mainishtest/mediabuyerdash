@@ -44,7 +44,8 @@ async function getClientShopifyConnectionId(clientId: string): Promise<string | 
 
 async function runMetaStep(
   clientId: string,
-  syncRunId: string
+  syncRunId: string,
+  workspaceId: string | null
 ): Promise<{ summary: MetaStepSummary; errors: string[] }> {
   const step = await createClientSyncRunStep(syncRunId, "meta_account");
 
@@ -94,7 +95,7 @@ async function runMetaStep(
   };
 
   for (const [connectionId, adAccounts] of byConnection) {
-    const result = await runMetaSyncForAccounts(adAccounts, connectionId);
+    const result = await runMetaSyncForAccounts(adAccounts, connectionId, workspaceId);
     totals.accountsProcessed += result.accountsProcessed;
     totals.campaignsSynced   += result.campaignsSynced;
     totals.adSetsSynced      += result.adSetsSynced;
@@ -167,6 +168,14 @@ export async function runClientSync(
   syncType: SyncType
 ): Promise<ClientSyncResult> {
   const startedAt  = new Date();
+
+  // Resolve workspaceId so synced records are correctly scoped.
+  const clientRecord = await prisma.clientAccount.findUnique({
+    where:  { id: clientId },
+    select: { workspaceId: true },
+  });
+  const workspaceId = clientRecord?.workspaceId ?? null;
+
   const syncRun    = await createClientSyncRun(clientId, syncType);
   const allErrors: string[] = [];
 
@@ -175,7 +184,7 @@ export async function runClientSync(
 
   try {
     if (syncType === "meta" || syncType === "full") {
-      const res = await runMetaStep(clientId, syncRun.id);
+      const res = await runMetaStep(clientId, syncRun.id, workspaceId);
       metaSummary = res.summary;
       allErrors.push(...res.errors);
     }

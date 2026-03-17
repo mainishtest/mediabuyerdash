@@ -16,9 +16,11 @@ import type { ClientIntegrationStatus } from "../../../lib/clientIntegrations";
 import type { ClientReadiness }         from "../../../lib/clientSync/readiness";
 import type { ClientSyncStatusSummary } from "../../../lib/clientSync/types";
 import type { ClientMetaData }          from "../../../lib/meta/clientMetaService";
+import type { MetaImportStatus }        from "../../../lib/meta/metaImportStatus";
 import { ClientIntegrationsSection }    from "./ClientIntegrationsSection";
 import { SyncStatusSection }            from "./SyncStatusSection";
 import { LiveMetaCampaignsSection }     from "./LiveMetaCampaignsSection";
+import { MetaImportDebugPanel }         from "./MetaImportDebugPanel";
 
 // --- Local types -------------------------------------------------------------
 
@@ -57,6 +59,7 @@ type Props = {
   readiness:         ClientReadiness;
   syncStatus:        ClientSyncStatusSummary;
   clientMetaData:    ClientMetaData;
+  metaImportStatus:  MetaImportStatus;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -85,6 +88,7 @@ export function ClientDetailView({
   readiness,
   syncStatus,
   clientMetaData,
+  metaImportStatus,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -252,6 +256,12 @@ export function ClientDetailView({
         clientId={account.id}
         readiness={readiness}
         syncStatus={syncStatus}
+      />
+
+      {/* Meta Import Pipeline Debug — collapsible diagnostic panel */}
+      <MetaImportDebugPanel
+        clientId={account.id}
+        status={metaImportStatus}
       />
 
       {/* Live Meta Campaigns — synced campaign data for mapped accounts */}

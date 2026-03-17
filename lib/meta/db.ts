@@ -102,17 +102,32 @@ export async function syncAccessibleAdAccounts(
 // ── Selection ─────────────────────────────────────────────────────────────────
 
 /**
- * Replaces the full selection set for a connection.
- * `accessibleAdAccountIds` are internal Prisma IDs (not Meta's act_xxx IDs).
+ * Updates the selection set for a connection.
+ *
+ * IMPORTANT: Uses upsert-style logic to preserve clientAccountId mappings.
+ *
+ * - Newly selected accounts are created (skipDuplicates keeps existing ones intact).
+ * - Deselected accounts that are UNMAPPED (clientAccountId = null) are deleted.
+ * - Deselected accounts that ARE mapped to a client are left in place — deleting them
+ *   would silently break client → ad-account associations. The operator must manually
+ *   unmap from the client page first.
  */
 export async function saveSelectedAdAccounts(
   connectionId: string,
   accessibleAdAccountIds: string[]
 ) {
+  // Remove unmapped accounts that are no longer in the selection.
+  // Mapped accounts are intentionally kept to preserve client assignments.
   await prisma.metaSelectedAdAccount.deleteMany({
-    where: { metaConnectionId: connectionId },
+    where: {
+      metaConnectionId:      connectionId,
+      accessibleAdAccountId: { notIn: accessibleAdAccountIds },
+      clientAccountId:       null,
+    },
   });
 
+  // Create new selections; skipDuplicates preserves existing rows (and their
+  // clientAccountId) for accounts that were already selected.
   if (accessibleAdAccountIds.length > 0) {
     await prisma.metaSelectedAdAccount.createMany({
       data: accessibleAdAccountIds.map((id) => ({
@@ -120,6 +135,7 @@ export async function saveSelectedAdAccounts(
         accessibleAdAccountId: id,
         selectedAt:            new Date(),
       })),
+      skipDuplicates: true,
     });
   }
 }
