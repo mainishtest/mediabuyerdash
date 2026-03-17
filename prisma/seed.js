@@ -320,7 +320,8 @@ async function main() {
       userEmail: "demo@example.com",
       connectedAt: new Date(),
       expiresAt,
-      isActive: true
+      isActive: true,
+      metaUserId: "demo_meta_user_1"
     }
   });
 
