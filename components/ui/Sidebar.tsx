@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 interface NavItem {
   href:  string;
@@ -20,8 +21,10 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/creative-lab",   label: "Creative Lab"  },
 ];
 
-function SidebarFooter() {
+function SidebarFooter({ onClose }: { onClose?: () => void }) {
   const { data: session } = useSession();
+  const router    = useRouter();
+  const pathname  = usePathname();
 
   if (!session) {
     return (
@@ -33,6 +36,12 @@ function SidebarFooter() {
 
   const userName      = session.user.name || session.user.email || "";
   const workspaceName = session.user.workspaceName ?? "Workspace";
+  const isProfile     = pathname === "/profile";
+
+  function goToProfile() {
+    onClose?.();
+    router.push("/profile");
+  }
 
   return (
     <div className="shrink-0 border-t border-slate-800 px-4 py-3">
@@ -44,11 +53,20 @@ function SidebarFooter() {
           {workspaceName}
         </span>
       </div>
-      <p className="mb-2 truncate text-xs text-slate-500">{userName}</p>
+      <button
+        onClick={goToProfile}
+        className={`mb-1 w-full truncate rounded-lg px-3 py-1.5 text-left text-xs transition-colors ${
+          isProfile
+            ? "bg-slate-800 font-medium text-white"
+            : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+        }`}
+      >
+        {userName}
+      </button>
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
-        className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-400
-          transition-colors hover:bg-slate-800 hover:text-slate-200"
+        className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-500
+          transition-colors hover:bg-slate-800 hover:text-slate-300"
       >
         Sign out
       </button>
@@ -98,8 +116,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </ul>
       </div>
 
-      {/* Footer — user info + sign out */}
-      <SidebarFooter />
+      {/* Footer — user info + sign out + profile */}
+      <SidebarFooter onClose={onClose} />
     </nav>
   );
 }

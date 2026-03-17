@@ -28,7 +28,16 @@ export default function LoginPage() {
 
         <LoginForm />
 
-        <p className="mt-6 text-center text-xs text-slate-500">
+        <p className="mt-4 text-center text-xs text-slate-500">
+          <a
+            href="/forgot-password"
+            className="text-slate-400 transition-colors hover:text-slate-200"
+          >
+            Forgot your password?
+          </a>
+        </p>
+
+        <p className="mt-3 text-center text-xs text-slate-500">
           Don&apos;t have an account?{" "}
           <a
             href="/register"
