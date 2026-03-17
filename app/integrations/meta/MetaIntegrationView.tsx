@@ -70,8 +70,11 @@ export function MetaIntegrationView({
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSelectedIds)
   );
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [isPending, startTransition]  = useTransition();
+  const [saveMessage,    setSaveMessage]    = useState<string | null>(null);
+  const [refreshError,   setRefreshError]   = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [isPending,      startTransition]   = useTransition();
+  const [isRefreshing,   startRefresh]      = useTransition();
 
   const isConnected     = connection !== null;
   const selectedCount   = selected.size;
@@ -99,9 +102,19 @@ export function MetaIntegrationView({
     ? disconnectMetaAction.bind(null, connection.id)
     : null;
 
-  const refreshAction = connection
-    ? refreshAccountsAction.bind(null, connection.id)
-    : null;
+  function handleRefresh() {
+    if (!connection) return;
+    setRefreshError(null);
+    setRefreshMessage(null);
+    startRefresh(async () => {
+      const result = await refreshAccountsAction(connection.id);
+      if (result.error) {
+        setRefreshError(result.error);
+      } else {
+        setRefreshMessage("Accounts refreshed.");
+      }
+    });
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
@@ -201,12 +214,20 @@ export function MetaIntegrationView({
             : "Link a Meta (Facebook) account with ads_read and business_management permissions."
         }
         actions={
-          isConnected && refreshAction ? (
-            <form action={refreshAction}>
-              <ActionButton type="submit" size="sm" variant="ghost">
-                Refresh Accounts
+          isConnected ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {refreshMessage && (
+                <span className="text-xs text-emerald-400">{refreshMessage}</span>
+              )}
+              <ActionButton
+                size="sm"
+                variant="ghost"
+                disabled={isRefreshing}
+                onClick={handleRefresh}
+              >
+                {isRefreshing ? "Refreshing…" : "Refresh Accounts"}
               </ActionButton>
-            </form>
+            </div>
           ) : undefined
         }
       >
@@ -238,6 +259,13 @@ export function MetaIntegrationView({
                 </div>
               )}
             </div>
+
+            {/* Refresh error */}
+            {refreshError && (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-300">
+                {refreshError}
+              </div>
+            )}
 
             {/* Disconnect */}
             {disconnectAction && (
