@@ -6,7 +6,11 @@ import { SectionCard }  from "../../../components/ui/SectionCard";
 import { Badge }        from "../../../components/ui/Badge";
 import { ActionButton } from "../../../components/ui/ActionButton";
 import { StatCard }     from "../../../components/ui/StatCard";
-import { startShopifyOAuthAction, disconnectShopifyAction } from "./actions";
+import {
+  startShopifyOAuthAction,
+  disconnectShopifyAction,
+  connectShopifyClientCredentialsAction,
+} from "./actions";
 
 // ── Error label map ────────────────────────────────────────────────────────────
 
@@ -59,8 +63,13 @@ export function ShopifyIntegrationView({
   errorMessage,
   justConnected,
 }: Props) {
-  const [shopInput, setShopInput]   = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [shopInput,      setShopInput]      = useState("");
+  const [clientIdInput,  setClientIdInput]  = useState("");
+  const [clientSecInput, setClientSecInput] = useState("");
+  const [connectMode,    setConnectMode]    = useState<"credentials" | "oauth">("credentials");
+  const [credsError,     setCredsError]     = useState<string | null>(null);
+  const [isPending,      startTransition]   = useTransition();
+  const [credsPending,   startCreds]        = useTransition();
 
   const humanError = errorMessage ? (ERROR_LABELS[errorMessage] ?? errorMessage) : null;
 
@@ -88,23 +97,17 @@ export function ShopifyIntegrationView({
         </div>
       )}
 
-      {/* Credentials warning */}
-      {!isConfigured && (
+      {/* Credentials warning — only shown when OAuth is unconfigured AND we're on OAuth tab */}
+      {!isConfigured && connectMode === "oauth" && (
         <div className="rounded-lg border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-400">
-          <strong className="font-semibold">Shopify credentials not configured.</strong>
+          <strong className="font-semibold">OAuth not configured.</strong>
           {" "}Set{" "}
-          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">
-            SHOPIFY_APP_KEY
-          </code>
+          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_APP_KEY</code>
           ,{" "}
-          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">
-            SHOPIFY_APP_SECRET
-          </code>
+          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_APP_SECRET</code>
           , and{" "}
-          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">
-            SHOPIFY_REDIRECT_URI
-          </code>{" "}
-          environment variables to enable OAuth.
+          <code className="rounded bg-slate-800 px-1 py-0.5 text-xs text-slate-200">SHOPIFY_REDIRECT_URI</code>{" "}
+          to use the OAuth flow.
         </div>
       )}
 
@@ -187,52 +190,173 @@ export function ShopifyIntegrationView({
         </SectionCard>
       ) : (
         <SectionCard title="Connect a Shopify Store">
-          <p className="mb-5 text-sm text-slate-400">
-            Enter your Shopify store domain below. You will be redirected to Shopify to
-            authorise read-only access to orders and customer data.
-          </p>
-
-          <form
-            action={(formData) => {
-              startTransition(() => {
-                startShopifyOAuthAction(formData);
-              });
-            }}
-            className="flex flex-col gap-4 sm:flex-row sm:items-end"
-          >
-            <div className="flex-1">
-              <label
-                htmlFor="shopDomain"
-                className="mb-1.5 block text-xs font-medium text-slate-400"
+          {/* Method tabs */}
+          <div className="mb-5 flex gap-1 rounded-lg border border-slate-700 bg-slate-800/50 p-1 w-fit">
+            {(["credentials", "oauth"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => { setConnectMode(mode); setCredsError(null); }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  connectMode === mode
+                    ? "bg-slate-700 text-slate-100"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
               >
-                Shop domain
-              </label>
-              <input
-                id="shopDomain"
-                name="shopDomain"
-                type="text"
-                placeholder="your-store.myshopify.com"
-                value={shopInput}
-                onChange={(e) => setShopInput(e.target.value)}
-                disabled={!isConfigured || isPending}
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none disabled:opacity-50"
-              />
-            </div>
-            <ActionButton
-              type="submit"
-              variant="primary"
-              disabled={!isConfigured || isPending || !shopInput.trim()}
-            >
-              {isPending ? "Redirecting…" : "Connect Shopify"}
-            </ActionButton>
-          </form>
+                {mode === "credentials" ? "Client Credentials" : "OAuth"}
+              </button>
+            ))}
+          </div>
 
-          <p className="mt-3 text-xs text-slate-500">
-            Only <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
-            <strong className="font-medium text-slate-400">read_customers</strong> scopes
-            are requested. No write access is granted.
-          </p>
+          {credsError && (
+            <div className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+              {credsError}
+            </div>
+          )}
+
+          {/* ── Client Credentials (default) ── */}
+          {connectMode === "credentials" && (
+            <>
+              <p className="mb-4 text-sm text-slate-400">
+                Enter the store domain along with the{" "}
+                <strong className="font-medium text-slate-300">Client ID</strong> and{" "}
+                <strong className="font-medium text-slate-300">Client Secret</strong>{" "}
+                from your Shopify custom app. An access token will be fetched automatically.
+              </p>
+
+              <form
+                action={async (fd) => {
+                  setCredsError(null);
+                  startCreds(async () => {
+                    const result = await connectShopifyClientCredentialsAction(fd);
+                    if (result?.error) setCredsError(result.error);
+                  });
+                }}
+                className="flex flex-col gap-4"
+              >
+                <div>
+                  <label htmlFor="cc-shopDomain" className="mb-1.5 block text-xs font-medium text-slate-400">
+                    Shop domain
+                  </label>
+                  <input
+                    id="cc-shopDomain"
+                    name="shopDomain"
+                    type="text"
+                    placeholder="your-store.myshopify.com"
+                    value={shopInput}
+                    onChange={(e) => setShopInput(e.target.value)}
+                    disabled={credsPending}
+                    required
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                      text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                      disabled:opacity-50"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="cc-clientId" className="mb-1.5 block text-xs font-medium text-slate-400">
+                      Client ID
+                    </label>
+                    <input
+                      id="cc-clientId"
+                      name="clientId"
+                      type="text"
+                      placeholder="5e78fcc4c4e4f43c…"
+                      value={clientIdInput}
+                      onChange={(e) => setClientIdInput(e.target.value)}
+                      disabled={credsPending}
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                        text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                        disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cc-clientSecret" className="mb-1.5 block text-xs font-medium text-slate-400">
+                      Client Secret
+                    </label>
+                    <input
+                      id="cc-clientSecret"
+                      name="clientSecret"
+                      type="password"
+                      placeholder="shpss_xxxxxxxxxxxx…"
+                      value={clientSecInput}
+                      onChange={(e) => setClientSecInput(e.target.value)}
+                      disabled={credsPending}
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                        text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                        disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <ActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={credsPending || !shopInput.trim() || !clientIdInput.trim() || !clientSecInput.trim()}
+                  >
+                    {credsPending ? "Connecting…" : "Connect Shopify"}
+                  </ActionButton>
+                </div>
+              </form>
+
+              <p className="mt-3 text-xs text-slate-500">
+                Credentials are exchanged server-side. The app needs{" "}
+                <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
+                <strong className="font-medium text-slate-400">read_customers</strong> scopes.
+              </p>
+            </>
+          )}
+
+          {/* ── OAuth flow ── */}
+          {connectMode === "oauth" && (
+            <>
+              <p className="mb-4 text-sm text-slate-400">
+                You will be redirected to Shopify to authorise read-only access to orders
+                and customer data.
+              </p>
+
+              <form
+                action={(formData) => {
+                  startTransition(() => { startShopifyOAuthAction(formData); });
+                }}
+                className="flex flex-col gap-4 sm:flex-row sm:items-end"
+              >
+                <div className="flex-1">
+                  <label htmlFor="oauth-shopDomain" className="mb-1.5 block text-xs font-medium text-slate-400">
+                    Shop domain
+                  </label>
+                  <input
+                    id="oauth-shopDomain"
+                    name="shopDomain"
+                    type="text"
+                    placeholder="your-store.myshopify.com"
+                    value={shopInput}
+                    onChange={(e) => setShopInput(e.target.value)}
+                    disabled={!isConfigured || isPending}
+                    required
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                      text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                      disabled:opacity-50"
+                  />
+                </div>
+                <ActionButton
+                  type="submit"
+                  variant="primary"
+                  disabled={!isConfigured || isPending || !shopInput.trim()}
+                >
+                  {isPending ? "Redirecting…" : "Connect via OAuth"}
+                </ActionButton>
+              </form>
+
+              <p className="mt-3 text-xs text-slate-500">
+                Only <strong className="font-medium text-slate-400">read_orders</strong> and{" "}
+                <strong className="font-medium text-slate-400">read_customers</strong> scopes
+                are requested. No write access is granted.
+              </p>
+            </>
+          )}
         </SectionCard>
       )}
 
