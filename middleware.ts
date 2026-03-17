@@ -1,8 +1,17 @@
-// middleware.ts — auth disabled for preview
-import { NextResponse } from "next/server";
+// middleware.ts
+// Protect all app routes. Unauthenticated users are redirected to /login.
+// Public paths: /login, /api/auth/**, Next.js internals, static files.
 
-export function middleware() {
-  return NextResponse.next();
-}
+import { withAuth } from "next-auth/middleware";
 
-export const config = { matcher: [] };
+export default withAuth({
+  pages: {
+    signIn: "/login",
+  },
+});
+
+export const config = {
+  matcher: [
+    "/((?!login|register|api/auth|_next/static|_next/image|favicon\\.ico).*)",
+  ],
+};
