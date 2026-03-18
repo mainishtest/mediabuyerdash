@@ -16,7 +16,9 @@ import { resolveGoal } from "../campaignGoals/resolveGoal";
 import type { CampaignPerformanceSnapshot, CampaignHealthStatus } from "./types";
 
 export async function buildCampaignPerformanceSnapshots(
-  clientId: string
+  clientId:  string,
+  startDate?: string,   // YYYY-MM-DD inclusive; defaults to all-time
+  endDate?:   string,   // YYYY-MM-DD inclusive; defaults to today
 ): Promise<CampaignPerformanceSnapshot[]> {
   // ── 1. Client's mapped Meta ad account IDs ───────────────────────────────────
   const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
@@ -40,17 +42,39 @@ export async function buildCampaignPerformanceSnapshots(
   const externalCampaignIds = metaCampaigns.map((c) => c.externalCampaignId);
 
   // ── 3–6. Parallel fetch ──────────────────────────────────────────────────────
+
+  // Build date filters for insight and order queries
+  const insightDateFilter = startDate || endDate
+    ? {
+        ...(startDate ? { gte: startDate } : {}),
+        ...(endDate   ? { lte: endDate   } : {}),
+      }
+    : undefined;
+
+  const orderDateFilter = startDate || endDate
+    ? {
+        ...(startDate ? { gte: new Date(startDate + "T00:00:00.000Z") } : {}),
+        ...(endDate   ? { lte: new Date(endDate   + "T23:59:59.999Z") } : {}),
+      }
+    : undefined;
+
   const [insightAggs, shopifyOrders, campaignGoals, clientDefaults] = await Promise.all([
     // 3. Spend aggregated by campaign from insight rows
     prisma.metaSyncedInsight.groupBy({
       by:    ["externalCampaignId"],
-      where: { externalAdAccountId: { in: externalAdAccountIds } },
+      where: {
+        externalAdAccountId: { in: externalAdAccountIds },
+        ...(insightDateFilter ? { dateStart: insightDateFilter } : {}),
+      },
       _sum:  { spend: true },
     }),
 
     // 4. Shopify orders for this client (CRM source of truth)
     prisma.shopifyOrder.findMany({
-      where:  { clientAccountId: clientId },
+      where: {
+        clientAccountId: clientId,
+        ...(orderDateFilter ? { orderCreatedAt: orderDateFilter } : {}),
+      },
       select: { utmCampaign: true, totalPrice: true },
     }),
 

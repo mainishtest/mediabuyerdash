@@ -40,9 +40,12 @@ export interface SparkPoint {
  */
 export async function getClientDailyMetrics(
   clientAccountId: string,
-  days = 30
+  days             = 30,
+  startDate?:      string,   // YYYY-MM-DD; overrides days when provided
+  endDate?:        string,   // YYYY-MM-DD; defaults to today when startDate set
 ): Promise<DailyPoint[]> {
-  const since = daysAgo(days);
+  const since = startDate ?? daysAgo(days);
+  const until = endDate   ?? today();
 
   // Resolve ad account IDs for this client.
   const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
@@ -50,7 +53,7 @@ export async function getClientDailyMetrics(
     include: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
   });
 
-  if (selectedAccounts.length === 0) return fillZeroDays(since, days);
+  if (selectedAccounts.length === 0) return fillDateRange(since, until);
 
   const adAccountIds = selectedAccounts.map(
     (sa) => sa.accessibleAdAccount.externalAdAccountId
@@ -62,7 +65,7 @@ export async function getClientDailyMetrics(
     where: {
       externalAdAccountId: { in: adAccountIds },
       level:               "campaign",
-      dateStart:           { gte: since },
+      dateStart:           { gte: since, lte: until },
     },
     _sum: { spend: true },
     orderBy: { dateStart: "asc" },
@@ -72,12 +75,15 @@ export async function getClientDailyMetrics(
   const orderRows = await prisma.shopifyOrder.findMany({
     where: {
       clientAccountId,
-      orderCreatedAt: { gte: new Date(since + "T00:00:00.000Z") },
+      orderCreatedAt: {
+        gte: new Date(since + "T00:00:00.000Z"),
+        lte: new Date(until + "T23:59:59.999Z"),
+      },
     },
     select: { orderCreatedAt: true, totalPrice: true },
   });
 
-  return mergeIntoDailyPoints(insightRows, orderRows, since, days);
+  return mergeIntoDailyPoints(insightRows, orderRows, since, until);
 }
 
 // ---------------------------------------------------------------------------
@@ -93,9 +99,12 @@ export async function getClientDailyMetrics(
 export async function getCampaignDailyMetrics(
   externalCampaignId: string,
   clientAccountId:    string,
-  days = 30
+  days               = 30,
+  startDate?:        string,   // YYYY-MM-DD; overrides days when provided
+  endDate?:          string,   // YYYY-MM-DD; defaults to today when startDate set
 ): Promise<DailyPoint[]> {
-  const since = daysAgo(days);
+  const since = startDate ?? daysAgo(days);
+  const until = endDate   ?? today();
 
   // Look up campaign name for UTM matching.
   const campaign = await prisma.metaSyncedCampaign.findUnique({
@@ -109,7 +118,7 @@ export async function getCampaignDailyMetrics(
     where: {
       externalCampaignId,
       level:     "campaign",
-      dateStart: { gte: since },
+      dateStart: { gte: since, lte: until },
     },
     _sum: { spend: true },
     orderBy: { dateStart: "asc" },
@@ -120,7 +129,10 @@ export async function getCampaignDailyMetrics(
   const orderRows = await prisma.shopifyOrder.findMany({
     where: {
       clientAccountId,
-      orderCreatedAt: { gte: new Date(since + "T00:00:00.000Z") },
+      orderCreatedAt: {
+        gte: new Date(since + "T00:00:00.000Z"),
+        lte: new Date(until + "T23:59:59.999Z"),
+      },
       ...(normalizedName
         ? { utmCampaign: { equals: normalizedName, mode: "insensitive" } }
         : {}),
@@ -128,7 +140,7 @@ export async function getCampaignDailyMetrics(
     select: { orderCreatedAt: true, totalPrice: true },
   });
 
-  return mergeIntoDailyPoints(insightRows, orderRows, since, days);
+  return mergeIntoDailyPoints(insightRows, orderRows, since, until);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,9 +155,12 @@ export async function getCampaignDailyMetrics(
  */
 export async function getCampaignSparklines(
   clientAccountId: string,
-  days = 30
+  days             = 30,
+  startDate?:      string,   // YYYY-MM-DD; overrides days when provided
+  endDate?:        string,   // YYYY-MM-DD; defaults to today when startDate set
 ): Promise<Record<string, SparkPoint[]>> {
-  const since = daysAgo(days);
+  const since = startDate ?? daysAgo(days);
+  const until = endDate   ?? today();
 
   const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
     where:   { clientAccountId },
@@ -164,7 +179,7 @@ export async function getCampaignSparklines(
     where: {
       externalAdAccountId: { in: adAccountIds },
       level:               "campaign",
-      dateStart:           { gte: since },
+      dateStart:           { gte: since, lte: until },
       externalCampaignId:  { not: "" },
     },
     _sum: { spend: true },
@@ -191,19 +206,24 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Fill a date range with zero-value DailyPoints. */
-function fillZeroDays(since: string, days: number): DailyPoint[] {
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Fill a date range [startDate, endDate] with zero-value DailyPoints. */
+function fillDateRange(startDate: string, endDate: string): DailyPoint[] {
   const result: DailyPoint[] = [];
-  for (let i = days; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+  const cur = new Date(startDate + "T00:00:00.000Z");
+  const end = new Date(endDate   + "T00:00:00.000Z");
+  while (cur <= end) {
     result.push({
-      date:    d.toISOString().slice(0, 10),
+      date:    cur.toISOString().slice(0, 10),
       spend:   0,
       revenue: 0,
       orders:  0,
       roas:    null,
     });
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return result;
 }
@@ -214,8 +234,8 @@ type OrderRow     = { orderCreatedAt: Date; totalPrice: number };
 function mergeIntoDailyPoints(
   insightGroups: InsightGroup[],
   orderRows:     OrderRow[],
-  since:         string,
-  days:          number
+  startDate:     string,
+  endDate:       string,
 ): DailyPoint[] {
   // Build lookup maps.
   const spendByDate:   Record<string, number> = {};
@@ -231,13 +251,12 @@ function mergeIntoDailyPoints(
     ordersByDate[d]  = (ordersByDate[d]  ?? 0) + 1;
   }
 
-  // Build contiguous date series from since → today.
+  // Build contiguous date series from startDate → endDate.
   const result: DailyPoint[] = [];
-  for (let i = days; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const date    = d.toISOString().slice(0, 10);
-    if (date < since) continue;
+  const cur = new Date(startDate + "T00:00:00.000Z");
+  const end = new Date(endDate   + "T00:00:00.000Z");
+  while (cur <= end) {
+    const date    = cur.toISOString().slice(0, 10);
     const spend   = spendByDate[date]   ?? 0;
     const revenue = revenueByDate[date] ?? 0;
     const orders  = ordersByDate[date]  ?? 0;
@@ -248,6 +267,7 @@ function mergeIntoDailyPoints(
       orders,
       roas:    spend > 0 ? Math.round((revenue / spend) * 100) / 100 : null,
     });
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return result;
 }

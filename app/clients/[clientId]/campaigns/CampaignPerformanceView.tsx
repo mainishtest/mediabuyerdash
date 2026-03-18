@@ -7,7 +7,7 @@
 // Inline goal editing: click "Edit goal" / "Add goal" to set ROAS + CPA without
 // navigating to the campaign detail page. Bulk mode: select campaigns → apply one goal.
 
-import { useState, useMemo, useTransition, Fragment } from "react";
+import { useState, useMemo, useTransition, Fragment, useCallback } from "react";
 import Link from "next/link";
 import { StatCard }   from "../../../../components/ui/StatCard";
 import { SectionCard } from "../../../../components/ui/SectionCard";
@@ -865,14 +865,144 @@ function FilterBar({
   );
 }
 
+// ── Date range helpers ────────────────────────────────────────────────────────
+
+type DatePreset = "7d" | "14d" | "30d" | "90d" | "custom";
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysAgoStr(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function presetToDates(preset: DatePreset): { startDate: string; endDate: string } {
+  const end = todayStr();
+  switch (preset) {
+    case "7d":  return { startDate: daysAgoStr(6),  endDate: end };
+    case "14d": return { startDate: daysAgoStr(13), endDate: end };
+    case "30d": return { startDate: daysAgoStr(29), endDate: end };
+    case "90d": return { startDate: daysAgoStr(89), endDate: end };
+    default:    return { startDate: daysAgoStr(29), endDate: end };
+  }
+}
+
+function fmtDateLabel(startDate: string, endDate: string): string {
+  const fmt = (d: string) => {
+    const [, m, day] = d.split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}`;
+  };
+  return `${fmt(startDate)} – ${fmt(endDate)}`;
+}
+
+// ── Date range picker ─────────────────────────────────────────────────────────
+
+const BTN_PRESET =
+  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] " +
+  "border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500";
+
+const BTN_PRESET_ACTIVE =
+  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] " +
+  "border border-emerald-700 bg-emerald-900/30 text-emerald-300";
+
+const DATE_INPUT_CLS =
+  "rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 " +
+  "focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[36px] " +
+  "cursor-pointer [color-scheme:dark]";
+
+function DateRangePicker({
+  startDate,
+  endDate,
+  preset,
+  loading,
+  onPreset,
+  onCustomRange,
+}: {
+  startDate:     string;
+  endDate:       string;
+  preset:        DatePreset;
+  loading:       boolean;
+  onPreset:      (p: DatePreset) => void;
+  onCustomRange: (start: string, end: string) => void;
+}) {
+  const [localStart, setLocalStart] = useState(startDate);
+  const [localEnd,   setLocalEnd]   = useState(endDate);
+
+  function applyCustom() {
+    if (localStart && localEnd && localStart <= localEnd) {
+      onCustomRange(localStart, localEnd);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Preset buttons */}
+      {(["7d", "14d", "30d", "90d"] as DatePreset[]).map((p) => (
+        <button
+          key={p}
+          type="button"
+          disabled={loading}
+          onClick={() => onPreset(p)}
+          className={preset === p ? BTN_PRESET_ACTIVE : BTN_PRESET}
+        >
+          {p === "7d" ? "7 days" : p === "14d" ? "14 days" : p === "30d" ? "30 days" : "90 days"}
+        </button>
+      ))}
+
+      {/* Divider */}
+      <span className="hidden text-slate-700 sm:inline">|</span>
+
+      {/* Custom date inputs */}
+      <div className="flex items-center gap-1.5">
+        <input
+          type="date"
+          value={localStart}
+          max={localEnd || todayStr()}
+          onChange={(e) => { setLocalStart(e.target.value); }}
+          className={DATE_INPUT_CLS}
+          disabled={loading}
+        />
+        <span className="text-xs text-slate-600">to</span>
+        <input
+          type="date"
+          value={localEnd}
+          min={localStart}
+          max={todayStr()}
+          onChange={(e) => { setLocalEnd(e.target.value); }}
+          className={DATE_INPUT_CLS}
+          disabled={loading}
+        />
+        <button
+          type="button"
+          onClick={applyCustom}
+          disabled={loading || !localStart || !localEnd || localStart > localEnd}
+          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300
+                     hover:text-white hover:border-slate-400 transition-colors min-h-[36px]
+                     disabled:opacity-40"
+        >
+          Apply
+        </button>
+      </div>
+
+      {loading && (
+        <span className="text-xs text-slate-500 animate-pulse">Loading…</span>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CampaignPerformanceView({
   clientId,
   clientName,
-  snapshots,
-  sparklines,
-  clientDaily,
+  snapshots:    initialSnapshots,
+  sparklines:   initialSparklines,
+  clientDaily:  initialClientDaily,
 }: Props) {
   const [healthFilter,   setHealthFilter]   = useState<HealthFilter>("all");
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>("all");
@@ -887,6 +1017,51 @@ export function CampaignPerformanceView({
   // Bulk selection state
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [, startTransition]     = useTransition();
+
+  // ── Date range state ────────────────────────────────────────────────────────
+  const [datePreset,  setDatePreset]  = useState<DatePreset>("30d");
+  const [dateRange,   setDateRange]   = useState(() => presetToDates("30d"));
+  const [snapshots,   setSnapshots]   = useState(initialSnapshots);
+  const [sparklines,  setSparklines]  = useState(initialSparklines);
+  const [clientDaily, setClientDaily] = useState(initialClientDaily);
+  const [dateLoading, setDateLoading] = useState(false);
+  const [dateError,   setDateError]   = useState<string | null>(null);
+
+  const fetchForRange = useCallback(async (startDate: string, endDate: string) => {
+    setDateLoading(true);
+    setDateError(null);
+    try {
+      const url = `/api/clients/${encodeURIComponent(clientId)}/campaigns/performance` +
+                  `?startDate=${startDate}&endDate=${endDate}`;
+      const res  = await fetch(url);
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        setDateError((data.error as string | undefined) ?? "Failed to load data");
+        return;
+      }
+      setSnapshots(data.snapshots  as typeof initialSnapshots);
+      setSparklines(data.sparklines as typeof initialSparklines);
+      setClientDaily(data.clientDaily as typeof initialClientDaily);
+      setGoalOverrides(new Map()); // clear inline overrides for new date range
+    } catch {
+      setDateError("Network error — please try again");
+    } finally {
+      setDateLoading(false);
+    }
+  }, [clientId]);
+
+  function handlePreset(preset: DatePreset) {
+    setDatePreset(preset);
+    const range = presetToDates(preset);
+    setDateRange(range);
+    void fetchForRange(range.startDate, range.endDate);
+  }
+
+  function handleCustomRange(startDate: string, endDate: string) {
+    setDatePreset("custom");
+    setDateRange({ startDate, endDate });
+    void fetchForRange(startDate, endDate);
+  }
 
   const counts = useMemo(() => countCampaignsByHealthStatus(snapshots), [snapshots]);
 
@@ -992,7 +1167,7 @@ export function CampaignPerformanceView({
               Campaign Performance
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Live metrics for {clientName} · CRM is source of truth for ROAS and CPA · 7-day attribution window
+              {clientName} · CRM is source of truth for ROAS &amp; CPA
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -1010,13 +1185,36 @@ export function CampaignPerformanceView({
             </Link>
           </div>
         </div>
+
+        {/* Date range picker */}
+        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              Date range
+            </span>
+            <span className="text-xs text-slate-500">
+              {fmtDateLabel(dateRange.startDate, dateRange.endDate)}
+            </span>
+          </div>
+          <DateRangePicker
+            startDate={dateRange.startDate}
+            endDate={dateRange.endDate}
+            preset={datePreset}
+            loading={dateLoading}
+            onPreset={handlePreset}
+            onCustomRange={handleCustomRange}
+          />
+          {dateError && (
+            <p className="mt-2 text-xs text-rose-400">{dateError}</p>
+          )}
+        </div>
       </div>
 
-      {/* 30-day overview chart */}
+      {/* Overview chart */}
       {clientDaily.some((d) => d.spend > 0 || d.revenue > 0) && (
         <div className="mb-8">
           <SectionCard
-            title="30-Day Overview"
+            title={`Overview · ${fmtDateLabel(dateRange.startDate, dateRange.endDate)}`}
             description="Spend (indigo), CRM revenue (green), and evaluated ROAS (amber dashed) from Meta + Shopify."
           >
             <TrendChart data={clientDaily} height={240} />
