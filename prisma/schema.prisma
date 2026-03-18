@@ -86,8 +86,9 @@ model ClientAccount {
   crmPerformanceRows      CRMPerformanceRow[]
   reconciliationResults   ReconciliationResult[]
   reconciliationMatches   ReconciliationMatch[]
-  reconciliationSummaries ReconciliationSummary[]
-  metaSelectedAccounts    MetaSelectedAdAccount[]
+  reconciliationSummaries          ReconciliationSummary[]
+  reconciledCampaignPerformances   ReconciledCampaignPerformance[]
+  metaSelectedAccounts             MetaSelectedAdAccount[]
   shopifyConnections      ShopifyConnection[]
   shopifyOrders           ShopifyOrder[]
   clientSyncRuns          ClientSyncRun[]
@@ -765,6 +766,33 @@ model ReconciliationSummary {
   clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
 
   @@unique([clientAccountId, dateFrom, dateTo])
+  @@index([clientAccountId, dateFrom])
+}
+
+// Per-campaign reconciliation rollup. One row per (client, campaign, date range).
+// Aggregates UTM-matched + window-fallback attributed orders into CRM-verified
+// ROAS and CPA metrics. Upserted on each reconciliation run.
+model ReconciledCampaignPerformance {
+  id                    String   @id @default(cuid())
+  clientAccountId       String
+  externalCampaignId    String
+  campaignName          String
+  dateFrom              String   // YYYY-MM-DD
+  dateTo                String   // YYYY-MM-DD
+  metaSpend             Float    @default(0)
+  attributedRevenue     Float    @default(0)  // CRM revenue (source of truth)
+  attributedOrders      Int      @default(0)  // CRM order count
+  calculatedRoas        Float?                // attributedRevenue / metaSpend
+  calculatedCpa         Float?                // metaSpend / attributedOrders
+  utmMatchedOrders      Int      @default(0)  // orders via exact UTM path
+  windowMatchedOrders   Int      @default(0)  // orders via 7-day lookback fallback
+  attributionWindowDays Int      @default(7)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([clientAccountId, externalCampaignId, dateFrom, dateTo])
   @@index([clientAccountId, dateFrom])
 }
 

@@ -15,8 +15,25 @@ export { reconcileMetaRowsWithShopifyOrders } from "./matchEngine";
 
 export { summarizeReconciliationResults } from "./summarize";
 
-// DB persistence helpers (ready, not yet wired to any page/route).
+// DB persistence helpers.
 export {
   persistReconciliationMatches,
   persistReconciliationSummary,
+  persistCampaignPerformance,
+  loadCampaignPerformance,
 } from "./persist";
+
+// Per-campaign attribution and roll-up (4 named functions).
+export {
+  matchOrdersToCampaigns,
+  attributeOrdersToCampaigns,
+  aggregateCampaignRevenue,
+  calculateCampaignPerformance,
+} from "./campaignPerformance";
+export type {
+  OrderRecord,
+  MetaCampaignSpend,
+  AttributedOrder,
+  CampaignRevenueAggregate,
+  CampaignPerformanceRow,
+} from "./campaignPerformance";

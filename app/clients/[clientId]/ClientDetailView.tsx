@@ -18,11 +18,13 @@ import type { ClientSyncStatusSummary } from "../../../lib/clientSync/types";
 import type { ClientMetaData }          from "../../../lib/meta/clientMetaService";
 import type { MetaImportStatus }        from "../../../lib/meta/metaImportStatus";
 import type { ClientMetaValidation }    from "../../../lib/meta/clientMetaValidation";
+import type { ReconciledCampaignPerformance } from "@prisma/client";
 import { ClientIntegrationsSection }    from "./ClientIntegrationsSection";
 import { SyncStatusSection }            from "./SyncStatusSection";
 import { LiveMetaCampaignsSection }     from "./LiveMetaCampaignsSection";
 import { MetaImportDebugPanel }         from "./MetaImportDebugPanel";
 import { MetaVerificationSection }      from "./MetaVerificationSection";
+import { SourceOfTruthSection }         from "./SourceOfTruthSection";
 
 // --- Local types -------------------------------------------------------------
 
@@ -50,19 +52,22 @@ function clientStatusVariant(status: string): BadgeVariant {
 }
 
 type Props = {
-  account:           ClientAccountDetail;
-  campaigns:         Campaign[];
-  adSets:            AdSet[];
-  ads:               Ad[];
-  campaignSummaries: CampaignSummary[];
-  adSetSummaries:    AdSetPerformanceSummary[];
-  adSummaries:       AdPerformanceSummary[];
-  integrations:      ClientIntegrationStatus;
-  readiness:         ClientReadiness;
-  syncStatus:        ClientSyncStatusSummary;
-  clientMetaData:    ClientMetaData;
-  metaImportStatus:  MetaImportStatus;
-  metaValidation:    ClientMetaValidation;
+  account:              ClientAccountDetail;
+  campaigns:            Campaign[];
+  adSets:               AdSet[];
+  ads:                  Ad[];
+  campaignSummaries:    CampaignSummary[];
+  adSetSummaries:       AdSetPerformanceSummary[];
+  adSummaries:          AdPerformanceSummary[];
+  integrations:         ClientIntegrationStatus;
+  readiness:            ClientReadiness;
+  syncStatus:           ClientSyncStatusSummary;
+  clientMetaData:       ClientMetaData;
+  metaImportStatus:     MetaImportStatus;
+  metaValidation:       ClientMetaValidation;
+  reconciledCampaigns:  ReconciledCampaignPerformance[];
+  reconciledDateFrom:   string | null;
+  reconciledDateTo:     string | null;
 };
 
 // --- Style constants ---------------------------------------------------------
@@ -93,6 +98,9 @@ export function ClientDetailView({
   clientMetaData,
   metaImportStatus,
   metaValidation,
+  reconciledCampaigns,
+  reconciledDateFrom,
+  reconciledDateTo,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
 
@@ -280,6 +288,14 @@ export function ClientDetailView({
       <LiveMetaCampaignsSection
         clientId={account.id}
         data={clientMetaData}
+      />
+
+      {/* Source-of-Truth Performance — CRM-verified ROAS/CPA from reconciliation */}
+      <SourceOfTruthSection
+        clientId={account.id}
+        rows={reconciledCampaigns}
+        dateFrom={reconciledDateFrom}
+        dateTo={reconciledDateTo}
       />
 
       {/* Campaign Performance — link to dedicated campaigns route */}

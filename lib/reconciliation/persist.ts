@@ -15,6 +15,7 @@
 
 import { prisma } from "../db";
 import type { ReconciliationMatchRow, ReconciliationComputedSummary } from "../../types/reconciliation";
+import type { CampaignPerformanceRow } from "./campaignPerformance";
 
 /**
  * Upsert a set of ReconciliationMatchRows into the database.
@@ -119,5 +120,84 @@ export async function persistReconciliationSummary(
       matchedRows:     summary.matchedRows,
       unmatchedRows:   summary.unmatchedRows,
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ReconciledCampaignPerformance
+// ---------------------------------------------------------------------------
+
+/**
+ * Upsert per-campaign reconciliation rollup rows.
+ * Keyed on (clientAccountId, externalCampaignId, dateFrom, dateTo).
+ */
+export async function persistCampaignPerformance(
+  clientAccountId: string,
+  dateFrom:         string,
+  dateTo:           string,
+  rows:             CampaignPerformanceRow[]
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  await prisma.$transaction(
+    rows.map((row) =>
+      prisma.reconciledCampaignPerformance.upsert({
+        where: {
+          clientAccountId_externalCampaignId_dateFrom_dateTo: {
+            clientAccountId,
+            externalCampaignId: row.externalCampaignId,
+            dateFrom,
+            dateTo,
+          },
+        },
+        update: {
+          campaignName:          row.campaignName,
+          metaSpend:             row.metaSpend,
+          attributedRevenue:     row.attributedRevenue,
+          attributedOrders:      row.attributedOrders,
+          calculatedRoas:        row.calculatedRoas    ?? null,
+          calculatedCpa:         row.calculatedCpa     ?? null,
+          utmMatchedOrders:      row.utmMatchedOrders,
+          windowMatchedOrders:   row.windowMatchedOrders,
+          attributionWindowDays: row.attributionWindowDays,
+        },
+        create: {
+          clientAccountId,
+          externalCampaignId:    row.externalCampaignId,
+          campaignName:          row.campaignName,
+          dateFrom,
+          dateTo,
+          metaSpend:             row.metaSpend,
+          attributedRevenue:     row.attributedRevenue,
+          attributedOrders:      row.attributedOrders,
+          calculatedRoas:        row.calculatedRoas    ?? null,
+          calculatedCpa:         row.calculatedCpa     ?? null,
+          utmMatchedOrders:      row.utmMatchedOrders,
+          windowMatchedOrders:   row.windowMatchedOrders,
+          attributionWindowDays: row.attributionWindowDays,
+        },
+      })
+    )
+  );
+}
+
+/**
+ * Load the most recent per-campaign performance rows for a client.
+ * Returns the rows from the latest run (most recent dateTo).
+ */
+export async function loadCampaignPerformance(
+  clientAccountId: string
+): Promise<import("@prisma/client").ReconciledCampaignPerformance[]> {
+  // Find the most recent dateTo for this client.
+  const latest = await prisma.reconciledCampaignPerformance.findFirst({
+    where:   { clientAccountId },
+    orderBy: { dateTo: "desc" },
+    select:  { dateTo: true },
+  });
+  if (!latest) return [];
+
+  return prisma.reconciledCampaignPerformance.findMany({
+    where:   { clientAccountId, dateTo: latest.dateTo },
+    orderBy: { metaSpend: "desc" },
   });
 }
