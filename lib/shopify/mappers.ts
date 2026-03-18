@@ -77,9 +77,9 @@ export function mapLineItemsForOrder(
 ): MappedLineItem[] {
   return raw.lineItems.edges.map(({ node }: { node: RawShopifyLineItem }) => ({
     shopifyOrderId,
-    productId: node.product?.id      ?? null,
-    variantId: node.variant?.id      ?? null,
-    sku:       node.variant?.sku     ?? null,
+    productId: null,
+    variantId: null,
+    sku:       null,
     title:     node.title,
     quantity:  node.quantity,
     price:     parseFloat(node.originalUnitPriceSet.shopMoney.amount) || 0,

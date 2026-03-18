@@ -8,8 +8,6 @@ export interface RawShopifyMoneyBag {
 
 export interface RawShopifyLineItem {
   id:       string;
-  product?: { id: string };
-  variant?: { id: string; sku?: string };
   title:    string;
   quantity: number;
   originalUnitPriceSet: RawShopifyMoneyBag;
@@ -77,8 +75,6 @@ const ORDERS_QUERY = `
             edges {
               node {
                 id
-                product { id }
-                variant { id sku }
                 title
                 quantity
                 originalUnitPriceSet { shopMoney { amount } }
