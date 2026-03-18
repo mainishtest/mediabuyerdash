@@ -15,6 +15,8 @@ import {
   EmptyState,
 } from "../../components/ui";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
+import { fetchAdLevelInsightsAction }  from "./actions";
+import type { AdInsightRow }            from "./actions";
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -78,7 +80,6 @@ function StatusPills({
   activeStatus:  ReconciliationMatchStatus | "all";
   onStatusClick: (s: ReconciliationMatchStatus | "all") => void;
 }) {
-  // Count from actual rows — no guessing
   const counts = useMemo(() => {
     const c: Record<ReconciliationMatchStatus, number> = {
       matched: 0, partial: 0, unmatched_meta: 0, unmatched_crm: 0, ambiguous: 0,
@@ -125,6 +126,9 @@ type Props = {
   clientId:         string | null;
   initialMatchRows: ReconciliationMatchRow[];
   initialSummary:   ReconciliationComputedSummary | null;
+  /** The date range that was used to load data from the DB (from URL params). */
+  initialDateFrom:  string;
+  initialDateTo:    string;
 };
 
 export function ReconciliationView({
@@ -132,6 +136,8 @@ export function ReconciliationView({
   clientId,
   initialMatchRows,
   initialSummary,
+  initialDateFrom,
+  initialDateTo,
 }: Props) {
   const router = useRouter();
   const [matchRows, setMatchRows] = useState<ReconciliationMatchRow[]>(initialMatchRows);
@@ -139,40 +145,78 @@ export function ReconciliationView({
   const [running,   setRunning]   = useState(false);
   const [runError,  setRunError]  = useState<string | null>(null);
 
-  // Filters
-  const [activeStatus, setActiveStatus]     = useState<ReconciliationMatchStatus | "all">("all");
-  const [utmCampaign,  setUtmCampaign]      = useState("");
-  const [dateFrom,     setDateFrom]         = useState("");
-  const [dateTo,       setDateTo]           = useState("");
+  // Filters — date state initialised from URL params (the loaded DB range)
+  const [activeStatus, setActiveStatus] = useState<ReconciliationMatchStatus | "all">("all");
+  const [utmCampaign,  setUtmCampaign]  = useState("");
+  const [dateFrom,     setDateFrom]     = useState(initialDateFrom);
+  const [dateTo,       setDateTo]       = useState(initialDateTo);
 
   // Sort
   const [sortKey, setSortKey] = useState<SortKey>("spend");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  function handleClientChange(id: string) {
-    router.push(id ? `/reconciliation?clientId=${encodeURIComponent(id)}` : "/reconciliation");
+  // -------------------------------------------------------------------------
+  // URL navigation helpers
+  // -------------------------------------------------------------------------
+
+  function buildUrl(overrides: { clientId?: string | null; dateFrom?: string; dateTo?: string }) {
+    const id  = overrides.clientId  !== undefined ? overrides.clientId  : clientId;
+    const dfr = overrides.dateFrom  !== undefined ? overrides.dateFrom  : dateFrom;
+    const dto = overrides.dateTo    !== undefined ? overrides.dateTo    : dateTo;
+    const params = new URLSearchParams();
+    if (id)  params.set("clientId",  id);
+    if (dfr) params.set("dateFrom",  dfr);
+    if (dto) params.set("dateTo",    dto);
+    return `/reconciliation${params.size > 0 ? `?${params.toString()}` : ""}`;
   }
+
+  function handleClientChange(id: string) {
+    router.push(buildUrl({ clientId: id || null }));
+  }
+
+  /** Reload the page so the server filters the DB query to the new date range. */
+  function handleApplyDates() {
+    router.push(buildUrl({}));
+  }
+
+  function handleClearFilters() {
+    setActiveStatus("all");
+    setUtmCampaign("");
+    setDateFrom("");
+    setDateTo("");
+    router.push(buildUrl({ dateFrom: "", dateTo: "" }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Refresh — re-runs reconciliation, passes current date range to the API
+  // -------------------------------------------------------------------------
 
   async function handleRun() {
     if (!clientId || running) return;
     setRunning(true);
     setRunError(null);
     try {
+      const body: Record<string, string> = {};
+      if (dateFrom) body.dateFrom = dateFrom;
+      if (dateTo)   body.dateTo   = dateTo;
+
       const res = await fetch(
         `/api/clients/${encodeURIComponent(clientId)}/reconciliation/run`,
-        { method: "POST" }
+        {
+          method:  "POST",
+          headers: Object.keys(body).length > 0 ? { "Content-Type": "application/json" } : {},
+          body:    Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+        }
       );
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error ?? `HTTP ${res.status}`);
       }
       const data = await res.json();
       setMatchRows(data.matchRows ?? []);
       setSummary(data.summary ?? null);
       setActiveStatus("all");
       setUtmCampaign("");
-      setDateFrom("");
-      setDateTo("");
     } catch (err) {
       setRunError(err instanceof Error ? err.message : "Run failed");
     } finally {
@@ -189,7 +233,7 @@ export function ReconciliationView({
     }
   }
 
-  // Campaign options for the dropdown filter
+  // Campaign options for the dropdown
   const campaignOptions = useMemo(
     () =>
       Array.from(
@@ -203,6 +247,7 @@ export function ReconciliationView({
     let rows = matchRows.filter((r) => {
       if (activeStatus !== "all" && r.matchStatus !== activeStatus) return false;
       if (utmCampaign && r.utmCampaign !== utmCampaign)              return false;
+      // Client-side date filter allows zooming within the already-loaded range
       if (dateFrom && r.date < dateFrom)                              return false;
       if (dateTo   && r.date > dateTo)                               return false;
       return true;
@@ -212,12 +257,12 @@ export function ReconciliationView({
       let av: number | string = 0;
       let bv: number | string = 0;
       switch (sortKey) {
-        case "date":       av = a.date;          bv = b.date;          break;
-        case "campaign":   av = a.utmCampaign ?? ""; bv = b.utmCampaign ?? ""; break;
-        case "spend":      av = a.metaSpend;     bv = b.metaSpend;     break;
-        case "crmRevenue": av = a.crmRevenue;    bv = b.crmRevenue;    break;
-        case "crmOrders":  av = a.crmOrders;     bv = b.crmOrders;     break;
-        case "roas":       av = a.evaluatedRoas ?? -1; bv = b.evaluatedRoas ?? -1; break;
+        case "date":       av = a.date;               bv = b.date;               break;
+        case "campaign":   av = a.utmCampaign ?? "";  bv = b.utmCampaign ?? "";  break;
+        case "spend":      av = a.metaSpend;          bv = b.metaSpend;          break;
+        case "crmRevenue": av = a.crmRevenue;         bv = b.crmRevenue;         break;
+        case "crmOrders":  av = a.crmOrders;          bv = b.crmOrders;          break;
+        case "roas":       av = a.evaluatedRoas ?? -1;       bv = b.evaluatedRoas ?? -1;       break;
         case "cpa":        av = a.evaluatedCpa  ?? Infinity; bv = b.evaluatedCpa  ?? Infinity; break;
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
@@ -228,10 +273,10 @@ export function ReconciliationView({
     return rows;
   }, [matchRows, activeStatus, utmCampaign, dateFrom, dateTo, sortKey, sortDir]);
 
-  const hasFilters = activeStatus !== "all" || utmCampaign !== "" || dateFrom !== "" || dateTo !== "";
-  const noDataAtAll = matchRows.length === 0;
-  const noMetaData  = matchRows.length > 0 && matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
-  const noCrmData   = matchRows.length > 0 && matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
+  const hasFilters   = activeStatus !== "all" || utmCampaign !== "" || dateFrom !== "" || dateTo !== "";
+  const noDataAtAll  = matchRows.length === 0;
+  const noMetaData   = matchRows.length > 0 && matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
+  const noCrmData    = matchRows.length > 0 && matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
 
   const matchedSpend = matchRows.filter((r) => r.matchStatus === "matched" || r.matchStatus === "partial").reduce((s, r) => s + r.metaSpend, 0);
   const totalSpend   = summary?.totalMetaSpend ?? 0;
@@ -240,11 +285,16 @@ export function ReconciliationView({
   const dateRangeLabel =
     summary?.dateFrom && summary?.dateTo
       ? `${summary.dateFrom} → ${summary.dateTo}`
+      : (initialDateFrom && initialDateTo)
+      ? `${initialDateFrom} → ${initialDateTo}`
       : null;
+
+  // Whether the current dateFrom/dateTo differs from what's loaded (URL params)
+  const datesChanged = dateFrom !== initialDateFrom || dateTo !== initialDateTo;
 
   return (
     <div className="space-y-0">
-      {/* Header + Run button */}
+      {/* Header + Refresh button */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader
           title="Reconciliation"
@@ -330,40 +380,16 @@ export function ReconciliationView({
               </p>
             )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <StatCard
-                label="Ad Spend"
-                value={formatCurrency(summary.totalMetaSpend)}
-                sub="Source: Meta"
-              />
-              <StatCard
-                label="True Revenue"
-                value={formatCurrency(summary.totalCrmRevenue)}
-                sub="Source: Shopify/CRM"
-              />
-              <StatCard
-                label="Attributed Orders"
-                value={summary.totalCrmOrders.toLocaleString()}
-                sub="Source: Shopify/CRM"
-              />
-              <StatCard
-                label="True CPA"
-                value={fmtCpa(summary.evaluatedCpa)}
-                sub="Spend ÷ CRM orders"
-              />
-              <StatCard
-                label="True ROAS"
-                value={fmtRoas(summary.evaluatedRoas)}
-                sub="CRM rev ÷ spend"
-              />
-              <StatCard
-                label="Spend Coverage"
-                value={coveragePct != null ? `${coveragePct}%` : "—"}
-                sub={`of spend matched to CRM`}
-              />
+              <StatCard label="Ad Spend"         value={formatCurrency(summary.totalMetaSpend)} sub="Source: Meta"          />
+              <StatCard label="True Revenue"     value={formatCurrency(summary.totalCrmRevenue)} sub="Source: Shopify/CRM"  />
+              <StatCard label="Attributed Orders" value={summary.totalCrmOrders.toLocaleString()} sub="Source: Shopify/CRM" />
+              <StatCard label="True CPA"         value={fmtCpa(summary.evaluatedCpa)}           sub="Spend ÷ CRM orders"   />
+              <StatCard label="True ROAS"        value={fmtRoas(summary.evaluatedRoas)}          sub="CRM rev ÷ spend"      />
+              <StatCard label="Spend Coverage"   value={coveragePct != null ? `${coveragePct}%` : "—"} sub="of spend matched to CRM" />
             </div>
           </section>
 
-          {/* Filter bar — status pills + dropdowns in one card */}
+          {/* Filter bar */}
           <SectionCard className="mb-6">
             <div className="flex flex-col gap-4">
               {/* Status pills */}
@@ -392,6 +418,8 @@ export function ReconciliationView({
                   </div>
                 )}
 
+                {/* Date range — these inputs change local state immediately (client-side
+                    filter) and the Apply button reloads from DB for the new range. */}
                 <div>
                   <p className="mb-1 text-xs text-slate-500">From</p>
                   <input
@@ -414,14 +442,21 @@ export function ReconciliationView({
                   />
                 </div>
 
+                {/* Apply button — reloads page with date params so the DB filters data */}
+                <button
+                  onClick={handleApplyDates}
+                  className={`self-end rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors
+                    ${datesChanged
+                      ? "border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
+                      : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    }`}
+                >
+                  Apply Date Range
+                </button>
+
                 {hasFilters && (
                   <button
-                    onClick={() => {
-                      setActiveStatus("all");
-                      setUtmCampaign("");
-                      setDateFrom("");
-                      setDateTo("");
-                    }}
+                    onClick={handleClearFilters}
                     className="self-end pb-0.5 text-xs text-slate-400 underline hover:text-slate-200"
                   >
                     Clear filters
@@ -438,13 +473,13 @@ export function ReconciliationView({
           {/* Detail table */}
           <SectionCard
             title="Campaign Performance"
-            description="Sorted by column headers. True CPA and ROAS always use CRM data — not Meta self-reported conversions."
+            description="Click ▶ on a row to drill into ad-level delivery metrics. True CPA and ROAS always use CRM data."
             flush
           >
             {filtered.length === 0 ? (
               <EmptyState
                 title="No rows match the current filters"
-                description="Try clearing filters or selecting a different date range."
+                description="Try clearing filters or adjusting the date range."
               />
             ) : (
               <ReconciliationTable
@@ -452,6 +487,7 @@ export function ReconciliationView({
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSortClick}
+                clientId={clientId}
               />
             )}
           </SectionCard>
@@ -462,152 +498,304 @@ export function ReconciliationView({
 }
 
 // ---------------------------------------------------------------------------
-// Table
+// Table with expandable ad drill-down rows
 // ---------------------------------------------------------------------------
 
-type SortKey2 = SortKey;
+type DrillDownState = { loading: boolean; rows: AdInsightRow[]; error?: string };
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return <span className="ml-1 text-slate-700">↕</span>;
   return <span className="ml-1 text-slate-300">{dir === "desc" ? "↓" : "↑"}</span>;
 }
 
-const TH_BASE =
-  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 whitespace-nowrap";
+const TH_BASE     = "px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 whitespace-nowrap";
 const TH_SORTABLE = `${TH_BASE} cursor-pointer select-none hover:text-slate-300 transition-colors`;
-const TD   = "px-4 py-3 text-sm text-slate-300 whitespace-nowrap";
-const TD_R = `${TD} text-right`;
+const TD          = "px-4 py-3 text-sm text-slate-300 whitespace-nowrap";
+const TD_R        = `${TD} text-right`;
 
 function ReconciliationTable({
   rows,
   sortKey,
   sortDir,
   onSort,
+  clientId,
 }: {
-  rows:    ReconciliationMatchRow[];
-  sortKey: SortKey2;
-  sortDir: SortDir;
-  onSort:  (k: SortKey2) => void;
+  rows:     ReconciliationMatchRow[];
+  sortKey:  SortKey;
+  sortDir:  SortDir;
+  onSort:   (k: SortKey) => void;
+  clientId: string;
 }) {
+  const [expandedId,  setExpandedId]  = useState<string | null>(null);
+  const [drillCache,  setDrillCache]  = useState<Map<string, DrillDownState>>(new Map());
+
+  async function handleExpand(row: ReconciliationMatchRow) {
+    // Toggle — collapse if already expanded
+    if (expandedId === row.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(row.id);
+
+    // Skip fetch if already cached
+    if (drillCache.has(row.id)) return;
+
+    const campaign = row.utmCampaign ?? null;
+    if (!campaign) {
+      setDrillCache((prev) => new Map(prev).set(row.id, {
+        loading: false,
+        rows:    [],
+        error:   "No campaign name on this row — cannot drill down.",
+      }));
+      return;
+    }
+
+    // Mark loading
+    setDrillCache((prev) => new Map(prev).set(row.id, { loading: true, rows: [] }));
+
+    const result = await fetchAdLevelInsightsAction(clientId, campaign, row.date);
+    setDrillCache((prev) => new Map(prev).set(row.id, {
+      loading: false,
+      rows:    result.rows,
+      error:   result.error,
+    }));
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-slate-800">
-            <th
-              className={TH_SORTABLE}
-              onClick={() => onSort("date")}
-            >
+            {/* Expand toggle column */}
+            <th className="w-10 px-3 py-3" />
+
+            <th className={TH_SORTABLE} onClick={() => onSort("date")}>
               Date <SortIcon active={sortKey === "date"} dir={sortDir} />
             </th>
-            <th
-              className={TH_SORTABLE}
-              onClick={() => onSort("campaign")}
-            >
+            <th className={TH_SORTABLE} onClick={() => onSort("campaign")}>
               Campaign <SortIcon active={sortKey === "campaign"} dir={sortDir} />
             </th>
-            <th
-              className={`${TH_SORTABLE} text-right`}
-              onClick={() => onSort("spend")}
-            >
+            <th className={`${TH_SORTABLE} text-right`} onClick={() => onSort("spend")}>
               Ad Spend <SortIcon active={sortKey === "spend"} dir={sortDir} />
             </th>
-            <th
-              className={`${TH_SORTABLE} text-right`}
-              onClick={() => onSort("crmOrders")}
-            >
+            <th className={`${TH_SORTABLE} text-right`} onClick={() => onSort("crmOrders")}>
               Orders <SortIcon active={sortKey === "crmOrders"} dir={sortDir} />
             </th>
-            <th
-              className={`${TH_SORTABLE} text-right`}
-              onClick={() => onSort("crmRevenue")}
-            >
+            <th className={`${TH_SORTABLE} text-right`} onClick={() => onSort("crmRevenue")}>
               True Revenue <SortIcon active={sortKey === "crmRevenue"} dir={sortDir} />
             </th>
-            <th
-              className={`${TH_SORTABLE} text-right`}
-              onClick={() => onSort("cpa")}
-            >
+            <th className={`${TH_SORTABLE} text-right`} onClick={() => onSort("cpa")}>
               True CPA <SortIcon active={sortKey === "cpa"} dir={sortDir} />
             </th>
-            <th
-              className={`${TH_SORTABLE} text-right`}
-              onClick={() => onSort("roas")}
-            >
+            <th className={`${TH_SORTABLE} text-right`} onClick={() => onSort("roas")}>
               True ROAS <SortIcon active={sortKey === "roas"} dir={sortDir} />
             </th>
             <th className={TH_BASE}>Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/60">
-          {rows.map((row) => (
-            <ReconciliationRow key={row.id} row={row} />
-          ))}
+          {rows.map((row) => {
+            const isExpanded = expandedId === row.id;
+            const drill      = drillCache.get(row.id);
+            return (
+              <ReconciliationRowGroup
+                key={row.id}
+                row={row}
+                isExpanded={isExpanded}
+                drill={drill}
+                onExpand={() => handleExpand(row)}
+              />
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function ReconciliationRow({ row }: { row: ReconciliationMatchRow }) {
+// ---------------------------------------------------------------------------
+// Row group — campaign row + optional ad drill-down expansion
+// ---------------------------------------------------------------------------
+
+function ReconciliationRowGroup({
+  row,
+  isExpanded,
+  drill,
+  onExpand,
+}: {
+  row:        ReconciliationMatchRow;
+  isExpanded: boolean;
+  drill:      DrillDownState | undefined;
+  onExpand:   () => void;
+}) {
   const hasEvalMetrics = row.matchStatus === "matched" || row.matchStatus === "partial";
   const campaignLabel  = row.utmCampaign ?? row.matchKey ?? null;
+  const canExpand      = !!row.utmCampaign;
 
   return (
-    <tr className="hover:bg-slate-800/20 transition-colors">
-      <td className={`${TD} text-slate-500`}>{row.date}</td>
+    <>
+      {/* Campaign row */}
+      <tr className={`transition-colors ${isExpanded ? "bg-slate-800/30" : "hover:bg-slate-800/20"}`}>
 
-      <td className={TD}>
-        {campaignLabel
-          ? <span className="text-slate-200">{campaignLabel}</span>
-          : <span className="text-slate-600">—</span>}
-      </td>
-
-      <td className={TD_R}>
-        {row.metaSpend > 0 ? formatCurrency(row.metaSpend) : <span className="text-slate-600">—</span>}
-      </td>
-
-      <td className={TD_R}>
-        {row.crmOrders > 0
-          ? row.crmOrders.toLocaleString()
-          : <span className="text-slate-600">—</span>}
-      </td>
-
-      <td className={TD_R}>
-        {row.crmRevenue > 0
-          ? formatCurrency(row.crmRevenue)
-          : <span className="text-slate-600">—</span>}
-      </td>
-
-      <td className={TD_R}>
-        {hasEvalMetrics
-          ? <span className={row.evaluatedCpa != null ? "text-slate-200" : "text-slate-600"}>{fmtCpa(row.evaluatedCpa)}</span>
-          : <span className="text-slate-700">—</span>}
-      </td>
-
-      <td className={TD_R}>
-        {hasEvalMetrics && row.evaluatedRoas != null ? (
-          <span
-            className={
-              row.evaluatedRoas >= 3
-                ? "font-semibold text-emerald-400"
-                : row.evaluatedRoas >= 1.5
-                ? "text-slate-200"
-                : "text-rose-400"
-            }
+        {/* Expand toggle */}
+        <td className="px-3 py-3">
+          <button
+            onClick={onExpand}
+            disabled={!canExpand}
+            title={canExpand ? "Drill down to ad level" : "No campaign name — cannot drill down"}
+            className={`flex h-6 w-6 items-center justify-center rounded text-xs transition-colors
+              ${canExpand
+                ? "text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                : "cursor-default text-slate-700"
+              }`}
           >
-            {fmtRoas(row.evaluatedRoas)}
-          </span>
-        ) : (
-          <span className="text-slate-700">—</span>
-        )}
-      </td>
+            {isExpanded ? "▼" : "▶"}
+          </button>
+        </td>
 
-      <td className={TD}>
-        <Badge variant={STATUS_BADGE_VARIANT[row.matchStatus]}>
-          {STATUS_LABELS[row.matchStatus]}
-        </Badge>
-      </td>
-    </tr>
+        <td className={`${TD} text-slate-500`}>{row.date}</td>
+
+        <td className={TD}>
+          {campaignLabel
+            ? <span className="text-slate-200">{campaignLabel}</span>
+            : <span className="text-slate-600">—</span>}
+        </td>
+
+        <td className={TD_R}>
+          {row.metaSpend > 0 ? formatCurrency(row.metaSpend) : <span className="text-slate-600">—</span>}
+        </td>
+
+        <td className={TD_R}>
+          {row.crmOrders > 0 ? row.crmOrders.toLocaleString() : <span className="text-slate-600">—</span>}
+        </td>
+
+        <td className={TD_R}>
+          {row.crmRevenue > 0 ? formatCurrency(row.crmRevenue) : <span className="text-slate-600">—</span>}
+        </td>
+
+        <td className={TD_R}>
+          {hasEvalMetrics
+            ? <span className={row.evaluatedCpa != null ? "text-slate-200" : "text-slate-600"}>{fmtCpa(row.evaluatedCpa)}</span>
+            : <span className="text-slate-700">—</span>}
+        </td>
+
+        <td className={TD_R}>
+          {hasEvalMetrics && row.evaluatedRoas != null ? (
+            <span
+              className={
+                row.evaluatedRoas >= 3   ? "font-semibold text-emerald-400" :
+                row.evaluatedRoas >= 1.5 ? "text-slate-200"                 : "text-rose-400"
+              }
+            >
+              {fmtRoas(row.evaluatedRoas)}
+            </span>
+          ) : (
+            <span className="text-slate-700">—</span>
+          )}
+        </td>
+
+        <td className={TD}>
+          <Badge variant={STATUS_BADGE_VARIANT[row.matchStatus]}>
+            {STATUS_LABELS[row.matchStatus]}
+          </Badge>
+        </td>
+      </tr>
+
+      {/* Ad drill-down row — spans all 9 columns */}
+      {isExpanded && (
+        <tr className="bg-slate-950/40">
+          <td colSpan={9} className="px-6 pb-4 pt-2">
+            <AdDrillDownPanel drill={drill} date={row.date} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ad drill-down panel — shown inside the expanded row
+// ---------------------------------------------------------------------------
+
+function AdDrillDownPanel({
+  drill,
+  date,
+}: {
+  drill: DrillDownState | undefined;
+  date:  string;
+}) {
+  if (!drill || drill.loading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-xs text-slate-500">
+        <span className="animate-pulse">●</span>
+        Loading ad-level data for {date}…
+      </div>
+    );
+  }
+
+  if (drill.error) {
+    return (
+      <div className="rounded-lg border border-amber-800/30 bg-amber-950/20 px-4 py-3 text-xs text-amber-300">
+        {drill.error}
+      </div>
+    );
+  }
+
+  if (drill.rows.length === 0) {
+    return (
+      <p className="py-3 text-xs text-slate-600">
+        No ad-level data found for {date}. Meta may not have synced insights at the ad level for this date.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-600">
+        Ad breakdown — {date} · Meta delivery only · no CRM data at ad level
+      </p>
+      <div className="overflow-x-auto rounded-lg border border-slate-800">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-800 bg-slate-900/60">
+              <th className="px-3 py-2 text-left font-semibold uppercase tracking-widest text-slate-600">Ad Name</th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-widest text-slate-600">Spend</th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-widest text-slate-600">Impressions</th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-widest text-slate-600">Clicks</th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-widest text-slate-600">CTR</th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-widest text-slate-600">Avg. Freq.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/50">
+            {drill.rows.map((ad) => (
+              <tr key={ad.externalAdId} className="hover:bg-slate-800/20 transition-colors">
+                <td className="px-3 py-2 text-slate-300 max-w-[240px] truncate">
+                  {ad.adName ?? <span className="text-slate-600">{ad.externalAdId}</span>}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+                  {formatCurrency(ad.spend)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-400">
+                  {ad.impressions.toLocaleString()}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-400">
+                  {ad.clicks.toLocaleString()}
+                </td>
+                <td className={`px-3 py-2 text-right tabular-nums font-medium
+                  ${ad.ctr >= 1.5 ? "text-emerald-400" : ad.ctr < 0.8 ? "text-rose-400" : "text-slate-300"}`}
+                >
+                  {ad.ctr.toFixed(2)}%
+                </td>
+                <td className={`px-3 py-2 text-right tabular-nums
+                  ${ad.avgFrequency != null && ad.avgFrequency > 3.5 ? "text-amber-400" : "text-slate-400"}`}
+                >
+                  {ad.avgFrequency != null ? `${ad.avgFrequency.toFixed(1)}x` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

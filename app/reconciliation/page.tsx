@@ -2,12 +2,16 @@
 // Server component — loads reconciliation data from the DB for the selected client
 // and passes it to the client view.
 //
-// URL: /reconciliation?clientId=<id>
+// URL: /reconciliation?clientId=<id>&dateFrom=<YYYY-MM-DD>&dateTo=<YYYY-MM-DD>
+//
+// dateFrom/dateTo are optional. When provided they filter the DB query so the
+// overview stats and table only cover that period. ReconciliationView renders
+// the active range and allows the buyer to change it via an Apply button that
+// navigates back here with updated date params.
 //
 // If no clientId is provided, the view shows a client selector and empty state.
 // If clientId is provided, loads the most recent persisted reconciliation results.
-// The "Run Reconciliation" button in the view calls
-//   POST /api/clients/[clientId]/reconciliation/run
+// The "Refresh" button in the view calls POST /api/clients/[clientId]/reconciliation/run
 // which rebuilds from live Meta + Shopify data and persists new results.
 
 export const dynamic = "force-dynamic";
@@ -26,11 +30,13 @@ export const metadata = {
 };
 
 type PageProps = {
-  searchParams: { clientId?: string };
+  searchParams: { clientId?: string; dateFrom?: string; dateTo?: string };
 };
 
 export default async function ReconciliationPage({ searchParams }: PageProps) {
   const clientId = searchParams?.clientId ?? null;
+  const dateFrom = searchParams?.dateFrom ?? undefined;
+  const dateTo   = searchParams?.dateTo   ?? undefined;
 
   // Load all clients for the selector dropdown.
   const clients = await prisma.clientAccount.findMany({
@@ -45,13 +51,15 @@ export default async function ReconciliationPage({ searchParams }: PageProps) {
         clientId={null}
         initialMatchRows={[]}
         initialSummary={null}
+        initialDateFrom={dateFrom ?? ""}
+        initialDateTo={dateTo ?? ""}
       />
     );
   }
 
-  // Load most recent persisted reconciliation results for this client.
+  // Load persisted reconciliation results, filtered by date when provided.
   const [dbRows, dbSummary] = await Promise.all([
-    loadLatestReconciliationMatches(clientId),
+    loadLatestReconciliationMatches(clientId, dateFrom, dateTo),
     loadLatestReconciliationSummary(clientId),
   ]);
 
@@ -85,8 +93,8 @@ export default async function ReconciliationPage({ searchParams }: PageProps) {
       : dbSummary
       ? {
           clientAccountId: dbSummary.clientAccountId,
-          dateFrom:        dbSummary.dateFrom,
-          dateTo:          dbSummary.dateTo,
+          dateFrom:        dateFrom ?? dbSummary.dateFrom,
+          dateTo:          dateTo   ?? dbSummary.dateTo,
           totalMetaSpend:  dbSummary.totalMetaSpend,
           totalCrmRevenue: dbSummary.totalCrmRevenue,
           totalCrmOrders:  dbSummary.totalCrmOrders,
@@ -106,6 +114,8 @@ export default async function ReconciliationPage({ searchParams }: PageProps) {
       clientId={clientId}
       initialMatchRows={matchRows}
       initialSummary={summary}
+      initialDateFrom={dateFrom ?? ""}
+      initialDateTo={dateTo ?? ""}
     />
   );
 }

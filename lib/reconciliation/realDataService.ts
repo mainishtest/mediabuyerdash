@@ -173,13 +173,22 @@ export async function buildCRMOrderRowsForClient(
  * Load the most recent ReconciliationMatch rows for a client from the DB.
  * Used by the Reconciliation page on initial load to show the last run's results.
  * Returns [] if no rows exist yet.
+ *
+ * Optional dateFrom/dateTo filter the DB query so the page can be scoped to
+ * a specific period. When omitted, returns the 500 most recent rows.
  */
 export async function loadLatestReconciliationMatches(
   clientAccountId: string,
+  dateFrom?: string,
+  dateTo?:   string,
   limit = 500
 ) {
   return prisma.reconciliationMatch.findMany({
-    where:   { clientAccountId },
+    where: {
+      clientAccountId,
+      ...(dateFrom ? { date: { gte: dateFrom } } : {}),
+      ...(dateTo   ? { date: { lte: dateTo   } } : {}),
+    },
     orderBy: { date: "desc" },
     take:    limit,
   });
