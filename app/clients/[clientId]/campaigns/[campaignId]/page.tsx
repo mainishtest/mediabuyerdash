@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound }           from "next/navigation";
 import { prisma }             from "../../../../../lib/db";
 import { getCampaignGoal }    from "../../../../../lib/campaignGoals/service";
+import { getCampaignDailyMetrics } from "../../../../../lib/charts/dataService";
 import { CampaignDrillDownView } from "./CampaignDrillDownView";
 import type { GoalData }         from "./CampaignGoalEditor";
 
@@ -42,8 +43,8 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const since = thirtyDaysAgo.toISOString().slice(0, 10);
 
-  // Ad sets, ads, insights, and goal in parallel
-  const [adSets, ads, adSetInsights, adInsights, goalRecord] = await Promise.all([
+  // Ad sets, ads, insights, goal, and daily chart data in parallel
+  const [adSets, ads, adSetInsights, adInsights, goalRecord, dailyMetrics] = await Promise.all([
     prisma.metaSyncedAdSet.findMany({
       where:   { externalCampaignId: campaignId },
       orderBy: { name: "asc" },
@@ -76,6 +77,8 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
     }),
     // Current goal for this campaign
     getCampaignGoal(campaignId),
+    // 30-day daily spend + CRM revenue for the trend chart
+    getCampaignDailyMetrics(campaignId, clientId, 30),
   ]);
 
   // Build insight maps
@@ -144,6 +147,7 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
     <CampaignDrillDownView
       clientId={clientId}
       clientName={account.name}
+      dailyMetrics={dailyMetrics}
       campaign={{
         externalCampaignId: campaign.externalCampaignId,
         name:               campaign.name,

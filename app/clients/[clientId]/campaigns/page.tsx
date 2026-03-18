@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound }                          from "next/navigation";
 import { prisma }                            from "../../../../lib/db";
 import { buildCampaignPerformanceSnapshots } from "../../../../lib/campaignPerformance/aggregator";
+import { getCampaignSparklines, getClientDailyMetrics } from "../../../../lib/charts/dataService";
 import { CampaignPerformanceView }           from "./CampaignPerformanceView";
 
 type PageProps = {
@@ -31,7 +32,11 @@ export default async function CampaignPerformancePage({ params }: PageProps) {
 
   if (!account) notFound();
 
-  const snapshots = await buildCampaignPerformanceSnapshots(clientId);
+  const [snapshots, sparklines, clientDaily] = await Promise.all([
+    buildCampaignPerformanceSnapshots(clientId),
+    getCampaignSparklines(clientId, 30),
+    getClientDailyMetrics(clientId, 30),
+  ]);
 
   return (
     <CampaignPerformanceView
@@ -39,6 +44,8 @@ export default async function CampaignPerformancePage({ params }: PageProps) {
       clientName={account.name}
       currency={account.currency}
       snapshots={snapshots}
+      sparklines={sparklines}
+      clientDaily={clientDaily}
     />
   );
 }

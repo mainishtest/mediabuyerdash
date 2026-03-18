@@ -6,6 +6,8 @@ import { Badge } from "../../../../../components/ui/Badge";
 import type { BadgeVariant } from "../../../../../components/ui/Badge";
 import { CampaignGoalEditor } from "./CampaignGoalEditor";
 import type { GoalData }       from "./CampaignGoalEditor";
+import { TrendChart } from "../../../../../components/charts/TrendChart";
+import type { DailyPoint } from "../../../../../lib/charts/dataService";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,12 +43,13 @@ type AdRow = {
 };
 
 type Props = {
-  clientId:   string;
-  clientName: string;
-  campaign:   CampaignInfo;
-  adSets:     AdSetRow[];
-  ads:        AdRow[];
-  goal:       GoalData | null;
+  clientId:     string;
+  clientName:   string;
+  campaign:     CampaignInfo;
+  adSets:       AdSetRow[];
+  ads:          AdRow[];
+  goal:         GoalData | null;
+  dailyMetrics: DailyPoint[];
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -271,6 +274,7 @@ export function CampaignDrillDownView({
   adSets,
   ads,
   goal,
+  dailyMetrics,
 }: Props) {
   const [selectedAdSetId, setSelectedAdSetId] = useState<string | null>(null);
 
@@ -333,6 +337,21 @@ export function CampaignDrillDownView({
         totalImpressions={totalImpressions}
         totalClicks={totalClicks}
       />
+
+      {/* 30-day trend chart */}
+      {dailyMetrics.some((d) => d.spend > 0 || d.revenue > 0) && (
+        <section className="mb-8">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
+              30-Day Trend
+            </p>
+            <p className="mb-4 text-xs text-slate-600">
+              Spend (indigo) · CRM revenue (green) · ROAS (amber dashed)
+            </p>
+            <TrendChart data={dailyMetrics} height={220} />
+          </div>
+        </section>
+      )}
 
       {/* Campaign Goals — goal editor section */}
       <section className="mb-8">

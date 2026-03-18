@@ -19,14 +19,19 @@ import type {
   CampaignHealthStatus,
   CampaignActionType,
 } from "../../../../lib/campaignPerformance/types";
+import { SparkLine }   from "../../../../components/charts/SparkLine";
+import { TrendChart }  from "../../../../components/charts/TrendChart";
+import type { SparkPoint, DailyPoint } from "../../../../lib/charts/dataService";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 type Props = {
-  clientId:   string;
-  clientName: string;
-  currency:   string;
-  snapshots:  CampaignPerformanceSnapshot[];
+  clientId:    string;
+  clientName:  string;
+  currency:    string;
+  snapshots:   CampaignPerformanceSnapshot[];
+  sparklines:  Record<string, SparkPoint[]>;
+  clientDaily: DailyPoint[];
 };
 
 // ── Format helpers ────────────────────────────────────────────────────────────
@@ -191,7 +196,15 @@ function MissingGoalsBanner({
 
 // ── Mobile campaign card ──────────────────────────────────────────────────────
 
-function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientId: string }) {
+function CampaignCard({
+  s,
+  clientId,
+  sparkData,
+}: {
+  s:         CampaignPerformanceSnapshot;
+  clientId:  string;
+  sparkData: SparkPoint[];
+}) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
       {/* Name + statuses */}
@@ -227,6 +240,14 @@ function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientI
           </Link>
         )}
       </div>
+
+      {/* Spend sparkline */}
+      {sparkData.length > 1 && (
+        <div className="flex items-center gap-2">
+          <SparkLine data={sparkData} />
+          <span className="text-xs text-slate-600">30d spend trend</span>
+        </div>
+      )}
 
       {/* Key metrics — 2-column */}
       <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-800/30 p-3">
@@ -267,7 +288,15 @@ function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientI
 const TH = "px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-widest text-slate-400 whitespace-nowrap";
 const TD = "px-3 py-3 text-sm text-slate-300 align-top";
 
-function CampaignTableRow({ s, clientId }: { s: CampaignPerformanceSnapshot; clientId: string }) {
+function CampaignTableRow({
+  s,
+  clientId,
+  sparkData,
+}: {
+  s:         CampaignPerformanceSnapshot;
+  clientId:  string;
+  sparkData: SparkPoint[];
+}) {
   return (
     <tr className="border-b border-slate-800 last:border-0 hover:bg-slate-800/20 transition-colors">
       <td className={`${TD} max-w-[200px]`}>
@@ -307,6 +336,9 @@ function CampaignTableRow({ s, clientId }: { s: CampaignPerformanceSnapshot; cli
         </div>
       </td>
       <td className={`${TD} text-right`}>{fmt$(s.metaSpend)}</td>
+      <td className={TD}>
+        <SparkLine data={sparkData} />
+      </td>
       <td className={`${TD} text-right`}>{fmt$(s.crmRevenue)}</td>
       <td className={`${TD} text-right`}>{fmtNum(s.crmOrders)}</td>
       <td className={`${TD} text-right`}>
@@ -518,6 +550,8 @@ export function CampaignPerformanceView({
   clientId,
   clientName,
   snapshots,
+  sparklines,
+  clientDaily,
 }: Props) {
   const [healthFilter,   setHealthFilter]   = useState<HealthFilter>("all");
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>("all");
@@ -583,6 +617,18 @@ export function CampaignPerformanceView({
           </Link>
         </div>
       </div>
+
+      {/* 30-day overview chart */}
+      {clientDaily.some((d) => d.spend > 0 || d.revenue > 0) && (
+        <div className="mb-8">
+          <SectionCard
+            title="30-Day Overview"
+            description="Spend (indigo), CRM revenue (green), and evaluated ROAS (amber dashed) from Meta + Shopify."
+          >
+            <TrendChart data={clientDaily} height={240} />
+          </SectionCard>
+        </div>
+      )}
 
       {noSync ? (
         <SectionCard>
@@ -688,7 +734,14 @@ export function CampaignPerformanceView({
             <>
               {/* Mobile: card list */}
               <div className="space-y-3 md:hidden">
-                {filtered.map((s) => <CampaignCard key={s.campaignId} s={s} clientId={clientId} />)}
+                {filtered.map((s) => (
+                  <CampaignCard
+                    key={s.campaignId}
+                    s={s}
+                    clientId={clientId}
+                    sparkData={sparklines[s.externalCampaignId] ?? []}
+                  />
+                ))}
               </div>
 
               {/* Desktop: table */}
@@ -700,6 +753,7 @@ export function CampaignPerformanceView({
                       <th className={TH}>Status</th>
                       <th className={TH}>Goal</th>
                       <th className={`${TH} text-right`}>Spend</th>
+                      <th className={TH}>Trend</th>
                       <th className={`${TH} text-right`}>CRM Rev</th>
                       <th className={`${TH} text-right`}>Orders</th>
                       <th className={`${TH} text-right`}>ROAS</th>
@@ -711,7 +765,12 @@ export function CampaignPerformanceView({
                   </thead>
                   <tbody>
                     {filtered.map((s) => (
-                      <CampaignTableRow key={s.campaignId} s={s} clientId={clientId} />
+                      <CampaignTableRow
+                        key={s.campaignId}
+                        s={s}
+                        clientId={clientId}
+                        sparkData={sparklines[s.externalCampaignId] ?? []}
+                      />
                     ))}
                   </tbody>
                 </table>
