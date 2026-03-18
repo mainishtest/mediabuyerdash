@@ -1,37 +1,170 @@
 "use client";
 
-import Link from "next/link";
+import Link          from "next/link";
+import { useState }  from "react";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter }  from "next/navigation";
 
-interface NavItem {
+// ---------------------------------------------------------------------------
+// Nav structure
+// ---------------------------------------------------------------------------
+
+type NavLeaf = {
+  kind:  "leaf";
   href:  string;
   label: string;
+};
+
+type NavGroup = {
+  kind:     "group";
+  label:    string;
+  icon:     string;
+  children: NavLeaf[];
+};
+
+type NavEntry = NavLeaf | NavGroup;
+
+const NAV: NavEntry[] = [
+  {
+    kind:  "leaf",
+    href:  "/dashboard",
+    label: "Dashboard",
+  },
+  {
+    kind:  "group",
+    label: "Performance",
+    icon:  "◈",
+    children: [
+      { kind: "leaf", href: "/reconciliation", label: "Reconciliation" },
+      { kind: "leaf", href: "/optimization",   label: "Optimization"   },
+      { kind: "leaf", href: "/pacing",         label: "Pacing"         },
+    ],
+  },
+  {
+    kind:  "group",
+    label: "Creative",
+    icon:  "◇",
+    children: [
+      { kind: "leaf", href: "/creative-lab",     label: "Creative Lab"     },
+      { kind: "leaf", href: "/creative-fatigue", label: "Creative Fatigue" },
+    ],
+  },
+  {
+    kind:  "group",
+    label: "Operations",
+    icon:  "◎",
+    children: [
+      { kind: "leaf", href: "/operations",   label: "Operations"   },
+      { kind: "leaf", href: "/alerts",       label: "Alerts"       },
+      { kind: "leaf", href: "/notifications", label: "Notifications" },
+    ],
+  },
+  {
+    kind:  "group",
+    label: "Automation",
+    icon:  "⟳",
+    children: [
+      { kind: "leaf", href: "/automation",               label: "Automation"     },
+      { kind: "leaf", href: "/automation/auto-execution", label: "Auto-Execution" },
+    ],
+  },
+  {
+    kind:  "group",
+    label: "Settings",
+    icon:  "◉",
+    children: [
+      { kind: "leaf", href: "/clients",      label: "Clients"      },
+      { kind: "leaf", href: "/integrations", label: "Integrations" },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function groupContainsActive(group: NavGroup, pathname: string): boolean {
+  return group.children.some(
+    (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+  );
 }
 
+// ---------------------------------------------------------------------------
+// Group item
+// ---------------------------------------------------------------------------
 
-// Primary nav — only routes that exist and matter to the agency owner.
-const NAV_ITEMS: NavItem[] = [
-  { href: "/operations",     label: "Operations"    },
-  { href: "/alerts",         label: "Alerts"        },
-  { href: "/pacing",         label: "Pacing"        },
-  { href: "/automation",     label: "Automation"    },
-  { href: "/dashboard",      label: "Dashboard"     },
-  { href: "/clients",        label: "Clients"       },
-  { href: "/integrations",   label: "Integrations"  },
-  { href: "/reconciliation", label: "Reconciliation" },
-  { href: "/optimization",   label: "Optimization"  },
-  { href: "/creative-lab",            label: "Creative Lab"    },
-  { href: "/creative-fatigue",        label: "Creative Fatigue" },
-  { href: "/notifications",             label: "Notifications"   },
-  { href: "/automation/auto-execution", label: "Auto-Execution"  },
-];
+function NavGroupItem({
+  group,
+  pathname,
+  onClose,
+}: {
+  group:    NavGroup;
+  pathname: string;
+  onClose?: () => void;
+}) {
+  const hasActive = groupContainsActive(group, pathname);
+  const [open, setOpen] = useState(hasActive);
+
+  const isChildActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
+
+  return (
+    <li>
+      {/* Group header */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm
+                   text-slate-400 transition-colors hover:bg-slate-800/60 hover:text-slate-200"
+        aria-expanded={open}
+      >
+        <span className="shrink-0 text-[11px] text-slate-600">{group.icon}</span>
+        <span className="flex-1 text-left font-medium">{group.label}</span>
+        <svg
+          className={`h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {/* Children */}
+      {open && (
+        <ul className="mt-0.5 space-y-0.5 pl-5">
+          {/* Left rail */}
+          <div className="absolute ml-[-13px] mt-0.5 h-[calc(100%-4px)] w-px bg-slate-800" />
+          {group.children.map((child) => (
+            <li key={child.href} className="relative">
+              <Link
+                href={child.href}
+                onClick={onClose}
+                className={`flex items-center rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  isChildActive(child.href)
+                    ? "bg-slate-800 font-medium text-white"
+                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                }`}
+              >
+                {child.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Footer
+// ---------------------------------------------------------------------------
 
 function SidebarFooter({ onClose }: { onClose?: () => void }) {
   const { data: session } = useSession();
-  const router    = useRouter();
-  const pathname  = usePathname();
+  const router   = useRouter();
+  const pathname = usePathname();
 
   if (!session) {
     return (
@@ -45,11 +178,6 @@ function SidebarFooter({ onClose }: { onClose?: () => void }) {
   const workspaceName = session.user.workspaceName ?? "Workspace";
   const isProfile     = pathname === "/profile";
 
-  function goToProfile() {
-    onClose?.();
-    router.push("/profile");
-  }
-
   return (
     <div className="shrink-0 border-t border-slate-800 px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
@@ -61,7 +189,7 @@ function SidebarFooter({ onClose }: { onClose?: () => void }) {
         </span>
       </div>
       <button
-        onClick={goToProfile}
+        onClick={() => { onClose?.(); router.push("/profile"); }}
         className={`mb-1 w-full truncate rounded-lg px-3 py-1.5 text-left text-xs transition-colors ${
           isProfile
             ? "bg-slate-800 font-medium text-white"
@@ -81,15 +209,16 @@ function SidebarFooter({ onClose }: { onClose?: () => void }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
-
   return (
     <nav className="flex h-full flex-col">
-      {/* Logo mark */}
+      {/* Logo */}
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-800 px-5">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">
           MB
@@ -102,28 +231,42 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         </span>
       </div>
 
-      {/* Nav items */}
+      {/* Nav */}
       <div className="flex-1 overflow-y-auto py-3">
         <ul className="space-y-0.5 px-3">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                onClick={onClose}
-                className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive(item.href)
-                    ? "bg-slate-800 font-medium text-white"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
-                }`}
-              >
-                {item.label}
-              </Link>
-            </li>
-          ))}
+          {NAV.map((entry) => {
+            if (entry.kind === "leaf") {
+              const active =
+                pathname === entry.href || pathname.startsWith(entry.href + "/");
+              return (
+                <li key={entry.href}>
+                  <Link
+                    href={entry.href}
+                    onClick={onClose}
+                    className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+                      active
+                        ? "bg-slate-800 font-medium text-white"
+                        : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                    }`}
+                  >
+                    {entry.label}
+                  </Link>
+                </li>
+              );
+            }
+
+            return (
+              <NavGroupItem
+                key={entry.label}
+                group={entry}
+                pathname={pathname}
+                onClose={onClose}
+              />
+            );
+          })}
         </ul>
       </div>
 
-      {/* Footer — user info + sign out + profile */}
       <SidebarFooter onClose={onClose} />
     </nav>
   );
