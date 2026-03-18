@@ -384,7 +384,7 @@ export function NotificationsView({
               <p className="text-2xl text-slate-700 mb-2">○</p>
               <p className="text-sm font-medium text-slate-300">No notifications sent yet</p>
               <p className="mt-1.5 mx-auto max-w-xs text-xs leading-relaxed text-slate-500">
-                Notifications appear here after they are triggered. Use "Send Test Email"
+                Notifications appear here after they are triggered. Use &ldquo;Send Test Email&rdquo;
                 above to create your first entry.
               </p>
             </div>
