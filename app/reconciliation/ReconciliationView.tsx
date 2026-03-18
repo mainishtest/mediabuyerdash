@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type {
   ReconciliationMatchRow,
   ReconciliationComputedSummary,
@@ -168,13 +169,59 @@ function AttributionInfoCard() {
 // Main component
 // ---------------------------------------------------------------------------
 
+type ClientOption = { id: string; name: string };
+
 type Props = {
-  matchRows: ReconciliationMatchRow[];
-  summary:   ReconciliationComputedSummary;
+  clients:          ClientOption[];
+  clientId:         string | null;
+  initialMatchRows: ReconciliationMatchRow[];
+  initialSummary:   ReconciliationComputedSummary | null;
 };
 
-export function ReconciliationView({ matchRows, summary }: Props) {
+export function ReconciliationView({
+  clients,
+  clientId,
+  initialMatchRows,
+  initialSummary,
+}: Props) {
+  const router   = useRouter();
+  const [matchRows, setMatchRows] = useState<ReconciliationMatchRow[]>(initialMatchRows);
+  const [summary,   setSummary]   = useState<ReconciliationComputedSummary | null>(initialSummary);
+  const [running,   setRunning]   = useState(false);
+  const [runError,  setRunError]  = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  function handleClientChange(id: string) {
+    if (id) {
+      router.push(`/reconciliation?clientId=${encodeURIComponent(id)}`);
+    } else {
+      router.push("/reconciliation");
+    }
+  }
+
+  async function handleRun() {
+    if (!clientId || running) return;
+    setRunning(true);
+    setRunError(null);
+    try {
+      const res = await fetch(
+        `/api/clients/${encodeURIComponent(clientId)}/reconciliation/run`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setMatchRows(data.matchRows ?? []);
+      setSummary(data.summary ?? null);
+      setFilters(EMPTY_FILTERS);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Run failed");
+    } finally {
+      setRunning(false);
+    }
+  }
 
   // Unique campaign options for the filter dropdown.
   const campaignOptions = useMemo(
@@ -207,13 +254,13 @@ export function ReconciliationView({ matchRows, summary }: Props) {
     filters.dateTo     !== "";
 
   const dateRangeLabel =
-    summary.dateFrom && summary.dateTo
+    summary?.dateFrom && summary?.dateTo
       ? `${summary.dateFrom} → ${summary.dateTo}`
       : "No data";
 
   // Handle empty states.
-  const noMetaData  = matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
-  const noCrmData   = matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
+  const noMetaData  = matchRows.length > 0 && matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
+  const noCrmData   = matchRows.length > 0 && matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
   const noDataAtAll = matchRows.length === 0;
 
   return (
@@ -227,21 +274,67 @@ export function ReconciliationView({ matchRows, summary }: Props) {
         }
       />
 
+      {/* Client selector + Run button */}
+      <SectionCard className="mb-8">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <p className="mb-1.5 text-xs text-slate-500">Client</p>
+            <select
+              value={clientId ?? ""}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              <option value="">Select a client…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {clientId && (
+            <button
+              onClick={handleRun}
+              disabled={running}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white
+                hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            >
+              {running ? "Running…" : "Run Reconciliation"}
+            </button>
+          )}
+
+          {runError && (
+            <p className="text-sm text-rose-400">{runError}</p>
+          )}
+        </div>
+      </SectionCard>
+
       {/* Attribution info */}
       <AttributionInfoCard />
 
-      {/* Global empty state */}
-      {noDataAtAll && (
+      {/* No client selected */}
+      {!clientId && (
         <SectionCard>
           <EmptyState
             icon="⚖"
-            title="No reconciliation data yet"
-            description="Sync your Meta ad account and connect Shopify to begin reconciling delivery data against CRM outcomes."
+            title="Select a client to get started"
+            description="Choose a client above, then click Run Reconciliation to compare Meta delivery data against Shopify/CRM outcomes."
           />
         </SectionCard>
       )}
 
-      {!noDataAtAll && (
+      {/* Global empty state (client selected, no data yet) */}
+      {clientId && noDataAtAll && !running && (
+        <SectionCard>
+          <EmptyState
+            icon="⚖"
+            title="No reconciliation data yet"
+            description="Click Run Reconciliation to match Meta spend against Shopify orders for this client."
+          />
+        </SectionCard>
+      )}
+
+      {clientId && !noDataAtAll && summary && (
         <>
           {/* Warning banners */}
           {noMetaData && (

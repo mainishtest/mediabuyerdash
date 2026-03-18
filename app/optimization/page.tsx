@@ -1,83 +1,143 @@
 // app/optimization/page.tsx
 // Server component — evaluates reconciled performance against campaign goals
-// and passes typed results to the client view.
+// using real data from ReconciliationMatch + MetaCampaignGoal.
 //
-// Data sourcing (v1 — sample data):
-//   Performance: lib/data/optimizationSample.ts (RawPerformanceInput[])
-//   Campaigns:   lib/data/campaigns.ts
-//   Ad sets:     lib/data/adSets.ts
-//   Ads:         lib/data/ads.ts
+// URL: /optimization?clientId=<id>
 //
-// When real reconciliation data is available, replace sampleOptimizationRows
-// with rows derived from ReconciliationMatch DB queries mapped to
-// RawPerformanceInput. The evaluation functions below remain unchanged.
-//
-// Safe handling:
-//   - Empty rows → evaluations are empty; view shows EmptyState
-//   - Missing campaign goals → entity is skipped (not matched in evaluator)
-//   - Partial data → evaluatedCpa/Roas may be null; view handles gracefully
+// If no clientId, shows a client selector and empty state.
+// If clientId is provided:
+//   1. Load persisted ReconciliationMatch rows for the last 30 days → RawPerformanceInput[]
+//   2. Load MetaSyncedCampaign + MetaCampaignGoal → Campaign[] with goal values
+//   3. Load MetaSyncedAdSet → AdSet[]
+//   4. Load MetaSyncedAd → Ad[]
+//   5. Run the goal-aware evaluation engine (server-side)
+//   6. Pass typed results to OptimizationView
 
-import { campaigns } from "../../lib/data/campaigns";
-import { adSets }    from "../../lib/data/adSets";
-import { ads }       from "../../lib/data/ads";
-import { sampleOptimizationRows } from "../../lib/data/optimizationSample";
+export const dynamic = "force-dynamic";
+
+import { prisma }                from "../../lib/db";
+import {
+  loadCampaignsWithGoals,
+  loadAdSetsForCampaigns,
+  loadAdsForAdSets,
+  loadRawPerformanceInputs,
+}                                from "../../lib/optimization/realDataService";
 import {
   evaluateCampaignsFromReconciledMetrics,
   evaluateAdSetsFromReconciledMetrics,
   evaluateAdsFromReconciledMetrics,
-} from "../../lib/goalAwareOptimization";
-import { OptimizationView } from "./OptimizationView";
+}                                from "../../lib/goalAwareOptimization";
+import { OptimizationView }      from "./OptimizationView";
 
 export const metadata = {
   title: "Optimization — Media Buying Dashboard",
 };
 
-// v1 sample date range — replace with dynamic range or user-selected filter.
-const DATE_FROM = "2024-03-01";
-const DATE_TO   = "2024-03-05";
+type PageProps = {
+  searchParams: { clientId?: string };
+};
 
-export default function OptimizationPage() {
-  // Run entity-level evaluations using CRM-backed reconciled metrics.
+function defaultDateRange() {
+  const now  = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - 30);
+  return {
+    dateFrom: from.toISOString().slice(0, 10),
+    dateTo:   now.toISOString().slice(0, 10),
+  };
+}
+
+export default async function OptimizationPage({ searchParams }: PageProps) {
+  const clientId = searchParams?.clientId ?? null;
+
+  // Load all clients for the selector dropdown.
+  const clients = await prisma.clientAccount.findMany({
+    select:  { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  if (!clientId) {
+    return (
+      <OptimizationView
+        clients={clients}
+        clientId={null}
+        campaignEvaluations={[]}
+        adSetEvaluations={[]}
+        adEvaluations={[]}
+        recommendations={[]}
+        totalSpend={0}
+        totalCrmRevenue={0}
+        totalCrmOrders={0}
+        evaluatedCpa={null}
+        evaluatedRoas={null}
+        dateFrom=""
+        dateTo=""
+      />
+    );
+  }
+
+  const { dateFrom, dateTo } = defaultDateRange();
+
+  // Load all data in parallel.
+  const [campaigns, rawRows] = await Promise.all([
+    loadCampaignsWithGoals(clientId),
+    loadRawPerformanceInputs(clientId, dateFrom, dateTo),
+  ]);
+
+  const campaignIds = campaigns.map((c) => c.id);
+  const [adSets, ads] = await Promise.all([
+    loadAdSetsForCampaigns(campaignIds),
+    (async () => {
+      const adSetIds = (await prisma.metaSyncedAdSet.findMany({
+        where:  { externalCampaignId: { in: campaignIds } },
+        select: { externalAdSetId: true },
+      })).map((as) => as.externalAdSetId);
+      return loadAdsForAdSets(adSetIds);
+    })(),
+  ]);
+
+  // Run goal-aware evaluations (pure functions — no DB access).
   const campaignOutput = evaluateCampaignsFromReconciledMetrics(
-    sampleOptimizationRows,
+    rawRows,
     campaigns,
-    DATE_FROM,
-    DATE_TO
+    dateFrom,
+    dateTo
   );
 
   const adSetOutput = evaluateAdSetsFromReconciledMetrics(
-    sampleOptimizationRows,
+    rawRows,
     adSets,
     campaigns,
-    DATE_FROM,
-    DATE_TO
+    dateFrom,
+    dateTo
   );
 
   const adOutput = evaluateAdsFromReconciledMetrics(
-    sampleOptimizationRows,
+    rawRows,
     ads,
     adSets,
     campaigns,
-    DATE_FROM,
-    DATE_TO
+    dateFrom,
+    dateTo
   );
 
-  // Combine all recommendations — sorted by priority (high → medium → low) in the view.
   const allRecommendations = [
     ...campaignOutput.recommendations,
     ...adSetOutput.recommendations,
     ...adOutput.recommendations,
   ];
 
-  // Compute global summary totals from the raw performance rows.
-  const totalSpend      = sampleOptimizationRows.reduce((s, r) => s + r.metaSpend, 0);
-  const totalCrmOrders  = sampleOptimizationRows.reduce((s, r) => s + r.crmOrders, 0);
-  const totalCrmRevenue = sampleOptimizationRows.reduce((s, r) => s + r.crmRevenue, 0);
+  // Compute global summary totals.
+  const totalSpend      = rawRows.reduce((s, r) => s + r.metaSpend,   0);
+  const totalCrmOrders  = rawRows.reduce((s, r) => s + r.crmOrders,   0);
+  const totalCrmRevenue = rawRows.reduce((s, r) => s + r.crmRevenue,  0);
   const evaluatedCpa    = totalCrmOrders  > 0 ? Math.round((totalSpend / totalCrmOrders) * 100) / 100 : null;
   const evaluatedRoas   = totalSpend      > 0 ? Math.round((totalCrmRevenue / totalSpend) * 100) / 100 : null;
 
   return (
     <OptimizationView
+      clients={clients}
+      clientId={clientId}
       campaignEvaluations={campaignOutput.evaluations}
       adSetEvaluations={adSetOutput.evaluations}
       adEvaluations={adOutput.evaluations}
@@ -87,8 +147,8 @@ export default function OptimizationPage() {
       totalCrmOrders={totalCrmOrders}
       evaluatedCpa={evaluatedCpa}
       evaluatedRoas={evaluatedRoas}
-      dateFrom={DATE_FROM}
-      dateTo={DATE_TO}
+      dateFrom={dateFrom}
+      dateTo={dateTo}
     />
   );
 }

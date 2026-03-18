@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type {
   GoalAwareEvaluationResult,
   GoalAwareRecommendation,
@@ -314,7 +315,11 @@ function RecommendationCard({ rec }: { rec: GoalAwareRecommendation }) {
 // Props
 // ---------------------------------------------------------------------------
 
+type ClientOption = { id: string; name: string };
+
 type Props = {
+  clients:             ClientOption[];
+  clientId:            string | null;
   campaignEvaluations: GoalAwareEvaluationResult[];
   adSetEvaluations:    GoalAwareEvaluationResult[];
   adEvaluations:       GoalAwareEvaluationResult[];
@@ -333,6 +338,8 @@ type Props = {
 // ---------------------------------------------------------------------------
 
 export function OptimizationView({
+  clients,
+  clientId,
   campaignEvaluations,
   adSetEvaluations,
   adEvaluations,
@@ -345,7 +352,16 @@ export function OptimizationView({
   dateFrom,
   dateTo,
 }: Props) {
+  const router = useRouter();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  function handleClientChange(id: string) {
+    if (id) {
+      router.push(`/optimization?clientId=${encodeURIComponent(id)}`);
+    } else {
+      router.push("/optimization");
+    }
+  }
 
   const allEvaluations = useMemo(
     () => [...campaignEvaluations, ...adSetEvaluations, ...adEvaluations],
@@ -384,11 +400,47 @@ export function OptimizationView({
         badge={<Badge variant="info">CRM Source of Truth</Badge>}
       />
 
+      {/* Client selector */}
+      <SectionCard className="mb-8">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <p className="mb-1.5 text-xs text-slate-500">Client</p>
+            <select
+              value={clientId ?? ""}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                text-slate-200 focus:border-slate-600 focus:outline-none"
+            >
+              <option value="">Select a client…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          {clientId && dateFrom && dateTo && (
+            <p className="self-end pb-1 text-xs text-slate-500">
+              Last 30 days: {dateFrom} → {dateTo}
+            </p>
+          )}
+        </div>
+      </SectionCard>
+
       {/* Source-of-truth explanation */}
       <SourceOfTruthCard />
 
-      {/* Global empty state */}
-      {noData && (
+      {/* No client selected */}
+      {!clientId && (
+        <SectionCard>
+          <EmptyState
+            icon="◎"
+            title="Select a client to get started"
+            description="Choose a client above to view goal-aware evaluations and recommendations based on reconciled CRM data."
+          />
+        </SectionCard>
+      )}
+
+      {/* Global empty state (client selected, no data) */}
+      {clientId && noData && (
         <SectionCard>
           <EmptyState
             icon="◎"
@@ -398,7 +450,7 @@ export function OptimizationView({
         </SectionCard>
       )}
 
-      {!noData && (
+      {clientId && !noData && (
         <>
           {/* Summary stat cards */}
           <section className="mb-8">
