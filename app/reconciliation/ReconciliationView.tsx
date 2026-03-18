@@ -12,19 +12,17 @@ import {
   SectionCard,
   StatCard,
   Badge,
-  FilterBar,
-  FilterSelect,
   EmptyState,
 } from "../../components/ui";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
 
 // ---------------------------------------------------------------------------
-// Status display helpers
+// Status helpers
 // ---------------------------------------------------------------------------
 
 const STATUS_BADGE_VARIANT: Record<ReconciliationMatchStatus, "success" | "warning" | "danger" | "neutral" | "info" | "purple"> = {
-  matched:       "success",
-  partial:       "warning",
+  matched:        "success",
+  partial:        "warning",
   unmatched_meta: "danger",
   unmatched_crm:  "neutral",
   ambiguous:      "purple",
@@ -38,25 +36,22 @@ const STATUS_LABELS: Record<ReconciliationMatchStatus, string> = {
   ambiguous:      "Ambiguous",
 };
 
+const STATUS_DESCRIPTIONS: Record<ReconciliationMatchStatus, string> = {
+  matched:        "Meta spend matched to CRM orders",
+  partial:        "Partial match — some data missing",
+  unmatched_meta: "Meta spend with no CRM orders found",
+  unmatched_crm:  "CRM orders with no Meta spend found",
+  ambiguous:      "Multiple possible matches",
+};
+
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as ReconciliationMatchStatus[];
 
 // ---------------------------------------------------------------------------
-// Filter state
+// Sort state
 // ---------------------------------------------------------------------------
 
-type FilterState = {
-  matchStatus:  ReconciliationMatchStatus | "all";
-  utmCampaign:  string;
-  dateFrom:     string;
-  dateTo:       string;
-};
-
-const EMPTY_FILTERS: FilterState = {
-  matchStatus:  "all",
-  utmCampaign:  "",
-  dateFrom:     "",
-  dateTo:       "",
-};
+type SortKey = "date" | "campaign" | "spend" | "crmRevenue" | "roas" | "cpa" | "crmOrders";
+type SortDir = "asc" | "desc";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -70,48 +65,39 @@ function fmtRoas(v: number | null): string {
   return v != null ? formatRoas(v) : "—";
 }
 
-function fmtNum(v: number | undefined): string {
-  return v != null ? v.toLocaleString() : "—";
-}
-
 // ---------------------------------------------------------------------------
-// Sub-components
+// Status pill filter
 // ---------------------------------------------------------------------------
 
-/** Small status breakdown pills shown in the summary section. */
-function StatusBreakdown({
-  summary,
+function StatusPills({
+  rows,
   activeStatus,
   onStatusClick,
 }: {
-  summary:       ReconciliationComputedSummary;
+  rows:          ReconciliationMatchRow[];
   activeStatus:  ReconciliationMatchStatus | "all";
   onStatusClick: (s: ReconciliationMatchStatus | "all") => void;
 }) {
-  const counts: { status: ReconciliationMatchStatus; count: number }[] = [
-    { status: "matched",        count: summary.matchedRows },
-    { status: "partial",        count: summary.partialRows },
-    { status: "unmatched_meta", count: 0 },
-    { status: "unmatched_crm",  count: 0 },
-    { status: "ambiguous",      count: summary.ambiguousRows },
-  ];
-
-  // unmatchedRows is unmatched_meta + unmatched_crm combined in the summary.
-  // Approximate split for display: re-derive from summary totals.
-  // (Exact counts would need full row scan — not needed for display breakdown.)
-  const unmatchedHalf = Math.floor(summary.unmatchedRows / 2);
-  counts[2].count = unmatchedHalf;
-  counts[3].count = summary.unmatchedRows - unmatchedHalf;
+  // Count from actual rows — no guessing
+  const counts = useMemo(() => {
+    const c: Record<ReconciliationMatchStatus, number> = {
+      matched: 0, partial: 0, unmatched_meta: 0, unmatched_crm: 0, ambiguous: 0,
+    };
+    for (const r of rows) c[r.matchStatus]++;
+    return c;
+  }, [rows]);
 
   return (
     <div className="flex flex-wrap gap-2">
-      {counts.map(({ status, count }) => {
+      {ALL_STATUSES.map((status) => {
+        const count    = counts[status];
         const isActive = activeStatus === status;
         return (
           <button
             key={status}
             onClick={() => onStatusClick(isActive ? "all" : status)}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors
+            title={STATUS_DESCRIPTIONS[status]}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors
               ${isActive
                 ? "border-slate-600 bg-slate-700"
                 : "border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/40"
@@ -120,48 +106,11 @@ function StatusBreakdown({
             <Badge variant={STATUS_BADGE_VARIANT[status]}>
               {STATUS_LABELS[status]}
             </Badge>
-            <span className="text-sm font-semibold text-slate-200">{count}</span>
+            <span className="font-semibold text-slate-200">{count}</span>
           </button>
         );
       })}
     </div>
-  );
-}
-
-/** Attribution model explanation card. */
-function AttributionInfoCard() {
-  return (
-    <SectionCard title="How this page works" className="mb-8">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Meta — Delivery Metrics
-          </p>
-          <p className="text-sm text-slate-300">
-            Spend, clicks, and impressions come from Meta. These measure
-            ad delivery and reach only.
-          </p>
-        </div>
-        <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-4">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-emerald-600">
-            Shopify / CRM — Source of Truth
-          </p>
-          <p className="text-sm text-slate-300">
-            Revenue and orders come from Shopify/CRM. These are the
-            authoritative business outcomes used for CPA and ROAS.
-          </p>
-        </div>
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Attribution Window — 7 Days
-          </p>
-          <p className="text-sm text-slate-300">
-            CRM orders are attributed within a 7-day window of the ad click.
-            Evaluated CPA and ROAS reflect this window.
-          </p>
-        </div>
-      </div>
-    </SectionCard>
   );
 }
 
@@ -184,19 +133,24 @@ export function ReconciliationView({
   initialMatchRows,
   initialSummary,
 }: Props) {
-  const router   = useRouter();
+  const router = useRouter();
   const [matchRows, setMatchRows] = useState<ReconciliationMatchRow[]>(initialMatchRows);
   const [summary,   setSummary]   = useState<ReconciliationComputedSummary | null>(initialSummary);
   const [running,   setRunning]   = useState(false);
   const [runError,  setRunError]  = useState<string | null>(null);
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+
+  // Filters
+  const [activeStatus, setActiveStatus]     = useState<ReconciliationMatchStatus | "all">("all");
+  const [utmCampaign,  setUtmCampaign]      = useState("");
+  const [dateFrom,     setDateFrom]         = useState("");
+  const [dateTo,       setDateTo]           = useState("");
+
+  // Sort
+  const [sortKey, setSortKey] = useState<SortKey>("spend");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   function handleClientChange(id: string) {
-    if (id) {
-      router.push(`/reconciliation?clientId=${encodeURIComponent(id)}`);
-    } else {
-      router.push("/reconciliation");
-    }
+    router.push(id ? `/reconciliation?clientId=${encodeURIComponent(id)}` : "/reconciliation");
   }
 
   async function handleRun() {
@@ -215,7 +169,10 @@ export function ReconciliationView({
       const data = await res.json();
       setMatchRows(data.matchRows ?? []);
       setSummary(data.summary ?? null);
-      setFilters(EMPTY_FILTERS);
+      setActiveStatus("all");
+      setUtmCampaign("");
+      setDateFrom("");
+      setDateTo("");
     } catch (err) {
       setRunError(err instanceof Error ? err.message : "Run failed");
     } finally {
@@ -223,7 +180,16 @@ export function ReconciliationView({
     }
   }
 
-  // Unique campaign options for the filter dropdown.
+  function handleSortClick(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  // Campaign options for the dropdown filter
   const campaignOptions = useMemo(
     () =>
       Array.from(
@@ -232,52 +198,78 @@ export function ReconciliationView({
     [matchRows]
   );
 
-  // Apply filters.
+  // Filter + sort
   const filtered = useMemo(() => {
-    return matchRows.filter((r) => {
-      if (filters.matchStatus !== "all" && r.matchStatus !== filters.matchStatus)
-        return false;
-      if (filters.utmCampaign && r.utmCampaign !== filters.utmCampaign)
-        return false;
-      if (filters.dateFrom && r.date < filters.dateFrom)
-        return false;
-      if (filters.dateTo && r.date > filters.dateTo)
-        return false;
+    let rows = matchRows.filter((r) => {
+      if (activeStatus !== "all" && r.matchStatus !== activeStatus) return false;
+      if (utmCampaign && r.utmCampaign !== utmCampaign)              return false;
+      if (dateFrom && r.date < dateFrom)                              return false;
+      if (dateTo   && r.date > dateTo)                               return false;
       return true;
     });
-  }, [matchRows, filters]);
 
-  const hasFilters =
-    filters.matchStatus !== "all" ||
-    filters.utmCampaign !== "" ||
-    filters.dateFrom   !== "" ||
-    filters.dateTo     !== "";
+    rows = [...rows].sort((a, b) => {
+      let av: number | string = 0;
+      let bv: number | string = 0;
+      switch (sortKey) {
+        case "date":       av = a.date;          bv = b.date;          break;
+        case "campaign":   av = a.utmCampaign ?? ""; bv = b.utmCampaign ?? ""; break;
+        case "spend":      av = a.metaSpend;     bv = b.metaSpend;     break;
+        case "crmRevenue": av = a.crmRevenue;    bv = b.crmRevenue;    break;
+        case "crmOrders":  av = a.crmOrders;     bv = b.crmOrders;     break;
+        case "roas":       av = a.evaluatedRoas ?? -1; bv = b.evaluatedRoas ?? -1; break;
+        case "cpa":        av = a.evaluatedCpa  ?? Infinity; bv = b.evaluatedCpa  ?? Infinity; break;
+      }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1  : -1;
+      return 0;
+    });
+
+    return rows;
+  }, [matchRows, activeStatus, utmCampaign, dateFrom, dateTo, sortKey, sortDir]);
+
+  const hasFilters = activeStatus !== "all" || utmCampaign !== "" || dateFrom !== "" || dateTo !== "";
+  const noDataAtAll = matchRows.length === 0;
+  const noMetaData  = matchRows.length > 0 && matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
+  const noCrmData   = matchRows.length > 0 && matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
+
+  const matchedSpend = matchRows.filter((r) => r.matchStatus === "matched" || r.matchStatus === "partial").reduce((s, r) => s + r.metaSpend, 0);
+  const totalSpend   = summary?.totalMetaSpend ?? 0;
+  const coveragePct  = totalSpend > 0 ? Math.round((matchedSpend / totalSpend) * 100) : null;
 
   const dateRangeLabel =
     summary?.dateFrom && summary?.dateTo
       ? `${summary.dateFrom} → ${summary.dateTo}`
-      : "No data";
-
-  // Handle empty states.
-  const noMetaData  = matchRows.length > 0 && matchRows.every((r) => r.metaSpend === 0 && r.matchStatus === "unmatched_crm");
-  const noCrmData   = matchRows.length > 0 && matchRows.every((r) => r.crmOrders  === 0 && r.matchStatus === "unmatched_meta");
-  const noDataAtAll = matchRows.length === 0;
+      : null;
 
   return (
     <div className="space-y-0">
-      {/* Page header */}
-      <PageHeader
-        title="Reconciliation"
-        description="Compare Meta delivery data against Shopify/CRM source-of-truth outcomes. Evaluated CPA and ROAS always use CRM data."
-        badge={
-          <Badge variant="info">7-day attribution window</Badge>
-        }
-      />
+      {/* Header + Run button */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <PageHeader
+          title="Reconciliation"
+          description="True CPA and ROAS using Shopify/CRM as the source of truth. Meta self-reported conversions are not used."
+          badge={<Badge variant="info">7-day attribution window</Badge>}
+        />
+        {clientId && (
+          <div className="pt-6 pr-2 flex flex-col items-end gap-1.5">
+            <button
+              onClick={handleRun}
+              disabled={running}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white
+                hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            >
+              {running ? "Running…" : "Refresh"}
+            </button>
+            {runError && <p className="text-xs text-rose-400 max-w-[240px] text-right">{runError}</p>}
+          </div>
+        )}
+      </div>
 
-      {/* Client selector + Run button */}
-      <SectionCard className="mb-8">
+      {/* Client selector */}
+      <SectionCard className="mb-6">
         <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[200px] max-w-sm">
             <p className="mb-1.5 text-xs text-slate-500">Client</p>
             <select
               value={clientId ?? ""}
@@ -291,45 +283,27 @@ export function ReconciliationView({
               ))}
             </select>
           </div>
-
-          {clientId && (
-            <button
-              onClick={handleRun}
-              disabled={running}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white
-                hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-            >
-              {running ? "Running…" : "Run Reconciliation"}
-            </button>
-          )}
-
-          {runError && (
-            <p className="text-sm text-rose-400">{runError}</p>
-          )}
         </div>
       </SectionCard>
 
-      {/* Attribution info */}
-      <AttributionInfoCard />
-
-      {/* No client selected */}
+      {/* No client */}
       {!clientId && (
         <SectionCard>
           <EmptyState
             icon="⚖"
             title="Select a client to get started"
-            description="Choose a client above, then click Run Reconciliation to compare Meta delivery data against Shopify/CRM outcomes."
+            description="Choose a client above, then click Refresh to compare Meta spend against Shopify/CRM outcomes."
           />
         </SectionCard>
       )}
 
-      {/* Global empty state (client selected, no data yet) */}
+      {/* No data yet */}
       {clientId && noDataAtAll && !running && (
         <SectionCard>
           <EmptyState
             icon="⚖"
             title="No reconciliation data yet"
-            description="Click Run Reconciliation to match Meta spend against Shopify orders for this client."
+            description='Click "Refresh" to match Meta spend against Shopify orders for this client.'
           />
         </SectionCard>
       )}
@@ -339,160 +313,132 @@ export function ReconciliationView({
           {/* Warning banners */}
           {noMetaData && (
             <div className="mb-6 rounded-xl border border-amber-800/40 bg-amber-950/20 px-5 py-3 text-sm text-amber-300">
-              No Meta data found — all rows are CRM-only. Sync your Meta ad account to enable matching.
+              No Meta spend data found — all rows are CRM-only. Sync your Meta ad account to enable matching.
             </div>
           )}
           {noCrmData && (
             <div className="mb-6 rounded-xl border border-amber-800/40 bg-amber-950/20 px-5 py-3 text-sm text-amber-300">
-              No CRM data found — all rows are Meta-only. Connect Shopify to enable CRM source-of-truth metrics.
+              No CRM data found — all rows are Meta-only. Connect Shopify to see true CPA and ROAS.
             </div>
           )}
 
-          {/* Summary stat cards */}
-          <section className="mb-8">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
-              {dateRangeLabel}
-            </p>
+          {/* Summary stats */}
+          <section className="mb-6">
+            {dateRangeLabel && (
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
+                {dateRangeLabel}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <StatCard
-                label="Meta Spend"
+                label="Ad Spend"
                 value={formatCurrency(summary.totalMetaSpend)}
                 sub="Source: Meta"
               />
               <StatCard
-                label="CRM Revenue"
+                label="True Revenue"
                 value={formatCurrency(summary.totalCrmRevenue)}
                 sub="Source: Shopify/CRM"
               />
               <StatCard
-                label="CRM Orders"
+                label="Attributed Orders"
                 value={summary.totalCrmOrders.toLocaleString()}
                 sub="Source: Shopify/CRM"
               />
               <StatCard
-                label="Evaluated CPA"
+                label="True CPA"
                 value={fmtCpa(summary.evaluatedCpa)}
                 sub="Spend ÷ CRM orders"
               />
               <StatCard
-                label="Evaluated ROAS"
+                label="True ROAS"
                 value={fmtRoas(summary.evaluatedRoas)}
-                sub="CRM rev ÷ Spend"
+                sub="CRM rev ÷ spend"
               />
               <StatCard
-                label="Match Rate"
-                value={
-                  summary.total > 0
-                    ? `${Math.round((summary.matchedRows / summary.total) * 100)}%`
-                    : "—"
-                }
-                sub={`${summary.matchedRows} of ${summary.total} rows`}
+                label="Spend Coverage"
+                value={coveragePct != null ? `${coveragePct}%` : "—"}
+                sub={`of spend matched to CRM`}
               />
             </div>
           </section>
 
-          {/* Status breakdown (clickable filter) */}
-          <section className="mb-8">
-            <SectionCard title="Match Summary" description="Click a status to filter the table below.">
-              <StatusBreakdown
-                summary={summary}
-                activeStatus={filters.matchStatus}
-                onStatusClick={(s) =>
-                  setFilters((p) => ({ ...p, matchStatus: s }))
-                }
-              />
-            </SectionCard>
-          </section>
-
-          {/* Filters */}
+          {/* Filter bar — status pills + dropdowns in one card */}
           <SectionCard className="mb-6">
-            <div className="flex flex-wrap items-end gap-4">
-              <div>
-                <p className="mb-1.5 text-xs text-slate-500">Match Status</p>
-                <FilterBar>
-                  <FilterSelect
-                    value={filters.matchStatus}
-                    onChange={(v) =>
-                      setFilters((p) => ({
-                        ...p,
-                        matchStatus: v as ReconciliationMatchStatus | "all",
-                      }))
-                    }
+            <div className="flex flex-col gap-4">
+              {/* Status pills */}
+              <StatusPills
+                rows={matchRows}
+                activeStatus={activeStatus}
+                onStatusClick={setActiveStatus}
+              />
+
+              {/* Secondary filters */}
+              <div className="flex flex-wrap items-end gap-3">
+                {campaignOptions.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs text-slate-500">Campaign</p>
+                    <select
+                      value={utmCampaign}
+                      onChange={(e) => setUtmCampaign(e.target.value)}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm
+                        text-slate-200 focus:border-slate-600 focus:outline-none"
+                    >
+                      <option value="">All campaigns</option>
+                      {campaignOptions.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <p className="mb-1 text-xs text-slate-500">From</p>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm
+                      text-slate-200 focus:border-slate-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs text-slate-500">To</p>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm
+                      text-slate-200 focus:border-slate-600 focus:outline-none"
+                  />
+                </div>
+
+                {hasFilters && (
+                  <button
+                    onClick={() => {
+                      setActiveStatus("all");
+                      setUtmCampaign("");
+                      setDateFrom("");
+                      setDateTo("");
+                    }}
+                    className="self-end pb-0.5 text-xs text-slate-400 underline hover:text-slate-200"
                   >
-                    <option value="all">All statuses</option>
-                    {ALL_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABELS[s]}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </FilterBar>
+                    Clear filters
+                  </button>
+                )}
+
+                <span className="ml-auto self-end pb-0.5 text-xs text-slate-500">
+                  {filtered.length} of {matchRows.length} rows
+                </span>
               </div>
-
-              <div>
-                <p className="mb-1.5 text-xs text-slate-500">utm_campaign</p>
-                <FilterBar>
-                  <FilterSelect
-                    value={filters.utmCampaign}
-                    onChange={(v) =>
-                      setFilters((p) => ({ ...p, utmCampaign: v }))
-                    }
-                  >
-                    <option value="">All campaigns</option>
-                    {campaignOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </FilterBar>
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-xs text-slate-500">Date from</p>
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) =>
-                    setFilters((p) => ({ ...p, dateFrom: e.target.value }))
-                  }
-                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm
-                    text-slate-200 focus:border-slate-600 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-xs text-slate-500">Date to</p>
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) =>
-                    setFilters((p) => ({ ...p, dateTo: e.target.value }))
-                  }
-                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm
-                    text-slate-200 focus:border-slate-600 focus:outline-none"
-                />
-              </div>
-
-              {hasFilters && (
-                <button
-                  onClick={() => setFilters(EMPTY_FILTERS)}
-                  className="self-end pb-0.5 text-xs text-slate-400 underline hover:text-slate-200"
-                >
-                  Clear filters
-                </button>
-              )}
-
-              <span className="ml-auto self-end pb-0.5 text-xs text-slate-500">
-                {filtered.length} of {matchRows.length} rows
-              </span>
             </div>
           </SectionCard>
 
           {/* Detail table */}
           <SectionCard
-            title="Reconciliation Detail"
-            description="Each row represents one Meta UTM group matched against CRM orders. Evaluated metrics always use CRM as source of truth."
+            title="Campaign Performance"
+            description="Sorted by column headers. True CPA and ROAS always use CRM data — not Meta self-reported conversions."
             flush
           >
             {filtered.length === 0 ? (
@@ -501,7 +447,12 @@ export function ReconciliationView({
                 description="Try clearing filters or selecting a different date range."
               />
             ) : (
-              <ReconciliationTable rows={filtered} />
+              <ReconciliationTable
+                rows={filtered}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortClick}
+              />
             )}
           </SectionCard>
         </>
@@ -511,31 +462,81 @@ export function ReconciliationView({
 }
 
 // ---------------------------------------------------------------------------
-// Detail table (extracted for readability)
+// Table
 // ---------------------------------------------------------------------------
 
-const TH =
-  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 whitespace-nowrap";
-const TD = "px-4 py-3 text-sm text-slate-300 whitespace-nowrap";
-const TD_MONO = `${TD} font-mono text-xs text-slate-400`;
+type SortKey2 = SortKey;
 
-function ReconciliationTable({ rows }: { rows: ReconciliationMatchRow[] }) {
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="ml-1 text-slate-700">↕</span>;
+  return <span className="ml-1 text-slate-300">{dir === "desc" ? "↓" : "↑"}</span>;
+}
+
+const TH_BASE =
+  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 whitespace-nowrap";
+const TH_SORTABLE = `${TH_BASE} cursor-pointer select-none hover:text-slate-300 transition-colors`;
+const TD   = "px-4 py-3 text-sm text-slate-300 whitespace-nowrap";
+const TD_R = `${TD} text-right`;
+
+function ReconciliationTable({
+  rows,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  rows:    ReconciliationMatchRow[];
+  sortKey: SortKey2;
+  sortDir: SortDir;
+  onSort:  (k: SortKey2) => void;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={TH}>Date</th>
-            <th className={TH}>Campaign / Ad Set / Ad</th>
-            <th className={TH}>utm_campaign</th>
-            <th className={TH}>utm_content</th>
-            <th className={TH}>utm_term</th>
-            <th className={`${TH} text-right`}>Meta Spend</th>
-            <th className={`${TH} text-right`}>CRM Orders</th>
-            <th className={`${TH} text-right`}>CRM Revenue</th>
-            <th className={`${TH} text-right`}>Eval. CPA</th>
-            <th className={`${TH} text-right`}>Eval. ROAS</th>
-            <th className={TH}>Status</th>
+            <th
+              className={TH_SORTABLE}
+              onClick={() => onSort("date")}
+            >
+              Date <SortIcon active={sortKey === "date"} dir={sortDir} />
+            </th>
+            <th
+              className={TH_SORTABLE}
+              onClick={() => onSort("campaign")}
+            >
+              Campaign <SortIcon active={sortKey === "campaign"} dir={sortDir} />
+            </th>
+            <th
+              className={`${TH_SORTABLE} text-right`}
+              onClick={() => onSort("spend")}
+            >
+              Ad Spend <SortIcon active={sortKey === "spend"} dir={sortDir} />
+            </th>
+            <th
+              className={`${TH_SORTABLE} text-right`}
+              onClick={() => onSort("crmOrders")}
+            >
+              Orders <SortIcon active={sortKey === "crmOrders"} dir={sortDir} />
+            </th>
+            <th
+              className={`${TH_SORTABLE} text-right`}
+              onClick={() => onSort("crmRevenue")}
+            >
+              True Revenue <SortIcon active={sortKey === "crmRevenue"} dir={sortDir} />
+            </th>
+            <th
+              className={`${TH_SORTABLE} text-right`}
+              onClick={() => onSort("cpa")}
+            >
+              True CPA <SortIcon active={sortKey === "cpa"} dir={sortDir} />
+            </th>
+            <th
+              className={`${TH_SORTABLE} text-right`}
+              onClick={() => onSort("roas")}
+            >
+              True ROAS <SortIcon active={sortKey === "roas"} dir={sortDir} />
+            </th>
+            <th className={TH_BASE}>Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/60">
@@ -549,63 +550,50 @@ function ReconciliationTable({ rows }: { rows: ReconciliationMatchRow[] }) {
 }
 
 function ReconciliationRow({ row }: { row: ReconciliationMatchRow }) {
-  const campaignLabel =
-    row.metaCampaignName ?? row.metaAdSetName ?? row.metaAdName ?? null;
-
   const hasEvalMetrics = row.matchStatus === "matched" || row.matchStatus === "partial";
+  const campaignLabel  = row.utmCampaign ?? row.matchKey ?? null;
 
   return (
     <tr className="hover:bg-slate-800/20 transition-colors">
       <td className={`${TD} text-slate-500`}>{row.date}</td>
+
       <td className={TD}>
-        {campaignLabel ? (
-          <div className="flex flex-col gap-0.5">
-            {row.metaCampaignName && (
-              <span className="text-xs text-slate-300">{row.metaCampaignName}</span>
-            )}
-            {row.metaAdSetName && (
-              <span className="text-xs text-slate-500">{row.metaAdSetName}</span>
-            )}
-            {row.metaAdName && (
-              <span className="text-xs text-slate-600">{row.metaAdName}</span>
-            )}
-          </div>
-        ) : (
-          <span className="text-slate-600">—</span>
-        )}
+        {campaignLabel
+          ? <span className="text-slate-200">{campaignLabel}</span>
+          : <span className="text-slate-600">—</span>}
       </td>
-      <td className={TD_MONO}>{row.utmCampaign ?? "—"}</td>
-      <td className={TD_MONO}>{row.utmContent  ?? "—"}</td>
-      <td className={TD_MONO}>{row.utmTerm     ?? "—"}</td>
-      <td className={`${TD} text-right`}>
-        {row.metaSpend > 0 ? formatCurrency(row.metaSpend) : "—"}
+
+      <td className={TD_R}>
+        {row.metaSpend > 0 ? formatCurrency(row.metaSpend) : <span className="text-slate-600">—</span>}
       </td>
-      <td className={`${TD} text-right`}>
-        {row.crmOrders > 0 ? row.crmOrders.toLocaleString() : "—"}
+
+      <td className={TD_R}>
+        {row.crmOrders > 0
+          ? row.crmOrders.toLocaleString()
+          : <span className="text-slate-600">—</span>}
       </td>
-      <td className={`${TD} text-right`}>
-        {row.crmRevenue > 0 ? formatCurrency(row.crmRevenue) : "—"}
+
+      <td className={TD_R}>
+        {row.crmRevenue > 0
+          ? formatCurrency(row.crmRevenue)
+          : <span className="text-slate-600">—</span>}
       </td>
-      <td className={`${TD} text-right`}>
-        {hasEvalMetrics ? (
-          <span className={row.evaluatedCpa != null ? "text-slate-200" : "text-slate-600"}>
-            {fmtCpa(row.evaluatedCpa)}
-          </span>
-        ) : (
-          <span className="text-slate-700">—</span>
-        )}
+
+      <td className={TD_R}>
+        {hasEvalMetrics
+          ? <span className={row.evaluatedCpa != null ? "text-slate-200" : "text-slate-600"}>{fmtCpa(row.evaluatedCpa)}</span>
+          : <span className="text-slate-700">—</span>}
       </td>
-      <td className={`${TD} text-right`}>
-        {hasEvalMetrics ? (
+
+      <td className={TD_R}>
+        {hasEvalMetrics && row.evaluatedRoas != null ? (
           <span
             className={
-              row.evaluatedRoas != null
-                ? row.evaluatedRoas >= 3
-                  ? "text-emerald-400"
-                  : row.evaluatedRoas >= 1.5
-                  ? "text-slate-200"
-                  : "text-rose-400"
-                : "text-slate-600"
+              row.evaluatedRoas >= 3
+                ? "font-semibold text-emerald-400"
+                : row.evaluatedRoas >= 1.5
+                ? "text-slate-200"
+                : "text-rose-400"
             }
           >
             {fmtRoas(row.evaluatedRoas)}
@@ -614,6 +602,7 @@ function ReconciliationRow({ row }: { row: ReconciliationMatchRow }) {
           <span className="text-slate-700">—</span>
         )}
       </td>
+
       <td className={TD}>
         <Badge variant={STATUS_BADGE_VARIANT[row.matchStatus]}>
           {STATUS_LABELS[row.matchStatus]}
