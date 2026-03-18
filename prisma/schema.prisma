@@ -142,6 +142,7 @@ model ClientAccount {
   clientSyncRuns          ClientSyncRun[]
   goalDefaults            ClientGoalDefaults?
   budgetPacingTargets     BudgetPacingTarget[]
+  autoExecutionSettings   AutoExecutionSettings?
 }
 
 model Campaign {
@@ -1060,6 +1061,51 @@ model ProposedAutomationAction {
   @@index([workspaceId])
   @@index([clientAccountId])
   @@index([deduplicationKey])
+  @@index([status])
+}
+
+// ── Auto-Execution ────────────────────────────────────────────────────────────
+
+// Per-client opt-in settings for guarded auto-execution.
+// Disabled by default — operators must explicitly enable per client.
+model AutoExecutionSettings {
+  id                 String   @id @default(cuid())
+  clientAccountId    String   @unique
+  workspaceId        String?
+  enabled            Boolean  @default(false)  // master switch — off by default
+  allowRunSync       Boolean  @default(true)   // permit auto run_sync
+  allowPauseCampaign Boolean  @default(false)  // permit auto pause_campaign
+  maxDailyExecutions Int      @default(5)      // hard cap per day per client
+  maxSpendThreshold  Float    @default(500)    // pause: campaign must have spent ≥ this (USD)
+  minRoasThreshold   Float    @default(0.4)    // pause: ROAS must be ≤ goal × this factor
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// Audit log for every auto-execution attempt (success, fail, or guardrail block).
+model AutoExecutionLog {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  clientAccountId String?
+  actionType      String   // run_sync | pause_campaign
+  entityType      String   // campaign | client
+  entityId        String
+  entityName      String
+  status          String   // pending | success | failed | skipped | guardrail_blocked
+  guardrailJson   String   @default("[]")  // JSON: GuardrailResult[]
+  decision        String   // execute | skip | block
+  decisionReason  String
+  durationMs      Int?
+  errorMessage    String?
+  executedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([clientAccountId, executedAt])
   @@index([status])
 }
 

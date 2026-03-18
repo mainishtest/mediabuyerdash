@@ -19,6 +19,7 @@ export {
   evaluateWeakRoasRule,
   evaluateCreativeFatigueRule,
   evaluateSetGoalsRule,
+  evaluatePauseCampaignRule,
   evaluateReviewPacingRule,
   evaluateAutomationRules,
   buildProposedAutomationActions,

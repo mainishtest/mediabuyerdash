@@ -465,6 +465,78 @@ export function evaluateCreativeFatigueRule(
 }
 
 // ---------------------------------------------------------------------------
+// Rule: pause_campaign — ROAS critically below goal, significant spend confirmed
+// Used by the auto-execution layer (stricter thresholds than reduce_budget).
+// ---------------------------------------------------------------------------
+
+const PAUSE_ROAS_FACTOR   = 0.40;  // ROAS must be ≤ goal × 0.40
+const PAUSE_MIN_SPEND     = 200;   // campaign must have spent ≥ $200 recently
+
+export function evaluatePauseCampaignRule(
+  input: DetectionInput
+): ProposedAutomationActionDraft[] {
+  const drafts: ProposedAutomationActionDraft[] = [];
+  const now          = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  for (const client of input.clients) {
+    const campaigns     = input.clientCampaigns.get(client.id) ?? [];
+    const reconciledList = input.latestReconciledByClient.get(client.id) ?? [];
+
+    for (const campaign of campaigns) {
+      if (!campaign.goal) continue;
+      if (campaign.status !== "ACTIVE") continue;
+
+      const reconciled = reconciledList.find(
+        (r) => r.externalCampaignId === campaign.externalCampaignId
+      );
+      if (!reconciled || reconciled.calculatedRoas === null) continue;
+
+      const goal = campaign.goal.roasGoalValue;
+      if (goal <= 0) continue;
+
+      const recentSpend = input.insightRows
+        .filter(
+          (r) =>
+            r.externalCampaignId === campaign.externalCampaignId &&
+            new Date(r.dateStart) >= sevenDaysAgo
+        )
+        .reduce((sum, r) => sum + r.spend, 0);
+
+      if (recentSpend < PAUSE_MIN_SPEND) continue;
+
+      if (reconciled.calculatedRoas <= goal * PAUSE_ROAS_FACTOR) {
+        const pctBelow = Math.round(
+          ((goal - reconciled.calculatedRoas) / goal) * 100
+        );
+        drafts.push({
+          workspaceId:      client.workspaceId,
+          clientAccountId:  client.id,
+          clientName:       client.name,
+          automationRuleId: null,
+          actionType:       "pause_campaign",
+          priority:         "high",
+          entityType:       "campaign",
+          entityId:         campaign.externalCampaignId,
+          entityName:       campaign.name,
+          rationale:        `Campaign ROAS (${reconciled.calculatedRoas.toFixed(2)}x) is ${pctBelow}% below goal (${goal.toFixed(2)}x) with $${Math.round(recentSpend)} recent spend. Pausing prevents further loss pending review.`,
+          supportingData:   {
+            calculatedRoas: reconciled.calculatedRoas,
+            roasGoal:       goal,
+            pctBelowGoal:   pctBelow,
+            recentSpend:    Math.round(recentSpend),
+          },
+          deduplicationKey: dedupKey(client.id, "pause_campaign", campaign.externalCampaignId),
+          expiresAt:        expiresInDays(3),
+        });
+      }
+    }
+  }
+
+  return drafts;
+}
+
+// ---------------------------------------------------------------------------
 // Run all rules
 // ---------------------------------------------------------------------------
 
@@ -479,6 +551,7 @@ export function evaluateAutomationRules(
     ...evaluateWeakRoasRule(input),
     ...evaluateCreativeFatigueRule(input),
     ...evaluateSetGoalsRule(input),
+    ...evaluatePauseCampaignRule(input),
   ];
 
   // Deduplicate: if two rules produce the same deduplicationKey, keep highest priority.
