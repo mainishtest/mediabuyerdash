@@ -55,43 +55,39 @@ export async function buildMetaUTMRowsForClient(
     (sa) => sa.accessibleAdAccount.externalAdAccountId
   );
 
-  // 2. Query campaign-level insight rows for those ad accounts in the date range.
-  const insights = await prisma.metaSyncedInsight.findMany({
+  // 2. Aggregate spend/impressions/clicks by (campaignId, dateStart) across ALL
+  //    insight levels (ad / adset / campaign). Insights may be stored at any level
+  //    depending on the sync configuration; grouping without a level filter ensures
+  //    we always capture spend regardless of which level was synced.
+  const insightAggs = await prisma.metaSyncedInsight.groupBy({
+    by:    ["externalCampaignId", "dateStart"],
     where: {
       externalAdAccountId: { in: externalAdAccountIds },
-      level:               "campaign",
       dateStart:           { gte: dateFrom, lte: dateTo },
       externalCampaignId:  { not: "" },
     },
-    select: {
-      id:                 true,
-      externalCampaignId: true,
-      dateStart:          true,
-      spend:              true,
-      impressions:        true,
-      clicks:             true,
-    },
+    _sum: { spend: true, impressions: true, clicks: true },
   });
 
-  if (insights.length === 0) return [];
+  if (insightAggs.length === 0) return [];
 
   // 3. Batch-look up campaign names.
-  const campaignIds = [...new Set(insights.map((r) => r.externalCampaignId))];
+  const campaignIds = [...new Set(insightAggs.map((r) => r.externalCampaignId))];
   const campaigns   = await prisma.metaSyncedCampaign.findMany({
     where:  { externalCampaignId: { in: campaignIds } },
     select: { externalCampaignId: true, name: true },
   });
   const campaignNameById = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
 
-  // 4. Map to UTMPerformanceRow.
-  return insights.map((row) => {
+  // 4. Map to UTMPerformanceRow — one row per (date, campaign).
+  return insightAggs.map((row, idx) => {
     const campaignName = campaignNameById.get(row.externalCampaignId) ?? row.externalCampaignId;
-    const spend        = row.spend       ?? 0;
-    const impressions  = row.impressions ?? 0;
-    const clicks       = row.clicks      ?? 0;
+    const spend        = row._sum.spend       ?? 0;
+    const impressions  = row._sum.impressions ?? 0;
+    const clicks       = row._sum.clicks      ?? 0;
 
     return {
-      id:              row.id,
+      id:              `${row.externalCampaignId}_${row.dateStart}_${idx}`,
       date:            row.dateStart,
       clientAccountId,
       campaignId:      row.externalCampaignId,
