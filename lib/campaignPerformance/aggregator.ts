@@ -13,6 +13,9 @@ import { prisma } from "../db";
 import { evaluateCampaignAgainstGoals } from "./evaluator";
 import { summarizeCampaignRecommendation } from "./recommendations";
 import { resolveGoal } from "../campaignGoals/resolveGoal";
+import { mapCampaignGoal, mapClientGoal } from "../goals/service";
+import { mergeGoalFields } from "../goals/resolve";
+import { evaluatePerformance } from "../evaluation/evaluate";
 import type { CampaignPerformanceSnapshot, CampaignHealthStatus } from "./types";
 
 export async function buildCampaignPerformanceSnapshots(
@@ -59,14 +62,14 @@ export async function buildCampaignPerformanceSnapshots(
     : undefined;
 
   const [insightAggs, shopifyOrders, campaignGoals, clientDefaults] = await Promise.all([
-    // 3. Spend aggregated by campaign from insight rows
+    // 3. Spend/impressions/clicks aggregated by campaign from insight rows
     prisma.metaSyncedInsight.groupBy({
       by:    ["externalCampaignId"],
       where: {
         externalAdAccountId: { in: externalAdAccountIds },
         ...(insightDateFilter ? { dateStart: insightDateFilter } : {}),
       },
-      _sum:  { spend: true },
+      _sum:  { spend: true, impressions: true, clicks: true },
     }),
 
     // 4. Shopify orders for this client (CRM source of truth)
@@ -91,8 +94,20 @@ export async function buildCampaignPerformanceSnapshots(
 
   // ── Build lookup maps ────────────────────────────────────────────────────────
 
+  const insightById: Record<string, { spend: number; impressions: number; clicks: number }> =
+    Object.fromEntries(
+      insightAggs.map((r) => [
+        r.externalCampaignId,
+        {
+          spend:       r._sum.spend       ?? 0,
+          impressions: r._sum.impressions ?? 0,
+          clicks:      r._sum.clicks      ?? 0,
+        },
+      ])
+    );
+  // Legacy alias — keeps evaluator references working
   const spendById: Record<string, number> = Object.fromEntries(
-    insightAggs.map((r) => [r.externalCampaignId, r._sum.spend ?? 0])
+    Object.entries(insightById).map(([id, v]) => [id, v.spend])
   );
 
   const crmByName: Record<string, { revenue: number; orders: number }> = {};
@@ -110,7 +125,8 @@ export async function buildCampaignPerformanceSnapshots(
 
   // ── Build a snapshot for every synced campaign ────────────────────────────────
   return metaCampaigns.map((mc): CampaignPerformanceSnapshot => {
-    const metaSpend = spendById[mc.externalCampaignId] ?? 0;
+    const insight   = insightById[mc.externalCampaignId] ?? { spend: 0, impressions: 0, clicks: 0 };
+    const metaSpend = insight.spend;
     const nameKey   = mc.name.toLowerCase().trim();
     const crm       = crmByName[nameKey] ?? { revenue: 0, orders: 0 };
 
@@ -160,6 +176,33 @@ export async function buildCampaignPerformanceSnapshots(
       }
     );
 
+    // Phase 3: build ResolvedGoal via new goal system for evaluation engine.
+    const rawCampaignGoal = explicitGoalsById.get(mc.externalCampaignId) ?? null;
+    const newGoal = mergeGoalFields(
+      rawCampaignGoal ? mapCampaignGoal(rawCampaignGoal) : null,
+      clientDefaults  ? mapClientGoal(clientDefaults)    : null
+    );
+
+    const ctr = insight.impressions > 0
+      ? (insight.clicks / insight.impressions) * 100
+      : 0;
+    const cvr = insight.clicks > 0
+      ? (crm.orders / insight.clicks) * 100
+      : null;
+
+    const evaluation = evaluatePerformance({
+      spend:       metaSpend,
+      impressions: insight.impressions,
+      clicks:      insight.clicks,
+      conversions: crm.orders,
+      revenue:     crm.revenue,
+      ctr,
+      cvr,
+      roas:        evaluatedRoas,
+      cpa:         evaluatedCpa > 0 ? evaluatedCpa : null,
+      resolvedGoal: newGoal,
+    });
+
     return {
       clientAccountId:    clientId,
       campaignId:         mc.id,
@@ -167,6 +210,8 @@ export async function buildCampaignPerformanceSnapshots(
       campaignName:       mc.name,
       campaignStatus:     mc.status,
       metaSpend,
+      impressions:        insight.impressions,
+      clicks:             insight.clicks,
       crmRevenue:         crm.revenue,
       crmOrders:          crm.orders,
       evaluatedCpa,
@@ -182,6 +227,7 @@ export async function buildCampaignPerformanceSnapshots(
       hasGoal,
       goalSource,
       dataWindowDays: 7,
+      evaluation,
     };
   });
 }

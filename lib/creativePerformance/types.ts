@@ -2,6 +2,7 @@
 // Typed models for the creative performance layer.
 
 import type { ResolvedGoal, GoalSource } from "../goals/types";
+import type { PerformanceEvaluation }    from "../evaluation/types";
 //
 // Design rules:
 //   - One CreativePerformanceRow per ad (externalAdId) within a date window.
@@ -69,6 +70,9 @@ export type CreativePerformanceRow = {
   // Inherited from the campaign this ad belongs to.
   resolvedGoal: ResolvedGoal;
   goalSource:   GoalSource;
+
+  // ── Phase 3 evaluation (additive) ─────────────────────────────────────────
+  evaluation: PerformanceEvaluation;
 };
 
 // ---------------------------------------------------------------------------

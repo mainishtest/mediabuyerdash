@@ -6,6 +6,7 @@ import type {
   CreativePerformanceRow,
   CreativePerformanceSummary,
 } from "../../../lib/creativePerformance/types";
+import { EvaluationSignal, EvaluationCard } from "../../../components/ui/EvaluationBadge";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -190,6 +191,11 @@ function CreativeCard({ row }: { row: CreativePerformanceRow }) {
           &ldquo;{row.adCopy}&rdquo;
         </p>
       )}
+
+      {/* Phase 3 evaluation signal */}
+      <div className="border-t border-slate-800 px-4 py-3">
+        <EvaluationCard evaluation={row.evaluation} />
+      </div>
     </div>
   );
 }
@@ -270,6 +276,9 @@ function TableRow({ row }: { row: CreativePerformanceRow }) {
       <td className="px-3 py-2.5 text-right text-sm text-slate-400">{fmtN(row.clicks)}</td>
       <td className="px-3 py-2.5 text-right text-sm text-slate-400">
         {row.conversions.toFixed(1)}
+      </td>
+      <td className="px-3 py-2.5">
+        <EvaluationSignal evaluation={row.evaluation} showRec={false} />
       </td>
     </tr>
   );
@@ -457,6 +466,11 @@ export function PerformanceView({
                             />
                           );
                         })}
+                        <th scope="col"
+                            className="px-3 py-2.5 text-xs font-medium uppercase
+                                       tracking-wide text-slate-500">
+                          Signal
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -487,6 +501,7 @@ export function PerformanceView({
                         <td className="px-3 py-2.5 text-right text-sm text-slate-400">
                           {visible.reduce((s,r) => s + r.conversions, 0).toFixed(1)}
                         </td>
+                        <td className="px-3 py-2.5 text-sm text-slate-600">—</td>
                       </tr>
                     </tfoot>
                   </table>

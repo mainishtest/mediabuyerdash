@@ -33,6 +33,7 @@ import {
   type OrderForAttribution,
   type AdForAttribution,
 }                                  from "./attribution";
+import { evaluatePerformance }     from "../evaluation/evaluate";
 
 // ---------------------------------------------------------------------------
 // getCreativePerformance
@@ -317,6 +318,19 @@ export async function getCreativePerformance(
     const resolvedGoal  = resolveGoalForCreative(campaignGoal, clientGoal);
     const goalSource    = getGoalSource(campaignGoal, clientGoal);
 
+    const evaluation = evaluatePerformance({
+      spend:       metrics.spend,
+      impressions: metrics.impressions,
+      clicks:      metrics.clicks,
+      conversions: metrics.conversions,
+      revenue:     metrics.revenue,
+      ctr:         metrics.ctr,
+      cvr:         metrics.cvr,
+      roas:        metrics.roas,
+      cpa:         metrics.cpa,
+      resolvedGoal,
+    });
+
     rows.push({
       adId,
       adName:          ad.name,
@@ -342,6 +356,7 @@ export async function getCreativePerformance(
       attributionWindowDays:    windowDays,
       resolvedGoal,
       goalSource,
+      evaluation,
     });
   }
 

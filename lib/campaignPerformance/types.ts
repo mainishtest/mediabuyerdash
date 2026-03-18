@@ -1,6 +1,8 @@
 // lib/campaignPerformance/types.ts
 // All domain types for the campaign-level live performance layer.
 
+import type { PerformanceEvaluation } from "../evaluation/types";
+
 // ── Health status ─────────────────────────────────────────────────────────────
 
 export type CampaignHealthStatus =
@@ -50,6 +52,8 @@ export interface CampaignPerformanceSnapshot {
 
   // Delivery (source: Meta)
   metaSpend:    number;
+  impressions?: number;  // from MetaSyncedInsight — available when aggregator sums them
+  clicks?:      number;
 
   // Business outcomes (source: Shopify/CRM — source of truth for ROAS and CPA)
   crmRevenue:   number;
@@ -75,6 +79,9 @@ export interface CampaignPerformanceSnapshot {
   hasGoal:        boolean;
   goalSource:     GoalSource;  // where the active goal came from
   dataWindowDays: number;      // attribution window used (7 days per product rules)
+
+  // Phase 3: evaluation engine output (additive — sits alongside healthStatus)
+  evaluation?: PerformanceEvaluation;
 }
 
 // ── Aggregate counts ──────────────────────────────────────────────────────────

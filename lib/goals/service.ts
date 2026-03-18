@@ -15,7 +15,7 @@ import type { ClientGoal, CampaignGoal, GoalInput } from "./types";
 // Priority: new field → legacy field → null
 // ---------------------------------------------------------------------------
 
-function mapCampaignGoal(row: {
+export function mapCampaignGoal(row: {
   externalCampaignId: string;
   targetRoas:         number | null;
   targetCpa:          number | null;
@@ -36,7 +36,7 @@ function mapCampaignGoal(row: {
   };
 }
 
-function mapClientGoal(row: {
+export function mapClientGoal(row: {
   clientAccountId:      string;
   targetRoas:           number | null;
   targetCpa:            number | null;

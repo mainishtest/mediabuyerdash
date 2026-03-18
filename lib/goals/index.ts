@@ -25,4 +25,6 @@ export { getClientGoal,
          upsertClientGoal,
          upsertCampaignGoal,
          getClientGoalsForClients,
-         getCampaignGoalsForCampaigns }    from "./service";
+         getCampaignGoalsForCampaigns,
+         mapCampaignGoal,
+         mapClientGoal }                  from "./service";

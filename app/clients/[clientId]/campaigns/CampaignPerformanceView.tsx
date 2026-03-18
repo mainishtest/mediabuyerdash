@@ -25,6 +25,7 @@ import type {
 import { SparkLine }   from "../../../../components/charts/SparkLine";
 import { TrendChart }  from "../../../../components/charts/TrendChart";
 import type { SparkPoint, DailyPoint } from "../../../../lib/charts/dataService";
+import { EvaluationSignal, EvaluationCard } from "../../../../components/ui/EvaluationBadge";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -557,6 +558,11 @@ function CampaignCard({
       {!isEditing && s.recommendation.supportingMetrics && (
         <p className="text-xs text-slate-600">{s.recommendation.supportingMetrics}</p>
       )}
+
+      {/* Phase 3 evaluation signal */}
+      {!isEditing && s.evaluation && (
+        <EvaluationCard evaluation={s.evaluation} />
+      )}
     </div>
   );
 }
@@ -592,7 +598,7 @@ function CampaignTableRow({
   const hasGoal  = goalOverride !== undefined || s.hasGoal;
   const roasGoal = goalOverride?.roasGoalValue ?? s.roasGoalValue;
   const cpaGoal  = goalOverride?.cpaGoalValue  ?? s.cpaGoalValue;
-  const colSpan  = 13; // total columns including new checkbox col
+  const colSpan  = 14; // total columns including new checkbox col + signal col
 
   return (
     <Fragment>
@@ -671,6 +677,12 @@ function CampaignTableRow({
         </td>
         <td className={TD}>
           <HealthChip status={s.healthStatus} />
+        </td>
+        <td className={TD}>
+          {s.evaluation
+            ? <EvaluationSignal evaluation={s.evaluation} />
+            : <span className="text-xs text-slate-600">—</span>
+          }
         </td>
         <td className={TD}>
           <div className="space-y-1">
@@ -1409,6 +1421,7 @@ export function CampaignPerformanceView({
                       <th className={`${TH} text-right`}>CPA</th>
                       <th className={`${TH} text-right`}>vs Goal</th>
                       <th className={TH}>Health</th>
+                      <th className={TH}>Signal</th>
                       <th className={TH}>Recommendation</th>
                     </tr>
                   </thead>
