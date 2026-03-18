@@ -1,294 +1,300 @@
 "use client";
 
-import { useState } from "react";
-import Link          from "next/link";
-import Image         from "next/image";
+import { useState, useMemo } from "react";
+import Link                   from "next/link";
 import type {
-  CreativePerformanceSnapshot,
-  CreativeDiagnostic,
-  CreativeOpportunity,
-  CreativeEvaluationStatus,
-  CreativeOpportunityType,
-} from "../../../lib/creativelab/types";
+  CreativePerformanceRow,
+  CreativePerformanceSummary,
+} from "../../../lib/creativePerformance/types";
 
 // ---------------------------------------------------------------------------
-// Style maps
+// Helpers
 // ---------------------------------------------------------------------------
 
-const STATUS_BORDER: Record<CreativeEvaluationStatus, string> = {
-  strong:            "border-l-emerald-500",
-  average:           "border-l-slate-600",
-  weak:              "border-l-rose-500",
-  fatigued:          "border-l-amber-500",
-  insufficient_data: "border-l-slate-800",
-};
+function fmt$  (n: number):         string { return `$${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`; }
+function fmtN  (n: number):         string { return n.toLocaleString(); }
+function fmtPct(n: number | null):  string { return n == null ? "—" : `${n.toFixed(2)}%`; }
+function fmtX  (n: number | null):  string { return n == null ? "—" : `${n.toFixed(2)}x`; }
+function fmt$2 (n: number | null):  string { return n == null ? "—" : `$${n.toFixed(2)}`; }
+function fmtRoas(n: number):        string { return `${n.toFixed(2)}x`; }
 
-const STATUS_BADGE_BG: Record<CreativeEvaluationStatus, string> = {
-  strong:            "bg-emerald-500/20 text-emerald-400",
-  average:           "bg-slate-700 text-slate-300",
-  weak:              "bg-rose-500/20 text-rose-400",
-  fatigued:          "bg-amber-500/20 text-amber-400",
-  insufficient_data: "bg-slate-800 text-slate-500",
-};
+// ---------------------------------------------------------------------------
+// Sort types
+// ---------------------------------------------------------------------------
 
-const STATUS_LABEL: Record<CreativeEvaluationStatus, string> = {
-  strong:            "Strong",
-  average:           "Average",
-  weak:              "Weak",
-  fatigued:          "Fatigued",
-  insufficient_data: "Insufficient Data",
-};
+type SortKey = "spend" | "impressions" | "clicks" | "conversions" | "revenue"
+             | "ctr"   | "cpc"         | "cpm"    | "cpa"         | "roas" | "cvr";
 
-const OPP_TYPE_BADGE: Record<CreativeOpportunityType, string> = {
-  scale:   "bg-emerald-500/20 text-emerald-400",
-  refresh: "bg-blue-500/20 text-blue-400",
-  iterate: "bg-amber-500/20 text-amber-400",
-  retire:  "bg-rose-500/20 text-rose-400",
-};
+type SortDir = "asc" | "desc";
 
-const OPP_URGENCY_BADGE: Record<string, string> = {
-  high:   "bg-rose-500/20 text-rose-400",
-  medium: "bg-amber-500/20 text-amber-400",
-  low:    "bg-slate-700 text-slate-400",
-};
+const SORTABLE_COLUMNS: { key: SortKey; label: string; format: (r: CreativePerformanceRow) => string }[] = [
+  { key: "spend",       label: "Spend",       format: r => fmt$(r.spend) },
+  { key: "revenue",     label: "Revenue",     format: r => fmt$(Math.round(r.revenue)) },
+  { key: "roas",        label: "ROAS",        format: r => fmtRoas(r.roas) },
+  { key: "cpa",         label: "CPA",         format: r => fmt$2(r.cpa) },
+  { key: "ctr",         label: "CTR",         format: r => fmtPct(r.ctr) },
+  { key: "cvr",         label: "CVR",         format: r => fmtPct(r.cvr) },
+  { key: "clicks",      label: "Clicks",      format: r => fmtN(r.clicks) },
+  { key: "impressions", label: "Impr.",        format: r => fmtN(r.impressions) },
+  { key: "conversions", label: "Conv.",        format: r => r.conversions.toFixed(1) },
+  { key: "cpc",         label: "CPC",         format: r => fmt$2(r.cpc) },
+  { key: "cpm",         label: "CPM",         format: r => fmt$2(r.cpm) },
+];
 
-type FilterStatus = CreativeEvaluationStatus | "all";
+function sortValue(row: CreativePerformanceRow, key: SortKey): number {
+  const v = row[key];
+  return v == null ? -Infinity : (v as number);
+}
 
 // ---------------------------------------------------------------------------
 // CreativeThumbnail
 // ---------------------------------------------------------------------------
 
-function CreativeThumbnail({
-  thumbnailUrl,
-  imageUrl,
-  name,
-}: {
-  thumbnailUrl: string | null;
-  imageUrl:     string | null;
-  name:         string | null;
-}) {
+function CreativeThumbnail({ src, name }: { src: string | null; name: string }) {
   const [failed, setFailed] = useState(false);
-  const src = thumbnailUrl ?? imageUrl ?? null;
 
   if (!src || failed) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-800 rounded-lg">
-        <span className="text-2xl text-slate-600">◻</span>
+      <div className="flex h-full w-full items-center justify-center rounded bg-slate-800">
+        <span className="text-lg text-slate-600">◻</span>
       </div>
     );
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg bg-slate-800">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={name ?? "Creative"}
-        className="h-full w-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name}
+      className="h-full w-full rounded object-cover"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
 // ---------------------------------------------------------------------------
-// MetricPill
+// ROAS colouring helper
 // ---------------------------------------------------------------------------
 
-function MetricPill({ label, value }: { label: string; value: string }) {
+function roasColor(roas: number): string {
+  if (roas >= 3)   return "text-emerald-400";
+  if (roas >= 1.5) return "text-slate-200";
+  if (roas >= 1)   return "text-amber-400";
+  return "text-rose-400";
+}
+
+// ---------------------------------------------------------------------------
+// SummaryBar — aggregate totals strip
+// ---------------------------------------------------------------------------
+
+function SummaryBar({ s }: { s: CreativePerformanceSummary }) {
+  const items = [
+    { label: "Creatives",    value: fmtN(s.totalCreatives)  },
+    { label: "Spend",        value: fmt$(Math.round(s.totalSpend)) },
+    { label: "Revenue",      value: fmt$(Math.round(s.totalRevenue)) },
+    { label: "ROAS",         value: fmtRoas(s.aggregateRoas) },
+    { label: "CPA",          value: fmt$2(s.aggregateCpa) },
+    { label: "CTR",          value: fmtPct(s.aggregateCtr) },
+    { label: "Conversions",  value: s.totalConversions.toFixed(1) },
+    { label: "Clicks",       value: fmtN(s.totalClicks) },
+  ];
+
   return (
-    <div className="flex flex-col">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-sm font-medium text-slate-200">{value}</span>
+    <div className="mb-6 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+      <div className="flex min-w-max divide-x divide-slate-800">
+        {items.map(item => (
+          <div key={item.label} className="px-4 py-3">
+            <p className="text-xs text-slate-500">{item.label}</p>
+            <p className="mt-0.5 text-sm font-semibold text-slate-100">{item.value}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CreativeCard
+// Mobile CreativeCard
+// Prominent: ROAS, CPA, Spend. Secondary: CTR, CVR, Clicks, Conversions.
 // ---------------------------------------------------------------------------
 
-function CreativeCard({
-  snapshot,
-  diagnostic,
-}: {
-  snapshot:   CreativePerformanceSnapshot;
-  diagnostic: CreativeDiagnostic;
-}) {
+function CreativeCard({ row }: { row: CreativePerformanceRow }) {
   const [expanded, setExpanded] = useState(false);
-  const s = snapshot;
-  const borderColor = STATUS_BORDER[s.evaluationStatus];
-  const badgeBg     = STATUS_BADGE_BG[s.evaluationStatus];
 
   return (
-    <div
-      className={`rounded-xl border border-slate-800 border-l-4 ${borderColor} bg-slate-900`}
-    >
-      {/* Top: thumbnail + headline */}
+    <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden">
+      {/* Top: thumbnail + identity */}
       <div className="flex gap-3 p-4">
-        {/* Thumbnail */}
-        <div className="h-20 w-20 shrink-0 sm:h-24 sm:w-24">
-          <CreativeThumbnail
-            thumbnailUrl={s.thumbnailUrl}
-            imageUrl={s.imageUrl}
-            name={s.creativeName}
-          />
+        <div className="h-16 w-16 shrink-0">
+          <CreativeThumbnail src={row.thumbnailUrl} name={row.adName} />
         </div>
-
-        {/* Identity + status */}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-1.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-100">
-                {s.creativeName ?? s.externalCreativeId}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">
-                {s.campaignName}
-              </p>
-              <p className="truncate text-xs text-slate-600">{s.clientName}</p>
-            </div>
-            <span
-              className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${badgeBg}`}
-            >
-              {STATUS_LABEL[s.evaluationStatus]}
-            </span>
-          </div>
-
-          {/* Copy snippet */}
-          {s.adCopy && (
-            <p className="mt-1.5 line-clamp-2 text-xs text-slate-500 italic">
-              &ldquo;{s.adCopy}&rdquo;
-            </p>
-          )}
+          <p className="truncate text-sm font-medium text-slate-100">{row.adName}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{row.campaignName}</p>
+          <p className="truncate text-xs text-slate-600">{row.clientName}</p>
         </div>
       </div>
 
-      {/* Metrics strip */}
-      <div className="border-t border-slate-800 px-4 py-3">
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-          <MetricPill label="CTR"       value={`${s.avgCtr.toFixed(2)}%`} />
-          <MetricPill label="Spend"     value={`$${Math.round(s.spend).toLocaleString()}`} />
-          <MetricPill label="Impressions" value={s.impressions.toLocaleString()} />
-          <MetricPill
-            label="Frequency"
-            value={s.avgFrequency != null ? `${s.avgFrequency.toFixed(1)}x` : "—"}
-          />
-          <MetricPill
-            label="ROAS"
-            value={s.campaignRoas != null ? `${s.campaignRoas.toFixed(2)}x` : "—"}
-          />
-        </div>
-        {s.campaignCpa != null && (
-          <p className="mt-1.5 text-xs text-slate-500">
-            CPA: <span className="font-medium text-slate-300">${s.campaignCpa.toFixed(2)}</span>
-            <span className="ml-1 text-slate-600">(campaign-level, CRM-verified)</span>
+      {/* Primary metrics: ROAS, CPA, Spend */}
+      <div className="grid grid-cols-3 gap-px border-t border-slate-800 bg-slate-800">
+        <div className="bg-slate-900 px-4 py-3 text-center">
+          <p className="text-xs text-slate-500">ROAS</p>
+          <p className={`mt-0.5 text-lg font-bold ${roasColor(row.roas)}`}>
+            {fmtRoas(row.roas)}
           </p>
-        )}
-      </div>
-
-      {/* Diagnostic */}
-      <div className="border-t border-slate-800 px-4 py-3">
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-between text-left"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-300">
-              {diagnostic.primaryIssue}
-            </span>
-          </div>
-          <span className="text-xs text-slate-600">{expanded ? "▲" : "▼"}</span>
-        </button>
-
-        {expanded && (
-          <div className="mt-2 space-y-2">
-            {/* Supporting signals */}
-            <ul className="space-y-1">
-              {diagnostic.supportingSignals.map((sig, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-xs text-slate-400">
-                  <span className="mt-0.5 shrink-0 text-slate-600">·</span>
-                  {sig}
-                </li>
-              ))}
-            </ul>
-            {/* Recommended direction */}
-            <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-              <p className="text-xs font-medium text-slate-400">Recommended</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-300">
-                {diagnostic.recommendedDirection}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// SummaryCard
-// ---------------------------------------------------------------------------
-
-function SummaryCard({
-  label,
-  value,
-  accent,
-  onClick,
-  active,
-}: {
-  label:   string;
-  value:   number;
-  accent?: string;
-  onClick: () => void;
-  active:  boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-        active
-          ? "border-slate-500 bg-slate-800"
-          : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
-      }`}
-    >
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${accent ?? "text-white"}`}>
-        {value}
-      </p>
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// OpportunityCard
-// ---------------------------------------------------------------------------
-
-function OpportunityCard({ opp }: { opp: CreativeOpportunity }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="text-sm font-medium text-slate-200">{opp.headline}</p>
-        <div className="flex gap-1.5">
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${OPP_TYPE_BADGE[opp.opportunityType]}`}
-          >
-            {opp.opportunityType}
-          </span>
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-medium ${OPP_URGENCY_BADGE[opp.urgency]}`}
-          >
-            {opp.urgency}
-          </span>
+        </div>
+        <div className="bg-slate-900 px-4 py-3 text-center">
+          <p className="text-xs text-slate-500">CPA</p>
+          <p className="mt-0.5 text-lg font-bold text-slate-100">{fmt$2(row.cpa)}</p>
+        </div>
+        <div className="bg-slate-900 px-4 py-3 text-center">
+          <p className="text-xs text-slate-500">Spend</p>
+          <p className="mt-0.5 text-lg font-bold text-slate-100">{fmt$(Math.round(row.spend))}</p>
         </div>
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-        {opp.description}
-      </p>
-      {opp.creativeName && (
-        <p className="mt-2 text-xs text-slate-600 truncate">
-          Creative: {opp.creativeName}
+
+      {/* Secondary metrics strip — toggled */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex w-full items-center justify-between border-t border-slate-800 px-4 py-2 text-left"
+      >
+        <span className="text-xs text-slate-500">
+          Revenue: <span className="text-slate-300">{fmt$(Math.round(row.revenue))}</span>
+          {" · "}CTR: <span className="text-slate-300">{fmtPct(row.ctr)}</span>
+          {" · "}Clicks: <span className="text-slate-300">{fmtN(row.clicks)}</span>
+        </span>
+        <span className="text-xs text-slate-600">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="grid grid-cols-3 gap-3 border-t border-slate-800 px-4 py-3 sm:grid-cols-4">
+          {[
+            { label: "Revenue",  value: fmt$(Math.round(row.revenue)) },
+            { label: "CVR",      value: fmtPct(row.cvr)  },
+            { label: "Conv.",    value: row.conversions.toFixed(1) },
+            { label: "Impr.",    value: fmtN(row.impressions) },
+            { label: "CPC",      value: fmt$2(row.cpc)   },
+            { label: "CPM",      value: fmt$2(row.cpm)   },
+          ].map(m => (
+            <div key={m.label}>
+              <p className="text-xs text-slate-500">{m.label}</p>
+              <p className="mt-0.5 text-sm font-medium text-slate-300">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Ad copy snippet */}
+      {row.adCopy && (
+        <p className="border-t border-slate-800 px-4 py-2 text-xs italic text-slate-600 line-clamp-1">
+          &ldquo;{row.adCopy}&rdquo;
         </p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SortHeader — desktop table column header with sort toggle
+// ---------------------------------------------------------------------------
+
+function SortHeader({
+  label,
+  sortKey,
+  current,
+  dir,
+  onSort,
+}: {
+  label:   string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir:     SortDir;
+  onSort:  (k: SortKey) => void;
+}) {
+  const active = current === sortKey;
+
+  return (
+    <th
+      scope="col"
+      className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium
+                 uppercase tracking-wide text-slate-500 hover:text-slate-300 transition-colors"
+      onClick={() => onSort(sortKey)}
+    >
+      {label}
+      {active && (
+        <span className="ml-1 text-slate-400">{dir === "desc" ? "↓" : "↑"}</span>
+      )}
+    </th>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Desktop table row
+// ---------------------------------------------------------------------------
+
+function TableRow({ row }: { row: CreativePerformanceRow }) {
+  return (
+    <tr className="border-t border-slate-800 hover:bg-slate-800/40 transition-colors">
+      {/* Creative identity */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-9 w-9 shrink-0">
+            <CreativeThumbnail src={row.thumbnailUrl} name={row.adName} />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate max-w-[180px] text-sm font-medium text-slate-200"
+               title={row.adName}>
+              {row.adName}
+            </p>
+            <p className="truncate max-w-[180px] text-xs text-slate-500"
+               title={row.campaignName}>
+              {row.campaignName}
+            </p>
+          </div>
+        </div>
+      </td>
+
+      {/* Metrics — right-aligned for fast scanning */}
+      <td className="px-3 py-2.5 text-right text-sm font-medium text-slate-200">
+        {fmt$(Math.round(row.spend))}
+      </td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-300">
+        {fmt$(Math.round(row.revenue))}
+      </td>
+      <td className={`px-3 py-2.5 text-right text-sm font-semibold ${roasColor(row.roas)}`}>
+        {fmtRoas(row.roas)}
+      </td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-300">{fmt$2(row.cpa)}</td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-300">{fmtPct(row.ctr)}</td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-300">{fmtPct(row.cvr)}</td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-400">{fmtN(row.clicks)}</td>
+      <td className="px-3 py-2.5 text-right text-sm text-slate-400">
+        {row.conversions.toFixed(1)}
+      </td>
+    </tr>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EmptyState
+// ---------------------------------------------------------------------------
+
+function EmptyState() {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 px-8 py-14 text-center">
+      <p className="text-sm font-medium text-slate-300">No creative performance data</p>
+      <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-slate-500">
+        Creative performance requires ad-level Meta insights synced for at least
+        one client. Run a sync from Integrations, then return here.
+      </p>
+      <Link
+        href="/integrations"
+        className="mt-5 inline-block rounded-lg border border-slate-700 bg-slate-800
+                   px-5 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700
+                   transition-colors"
+      >
+        Go to Integrations
+      </Link>
     </div>
   );
 }
@@ -298,207 +304,214 @@ function OpportunityCard({ opp }: { opp: CreativeOpportunity }) {
 // ---------------------------------------------------------------------------
 
 export function PerformanceView({
-  snapshots,
-  diagnostics,
-  opportunities,
+  rows,
+  summary,
+  dateFrom,
+  dateTo,
 }: {
-  snapshots:     CreativePerformanceSnapshot[];
-  diagnostics:   CreativeDiagnostic[];
-  opportunities: CreativeOpportunity[];
+  rows:     CreativePerformanceRow[];
+  summary:  CreativePerformanceSummary;
+  dateFrom: string;
+  dateTo:   string;
 }) {
-  const [activeFilter, setActiveFilter] = useState<FilterStatus>("all");
+  const [sortKey,  setSortKey]  = useState<SortKey>("spend");
+  const [sortDir,  setSortDir]  = useState<SortDir>("desc");
+  const [search,   setSearch]   = useState("");
 
-  // Build diagnostic map for quick lookup
-  const diagMap = new Map(
-    diagnostics.map((d) => [d.externalCreativeId, d])
-  );
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
 
-  // Count by status
-  const counts: Record<CreativeEvaluationStatus, number> = {
-    strong:            0,
-    average:           0,
-    weak:              0,
-    fatigued:          0,
-    insufficient_data: 0,
-  };
-  for (const s of snapshots) counts[s.evaluationStatus]++;
+  // Filter + sort
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? rows.filter(r =>
+          r.adName.toLowerCase().includes(q)       ||
+          r.campaignName.toLowerCase().includes(q) ||
+          r.clientName.toLowerCase().includes(q)   ||
+          (r.creativeName ?? "").toLowerCase().includes(q)
+        )
+      : rows;
 
-  // Apply filter
-  const filtered =
-    activeFilter === "all"
-      ? snapshots
-      : snapshots.filter((s) => s.evaluationStatus === activeFilter);
+    return [...filtered].sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      return sortDir === "desc" ? bv - av : av - bv;
+    });
+  }, [rows, search, sortKey, sortDir]);
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 lg:px-8">
 
       {/* Sub-nav */}
       <nav className="mb-6 flex gap-4 border-b border-slate-800 pb-3 text-sm">
-        <Link
-          href="/creative-lab"
-          className="text-slate-500 hover:text-slate-300 transition-colors"
-        >
+        <Link href="/creative-lab"
+              className="text-slate-500 hover:text-slate-300 transition-colors">
           Creative Lab
         </Link>
-        <Link
-          href="/creative-lab/images"
-          className="text-slate-500 hover:text-slate-300 transition-colors"
-        >
+        <Link href="/creative-lab/images"
+              className="text-slate-500 hover:text-slate-300 transition-colors">
           Images
         </Link>
         <span className="font-medium text-white">Performance</span>
       </nav>
 
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Creative Performance</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Rule-based evaluation of ad creatives using real Meta sync data.
-          CTR and frequency come from ad-level insights. ROAS/CPA are
-          CRM-verified campaign-level metrics from reconciliation.
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Creative Performance</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Ad-level delivery from Meta · CRM-attributed revenue &amp; conversions
+            · {dateFrom} – {dateTo}
+          </p>
+        </div>
       </div>
 
-      {/* No data state */}
-      {snapshots.length === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-12 text-center">
-          <p className="text-sm font-medium text-slate-300">No creative performance data yet</p>
-          <p className="mt-2 max-w-sm mx-auto text-xs leading-relaxed text-slate-500">
-            Creative performance requires ad-level Meta sync data. Run a Meta sync
-            for a client to start seeing creative diagnostics here.
-          </p>
-          <Link
-            href="/integrations"
-            className="mt-5 inline-block rounded-lg border border-slate-700 bg-slate-800
-              px-5 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
-          >
-            Go to Integrations
-          </Link>
-        </div>
-      )}
+      {/* No data */}
+      {rows.length === 0 && <EmptyState />}
 
-      {snapshots.length > 0 && (
+      {rows.length > 0 && (
         <>
-          {/* Summary cards — clickable filter shortcuts */}
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <SummaryCard
-              label="Strong"
-              value={counts.strong}
-              accent="text-emerald-400"
-              active={activeFilter === "strong"}
-              onClick={() =>
-                setActiveFilter((f) => (f === "strong" ? "all" : "strong"))
-              }
-            />
-            <SummaryCard
-              label="Weak"
-              value={counts.weak}
-              accent="text-rose-400"
-              active={activeFilter === "weak"}
-              onClick={() =>
-                setActiveFilter((f) => (f === "weak" ? "all" : "weak"))
-              }
-            />
-            <SummaryCard
-              label="Fatigued"
-              value={counts.fatigued}
-              accent="text-amber-400"
-              active={activeFilter === "fatigued"}
-              onClick={() =>
-                setActiveFilter((f) => (f === "fatigued" ? "all" : "fatigued"))
-              }
-            />
-            <SummaryCard
-              label="Total Creatives"
-              value={snapshots.length}
-              active={activeFilter === "all"}
-              onClick={() => setActiveFilter("all")}
-            />
-          </div>
+          {/* Summary bar */}
+          <SummaryBar s={summary} />
 
-          {/* Filter bar */}
-          <div className="mb-5 flex flex-wrap gap-2">
-            {(
-              [
-                "all",
-                "strong",
-                "weak",
-                "fatigued",
-                "average",
-                "insufficient_data",
-              ] as const
-            ).map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFilter(f)}
-                className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                  activeFilter === f
-                    ? "bg-slate-200 text-slate-900"
-                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                }`}
+          {/* Search + sort controls */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              placeholder="Search ad or campaign…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-700 bg-slate-900
+                         px-3 text-sm text-slate-200 placeholder-slate-500 outline-none
+                         focus:border-slate-500 sm:w-64"
+            />
+            {/* Mobile sort select */}
+            <div className="flex items-center gap-2 lg:hidden">
+              <label className="text-xs text-slate-500">Sort:</label>
+              <select
+                value={sortKey}
+                onChange={e => setSortKey(e.target.value as SortKey)}
+                className="h-9 rounded-lg border border-slate-700 bg-slate-900
+                           px-2 text-sm text-slate-200 outline-none focus:border-slate-500"
               >
-                {f === "all"
-                  ? `All (${snapshots.length})`
-                  : f === "insufficient_data"
-                  ? `Insufficient Data (${counts.insufficient_data})`
-                  : `${STATUS_LABEL[f as CreativeEvaluationStatus]} (${counts[f as CreativeEvaluationStatus]})`}
+                {SORTABLE_COLUMNS.map(c => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
+                className="h-9 rounded-lg border border-slate-700 bg-slate-900
+                           px-2 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                {sortDir === "desc" ? "↓" : "↑"}
               </button>
-            ))}
+            </div>
           </div>
 
-          {/* Creative cards */}
-          {filtered.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-10 text-center">
-              <p className="text-sm text-slate-500">
-                No creatives match this filter.
-              </p>
-            </div>
-          ) : (
-            <div className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {filtered.map((s) => {
-                const d = diagMap.get(s.externalCreativeId);
-                if (!d) return null;
-                return (
-                  <CreativeCard
-                    key={`${s.externalCreativeId}::${s.externalCampaignId}`}
-                    snapshot={s}
-                    diagnostic={d}
-                  />
-                );
-              })}
+          {/* No match after filter */}
+          {visible.length === 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900 py-10 text-center">
+              <p className="text-sm text-slate-500">No creatives match &ldquo;{search}&rdquo;.</p>
             </div>
           )}
 
-          {/* Creative Opportunities */}
-          {opportunities.length > 0 && (
-            <section>
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-50">
-                  Creative Opportunities
-                </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Prioritised actions — creatives to scale, refresh, iterate, or
-                  retire.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {opportunities.map((opp, i) => (
-                  <OpportunityCard key={i} opp={opp} />
+          {visible.length > 0 && (
+            <>
+              {/* ── Mobile: stacked cards ─────────────────────────────── */}
+              <div className="grid grid-cols-1 gap-4 lg:hidden">
+                {visible.map(row => (
+                  <CreativeCard key={row.adId} row={row} />
                 ))}
               </div>
-            </section>
+
+              {/* ── Desktop: sortable table ───────────────────────────── */}
+              <div className="hidden lg:block">
+                <div className="overflow-x-auto rounded-xl border border-slate-800">
+                  <table className="w-full min-w-[900px] border-collapse text-left">
+                    <thead className="bg-slate-900">
+                      <tr>
+                        <th scope="col"
+                            className="px-3 py-2.5 text-xs font-medium uppercase
+                                       tracking-wide text-slate-500">
+                          Creative / Ad
+                        </th>
+                        {(["spend","revenue","roas","cpa","ctr","cvr","clicks","conversions"] as SortKey[]).map(k => {
+                          const col = SORTABLE_COLUMNS.find(c => c.key === k)!;
+                          return (
+                            <SortHeader
+                              key={k}
+                              label={col.label}
+                              sortKey={k}
+                              current={sortKey}
+                              dir={sortDir}
+                              onSort={handleSort}
+                            />
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {visible.map(row => (
+                        <TableRow key={row.adId} row={row} />
+                      ))}
+                    </tbody>
+
+                    {/* Summary footer row */}
+                    <tfoot className="border-t-2 border-slate-700 bg-slate-900/80">
+                      <tr>
+                        <td className="px-3 py-2.5 text-xs font-medium text-slate-400">
+                          {visible.length} ad{visible.length !== 1 ? "s" : ""}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-200">
+                          {fmt$(Math.round(visible.reduce((s,r) => s + r.spend, 0)))}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-200">
+                          {fmt$(Math.round(visible.reduce((s,r) => s + r.revenue, 0)))}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-400">—</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-400">—</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-400">—</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-400">—</td>
+                        <td className="px-3 py-2.5 text-right text-sm text-slate-400">
+                          {fmtN(visible.reduce((s,r) => s + r.clicks, 0))}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-sm text-slate-400">
+                          {visible.reduce((s,r) => s + r.conversions, 0).toFixed(1)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
 
-          {/* Data notes */}
+          {/* Attribution quality + data notes */}
           <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/40 px-5 py-4">
             <p className="text-xs font-medium text-slate-400">Data notes</p>
             <ul className="mt-2 space-y-1 text-xs text-slate-500">
-              <li>· CTR and frequency are aggregated from ad-level Meta sync data (last 14 days).</li>
-              <li>· ROAS and CPA are campaign-level, CRM-verified from reconciliation — not Meta&apos;s self-reported conversions.</li>
-              <li>· &ldquo;Strong&rdquo; status requires both CTR ≥ 1.5% and campaign ROAS ≥ 2.0x. ROAS shows &mdash; if reconciliation has not been run.</li>
-              <li>· One card per (creative, campaign) pair — a creative running in two campaigns appears twice.</li>
+              <li>
+                · Attribution:{" "}
+                <span className="text-slate-400">
+                  {(summary.utmMatchRate * 100).toFixed(0)}% direct utm_content match
+                  {" · "}
+                  {(summary.windowMatchRate * 100).toFixed(0)}% spend-share (7-day window)
+                  {" · "}
+                  {(summary.unattributedRate * 100).toFixed(0)}% unattributed
+                </span>
+              </li>
+              <li>· ROAS = CRM revenue ÷ Meta spend. CPA = Meta spend ÷ CRM conversions. Meta&apos;s own conversion data is not used.</li>
+              <li>· Spend-share: campaign revenue distributed proportionally across ads by their spend in the 7 days before each order. Fractional conversions sum to campaign totals.</li>
+              <li>· Dates follow the ad account&apos;s timezone. Shopify orders are bucketed into that same timezone.</li>
             </ul>
           </div>
         </>
