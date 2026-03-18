@@ -10,7 +10,8 @@
 // Receives a pre-computed OperationsSnapshot — no data fetching here.
 
 import Link from "next/link";
-import type { AlertEventRow, AlertSeverity } from "../../lib/alerts/types";
+import type { AlertEventRow, AlertSeverity }              from "../../lib/alerts/types";
+import type { ProposedAutomationActionRow, AutomationPriority } from "../../lib/automation/types";
 import type {
   OperationsSnapshot,
   OperationsIssue,
@@ -324,9 +325,92 @@ function TopAlertsSection({ alerts }: { alerts: AlertEventRow[] }) {
   );
 }
 
+// ── Top proposed automation actions (for Operations page) ────────────────────
+
+function automationPriorityBorder(p: AutomationPriority) {
+  if (p === "high")   return "border-l-rose-500";
+  if (p === "medium") return "border-l-amber-500";
+  return "border-l-slate-600";
+}
+
+function automationPriorityBadge(p: AutomationPriority) {
+  if (p === "high")   return "bg-rose-900/50 text-rose-300";
+  if (p === "medium") return "bg-amber-900/50 text-amber-300";
+  return "bg-slate-800 text-slate-400";
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  pause_campaign:     "Pause Campaign",
+  reduce_budget:      "Reduce Budget",
+  increase_budget:    "Increase Budget",
+  review_creative:    "Review Creative",
+  refresh_creative:   "Refresh Creative",
+  run_sync:           "Run Sync",
+  investigate_client: "Investigate Client",
+};
+
+function TopProposedActionsSection({
+  actions,
+}: {
+  actions: ProposedAutomationActionRow[];
+}) {
+  if (actions.length === 0) return null;
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-50">
+            Proposed Automation
+          </h2>
+          <p className="text-xs text-slate-500">
+            High-priority rule-driven recommendations awaiting approval.
+          </p>
+        </div>
+        <Link
+          href="/automation"
+          className="text-xs text-slate-500 hover:text-slate-300"
+        >
+          Review all →
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {actions.map((a) => (
+          <div
+            key={a.id}
+            className={`border-l-4 ${automationPriorityBorder(a.priority)} rounded-r-lg border border-l-0 border-slate-800 bg-slate-900/40 px-4 py-3`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ${automationPriorityBadge(a.priority)}`}
+                >
+                  {a.priority}
+                </span>
+                <span className="rounded px-2 py-0.5 text-xs font-medium bg-slate-800 text-slate-300">
+                  {ACTION_LABELS[a.actionType] ?? a.actionType}
+                </span>
+                <p className="text-sm text-slate-200 truncate max-w-xs">{a.rationale}</p>
+              </div>
+              <span className="shrink-0 text-xs text-slate-600">{a.clientName}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function OperationsView({ snapshot, topAlerts = [] }: { snapshot: OperationsSnapshot; topAlerts?: AlertEventRow[] }) {
+export function OperationsView({
+  snapshot,
+  topAlerts = [],
+  topProposedActions = [],
+}: {
+  snapshot:             OperationsSnapshot;
+  topAlerts?:           AlertEventRow[];
+  topProposedActions?:  ProposedAutomationActionRow[];
+}) {
   const hasClients = snapshot.totalClientsCount > 0;
   const genTime    = new Date(snapshot.generatedAt).toLocaleTimeString("en-US", {
     hour: "numeric", minute: "2-digit", hour12: true,
@@ -368,6 +452,9 @@ export function OperationsView({ snapshot, topAlerts = [] }: { snapshot: Operati
 
           {/* Active Alerts from anomaly detection */}
           <TopAlertsSection alerts={topAlerts} />
+
+          {/* High-priority proposed automation actions */}
+          <TopProposedActionsSection actions={topProposedActions} />
 
           {/* Issues + Opportunities — 2-col on desktop, stacked on mobile */}
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
