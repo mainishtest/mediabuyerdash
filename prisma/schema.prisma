@@ -526,8 +526,28 @@ model MetaSyncedCampaign {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  goal MetaCampaignGoal?
+
   @@index([workspaceId])
   @@index([workspaceId, externalAdAccountId])
+}
+
+// Internal dashboard goals for imported Meta campaigns.
+// Stored in this app only — never written back to Meta Ads Manager.
+// Keyed on externalCampaignId for direct, reliable linking (no name matching).
+model MetaCampaignGoal {
+  id                 String   @id @default(cuid())
+  externalCampaignId String   @unique
+  roasGoalType       String   // "high" | "low"
+  roasGoalValue      Float
+  cpaGoalType        String   // "high" | "low"
+  cpaGoalValue       Float
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  campaign MetaSyncedCampaign @relation(fields: [externalCampaignId], references: [externalCampaignId], onDelete: Cascade)
+
+  @@index([externalCampaignId])
 }
 
 // Ad sets synced from Meta. Upserted on externalAdSetId.

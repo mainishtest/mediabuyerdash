@@ -2,18 +2,13 @@
 // Builds CampaignPerformanceSnapshot[] for a client by joining:
 //   - MetaSyncedCampaign + MetaSyncedInsight  → delivery metrics (spend)
 //   - ShopifyOrder                            → CRM revenue + orders (source of truth)
-//   - Campaign + CampaignGoal                 → goal targets
-//
-// Join key: campaign name (case-insensitive) between Meta campaigns,
-// Shopify UTM params, and internal Campaign records.
+//   - MetaCampaignGoal                        → goal targets (direct link by externalCampaignId)
 //
 // MEASUREMENT POLICY: evaluatedRoas and evaluatedCpa use CRM figures only.
 // Meta data provides spend; Shopify provides the revenue and order count.
 //
-// NOTE: When ReconciliationMatch records exist for a client they provide a
-// more precisely attributed join (metaCampaignId). This version uses the
-// direct name-based join and is documented as the V1 approach. The
-// ReconciliationMatch upgrade path is noted in docs/campaign-performance.md.
+// GOAL LINKING: Goals are read from MetaCampaignGoal (direct FK on externalCampaignId).
+// This replaces the previous name-based join through internal Campaign records.
 
 import { prisma } from "../db";
 import { evaluateCampaignAgainstGoals } from "./evaluator";
@@ -35,35 +30,35 @@ export async function buildCampaignPerformanceSnapshots(
 
   if (externalAdAccountIds.length === 0) return [];
 
-  // ── 2–5. Parallel fetch ──────────────────────────────────────────────────────
-  const [metaCampaigns, insightAggs, shopifyOrders, internalCampaigns] =
-    await Promise.all([
-      // 2. Synced campaigns for this client's ad accounts
-      prisma.metaSyncedCampaign.findMany({
-        where: { externalAdAccountId: { in: externalAdAccountIds } },
-      }),
-
-      // 3. Spend aggregated by campaign from insight rows (all ad-level rows)
-      prisma.metaSyncedInsight.groupBy({
-        by:    ["externalCampaignId"],
-        where: { externalAdAccountId: { in: externalAdAccountIds } },
-        _sum:  { spend: true },
-      }),
-
-      // 4. Shopify orders for this client (CRM source of truth)
-      prisma.shopifyOrder.findMany({
-        where:  { clientAccountId: clientId },
-        select: { utmCampaign: true, totalPrice: true },
-      }),
-
-      // 5. Internal campaigns with goals (for goal resolution)
-      prisma.campaign.findMany({
-        where:   { accountId: clientId },
-        include: { goals: true },
-      }),
-    ]);
+  // ── 2. Synced campaigns for this client's ad accounts ────────────────────────
+  const metaCampaigns = await prisma.metaSyncedCampaign.findMany({
+    where: { externalAdAccountId: { in: externalAdAccountIds } },
+  });
 
   if (metaCampaigns.length === 0) return [];
+
+  const externalCampaignIds = metaCampaigns.map((c) => c.externalCampaignId);
+
+  // ── 3–5. Parallel fetch ──────────────────────────────────────────────────────
+  const [insightAggs, shopifyOrders, campaignGoals] = await Promise.all([
+    // 3. Spend aggregated by campaign from insight rows
+    prisma.metaSyncedInsight.groupBy({
+      by:    ["externalCampaignId"],
+      where: { externalAdAccountId: { in: externalAdAccountIds } },
+      _sum:  { spend: true },
+    }),
+
+    // 4. Shopify orders for this client (CRM source of truth)
+    prisma.shopifyOrder.findMany({
+      where:  { clientAccountId: clientId },
+      select: { utmCampaign: true, totalPrice: true },
+    }),
+
+    // 5. Goals — direct lookup via MetaCampaignGoal (no name matching needed)
+    prisma.metaCampaignGoal.findMany({
+      where: { externalCampaignId: { in: externalCampaignIds } },
+    }),
+  ]);
 
   // ── Build lookup maps ────────────────────────────────────────────────────────
 
@@ -82,26 +77,23 @@ export async function buildCampaignPerformanceSnapshots(
     crmByName[key].orders  += 1;
   }
 
-  // Goals by normalized campaign name
+  // Goals by externalCampaignId (direct, reliable link)
   type GoalRow = {
     roasGoalType:  string;
     roasGoalValue: number;
     cpaGoalType:   string;
     cpaGoalValue:  number;
   };
-  const goalsByName: Record<string, GoalRow> = {};
-  for (const c of internalCampaigns) {
-    if (c.goals) {
-      goalsByName[c.name.toLowerCase().trim()] = c.goals;
-    }
-  }
+  const goalsById: Record<string, GoalRow> = Object.fromEntries(
+    campaignGoals.map((g) => [g.externalCampaignId, g])
+  );
 
   // ── Build a snapshot for every synced campaign ────────────────────────────────
   return metaCampaigns.map((mc): CampaignPerformanceSnapshot => {
     const metaSpend = spendById[mc.externalCampaignId] ?? 0;
     const nameKey   = mc.name.toLowerCase().trim();
-    const crm       = crmByName[nameKey]   ?? { revenue: 0, orders: 0 };
-    const goal      = goalsByName[nameKey] ?? null;
+    const crm       = crmByName[nameKey] ?? { revenue: 0, orders: 0 };
+    const goal      = goalsById[mc.externalCampaignId] ?? null;
 
     // CRM-sourced metrics (product rule: CRM is source of truth for ROAS/CPA)
     const evaluatedRoas = metaSpend > 0 ? crm.revenue / metaSpend : 0;

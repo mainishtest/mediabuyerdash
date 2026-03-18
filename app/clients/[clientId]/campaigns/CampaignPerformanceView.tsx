@@ -31,7 +31,7 @@ type Props = {
 
 // ── Format helpers ────────────────────────────────────────────────────────────
 
-function fmt$(n: number, currency = "USD"): string {
+function fmt$(n: number): string {
   if (n === 0) return "—";
   return n >= 1000
     ? `$${(n / 1000).toFixed(1)}k`
@@ -90,6 +90,21 @@ function ActionChip({ action }: { action: CampaignActionType }) {
   );
 }
 
+function GoalStatusChip({ hasGoal }: { hasGoal: boolean }) {
+  if (hasGoal) {
+    return (
+      <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-900/40 text-emerald-400">
+        Goal set
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-900/40 text-amber-400">
+      Missing goal
+    </span>
+  );
+}
+
 function statusBadgeVariant(s: string): BadgeVariant {
   if (s === "ACTIVE") return "success";
   if (s === "PAUSED") return "warning";
@@ -118,6 +133,62 @@ function GoalDelta({
   );
 }
 
+// ── Missing Goals Banner ──────────────────────────────────────────────────────
+
+function MissingGoalsBanner({
+  missingCount,
+  totalCount,
+  clientId,
+  onFilterMissing,
+}: {
+  missingCount:    number;
+  totalCount:      number;
+  clientId:        string;
+  onFilterMissing: () => void;
+}) {
+  if (missingCount === 0) return null;
+
+  if (missingCount === totalCount) {
+    return (
+      <div className="mb-5 rounded-xl border border-amber-900/50 bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-amber-300">
+            No campaigns have goals set
+          </p>
+          <p className="mt-0.5 text-xs text-amber-600">
+            {totalCount} campaign{totalCount !== 1 ? "s" : ""} imported · add goals to enable health scoring and recommendations
+          </p>
+        </div>
+        <button
+          onClick={onFilterMissing}
+          className="text-xs text-amber-400 hover:text-amber-200 transition-colors underline underline-offset-2"
+        >
+          View campaigns →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-5 rounded-xl border border-amber-900/50 bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium text-amber-300">
+          {missingCount} campaign{missingCount !== 1 ? "s" : ""} missing goals
+        </p>
+        <p className="mt-0.5 text-xs text-amber-600">
+          {totalCount - missingCount} of {totalCount} campaigns have goals · click to filter
+        </p>
+      </div>
+      <button
+        onClick={onFilterMissing}
+        className="text-xs text-amber-400 hover:text-amber-200 transition-colors underline underline-offset-2"
+      >
+        Show missing →
+      </button>
+    </div>
+  );
+}
+
 // ── Mobile campaign card ──────────────────────────────────────────────────────
 
 function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientId: string }) {
@@ -131,12 +202,30 @@ function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientI
         >
           {s.campaignName}
         </Link>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <Badge variant={statusBadgeVariant(s.campaignStatus)}>
             {s.campaignStatus}
           </Badge>
           <HealthChip status={s.healthStatus} />
         </div>
+      </div>
+
+      {/* Goal status */}
+      <div className="flex items-center gap-2">
+        <GoalStatusChip hasGoal={s.hasGoal} />
+        {s.hasGoal && s.roasGoalValue && (
+          <span className="text-xs text-slate-500">
+            ROAS {s.roasGoalValue.toFixed(2)}x · CPA ${s.cpaGoalValue?.toFixed(2) ?? "—"}
+          </span>
+        )}
+        {!s.hasGoal && (
+          <Link
+            href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+            className="text-xs text-amber-500 hover:text-amber-300 transition-colors underline underline-offset-2"
+          >
+            Add goal →
+          </Link>
+        )}
       </div>
 
       {/* Key metrics — 2-column */}
@@ -192,6 +281,30 @@ function CampaignTableRow({ s, clientId }: { s: CampaignPerformanceSnapshot; cli
       </td>
       <td className={TD}>
         <Badge variant={statusBadgeVariant(s.campaignStatus)}>{s.campaignStatus}</Badge>
+      </td>
+      {/* Goal column */}
+      <td className={TD}>
+        <div className="space-y-1">
+          <GoalStatusChip hasGoal={s.hasGoal} />
+          {s.hasGoal && s.roasGoalValue && (
+            <p className="text-xs text-slate-500">
+              ROAS {s.roasGoalValue.toFixed(2)}x
+            </p>
+          )}
+          {s.hasGoal && s.cpaGoalValue && (
+            <p className="text-xs text-slate-500">
+              CPA ${s.cpaGoalValue.toFixed(2)}
+            </p>
+          )}
+          {!s.hasGoal && (
+            <Link
+              href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+              className="block text-xs text-amber-500 hover:text-amber-300 transition-colors"
+            >
+              + Add goal
+            </Link>
+          )}
+        </div>
       </td>
       <td className={`${TD} text-right`}>{fmt$(s.metaSpend)}</td>
       <td className={`${TD} text-right`}>{fmt$(s.crmRevenue)}</td>
@@ -277,7 +390,6 @@ function CampaignActionsSection({ snapshots }: { snapshots: CampaignPerformanceS
   const highPriority = snapshots
     .filter((s) => s.recommendation.priority === "high")
     .sort((a, b) => {
-      // scale first, then reduce_spend
       const order = { scale: 0, reduce_spend: 1 } as Record<string, number>;
       return (order[a.recommendation.actionType] ?? 2) - (order[b.recommendation.actionType] ?? 2);
     })
@@ -322,6 +434,7 @@ function CampaignActionsSection({ snapshots }: { snapshots: CampaignPerformanceS
 type HealthFilter  = CampaignHealthStatus | "all";
 type StatusFilter  = "all" | "ACTIVE" | "PAUSED";
 type PriorityFilter = "all" | "high" | "medium" | "low";
+type GoalFilter    = "all" | "has_goal" | "missing_goal";
 
 const SELECT_CLS =
   "rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 " +
@@ -331,6 +444,7 @@ function FilterBar({
   healthFilter,  setHealthFilter,
   statusFilter,  setStatusFilter,
   priorityFilter, setPriorityFilter,
+  goalFilter,    setGoalFilter,
   search,        setSearch,
 }: {
   healthFilter:    HealthFilter;
@@ -339,6 +453,8 @@ function FilterBar({
   setStatusFilter: (v: StatusFilter)   => void;
   priorityFilter:  PriorityFilter;
   setPriorityFilter: (v: PriorityFilter) => void;
+  goalFilter:      GoalFilter;
+  setGoalFilter:   (v: GoalFilter) => void;
   search:    string;
   setSearch: (v: string) => void;
 }) {
@@ -351,6 +467,15 @@ function FilterBar({
         onChange={(e) => setSearch(e.target.value)}
         className={`${SELECT_CLS} min-w-[160px] flex-1 sm:flex-none`}
       />
+      <select
+        value={goalFilter}
+        onChange={(e) => setGoalFilter(e.target.value as GoalFilter)}
+        className={SELECT_CLS}
+      >
+        <option value="all">All campaigns</option>
+        <option value="has_goal">Has goals</option>
+        <option value="missing_goal">Missing goals</option>
+      </select>
       <select
         value={statusFilter}
         onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
@@ -397,19 +522,28 @@ export function CampaignPerformanceView({
   const [healthFilter,   setHealthFilter]   = useState<HealthFilter>("all");
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
+  const [goalFilter,     setGoalFilter]     = useState<GoalFilter>("all");
   const [search,         setSearch]         = useState("");
 
   const counts = useMemo(() => countCampaignsByHealthStatus(snapshots), [snapshots]);
 
+  // Missing goals counts (computed from all snapshots, not just filtered)
+  const missingGoalsCount = useMemo(
+    () => snapshots.filter((s) => !s.hasGoal).length,
+    [snapshots]
+  );
+
   const filtered = useMemo(() => {
     return snapshots.filter((s) => {
+      if (goalFilter === "has_goal"     && !s.hasGoal) return false;
+      if (goalFilter === "missing_goal" &&  s.hasGoal) return false;
       if (healthFilter   !== "all" && s.healthStatus               !== healthFilter)   return false;
       if (statusFilter   !== "all" && s.campaignStatus             !== statusFilter)   return false;
       if (priorityFilter !== "all" && s.recommendation.priority    !== priorityFilter) return false;
       if (search && !s.campaignName.toLowerCase().includes(search.toLowerCase()))      return false;
       return true;
     });
-  }, [snapshots, healthFilter, statusFilter, priorityFilter, search]);
+  }, [snapshots, goalFilter, healthFilter, statusFilter, priorityFilter, search]);
 
   // ── Empty states ───────────────────────────────────────────────────────────
 
@@ -492,6 +626,14 @@ export function CampaignPerformanceView({
             />
           </div>
 
+          {/* Missing Goals Banner */}
+          <MissingGoalsBanner
+            missingCount={missingGoalsCount}
+            totalCount={snapshots.length}
+            clientId={clientId}
+            onFilterMissing={() => setGoalFilter("missing_goal")}
+          />
+
           {/* Opportunities / Risks strip */}
           <OpportunityRiskStrip snapshots={snapshots} />
 
@@ -500,16 +642,47 @@ export function CampaignPerformanceView({
             healthFilter={healthFilter}     setHealthFilter={setHealthFilter}
             statusFilter={statusFilter}     setStatusFilter={setStatusFilter}
             priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter}
+            goalFilter={goalFilter}         setGoalFilter={setGoalFilter}
             search={search}                 setSearch={setSearch}
           />
 
           {noFilter ? (
             <SectionCard>
-              <EmptyState
-                title="No campaigns match these filters"
-                description="Try adjusting the health, status, or priority filters."
-                icon="□"
-              />
+              {goalFilter === "missing_goal" && missingGoalsCount === 0 ? (
+                <EmptyState
+                  title="All campaigns have goals set"
+                  description="Every imported campaign has a ROAS and CPA goal configured."
+                  icon="✓"
+                  action={
+                    <button
+                      onClick={() => setGoalFilter("all")}
+                      className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
+                    >
+                      View all campaigns
+                    </button>
+                  }
+                />
+              ) : goalFilter === "has_goal" ? (
+                <EmptyState
+                  title="No campaigns have goals yet"
+                  description="Open a campaign from the list below and use the Campaign Goals section to add ROAS and CPA targets."
+                  icon="◎"
+                  action={
+                    <button
+                      onClick={() => setGoalFilter("all")}
+                      className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
+                    >
+                      View all campaigns
+                    </button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No campaigns match these filters"
+                  description="Try adjusting the health, status, goal, or priority filters."
+                  icon="□"
+                />
+              )}
             </SectionCard>
           ) : (
             <>
@@ -525,6 +698,7 @@ export function CampaignPerformanceView({
                     <tr className="border-b border-slate-700">
                       <th className={TH}>Campaign</th>
                       <th className={TH}>Status</th>
+                      <th className={TH}>Goal</th>
                       <th className={`${TH} text-right`}>Spend</th>
                       <th className={`${TH} text-right`}>CRM Rev</th>
                       <th className={`${TH} text-right`}>Orders</th>

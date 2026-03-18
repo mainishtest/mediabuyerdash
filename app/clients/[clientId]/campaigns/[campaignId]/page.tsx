@@ -1,8 +1,10 @@
 export const dynamic = "force-dynamic";
 
-import { notFound }  from "next/navigation";
-import { prisma }    from "../../../../../lib/db";
+import { notFound }           from "next/navigation";
+import { prisma }             from "../../../../../lib/db";
+import { getCampaignGoal }    from "../../../../../lib/campaignGoals/service";
 import { CampaignDrillDownView } from "./CampaignDrillDownView";
+import type { GoalData }         from "./CampaignGoalEditor";
 
 type PageProps = {
   params: { clientId: string; campaignId: string };
@@ -40,8 +42,8 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const since = thirtyDaysAgo.toISOString().slice(0, 10);
 
-  // Ad sets, ads, and insights in parallel
-  const [adSets, ads, adSetInsights, adInsights] = await Promise.all([
+  // Ad sets, ads, insights, and goal in parallel
+  const [adSets, ads, adSetInsights, adInsights, goalRecord] = await Promise.all([
     prisma.metaSyncedAdSet.findMany({
       where:   { externalCampaignId: campaignId },
       orderBy: { name: "asc" },
@@ -72,6 +74,8 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
       },
       _sum: { spend: true, impressions: true, clicks: true },
     }),
+    // Current goal for this campaign
+    getCampaignGoal(campaignId),
   ]);
 
   // Build insight maps
@@ -126,6 +130,16 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
     };
   });
 
+  // Serialise goal (Dates are not serialisable, so extract plain fields)
+  const goal: GoalData | null = goalRecord
+    ? {
+        roasGoalType:  goalRecord.roasGoalType  as "high" | "low",
+        roasGoalValue: goalRecord.roasGoalValue,
+        cpaGoalType:   goalRecord.cpaGoalType   as "high" | "low",
+        cpaGoalValue:  goalRecord.cpaGoalValue,
+      }
+    : null;
+
   return (
     <CampaignDrillDownView
       clientId={clientId}
@@ -139,6 +153,7 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
       }}
       adSets={adSetRows}
       ads={adRows}
+      goal={goal}
     />
   );
 }

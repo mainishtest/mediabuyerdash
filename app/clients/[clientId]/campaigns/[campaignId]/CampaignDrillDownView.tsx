@@ -4,6 +4,8 @@ import Link  from "next/link";
 import { useState, useMemo } from "react";
 import { Badge } from "../../../../../components/ui/Badge";
 import type { BadgeVariant } from "../../../../../components/ui/Badge";
+import { CampaignGoalEditor } from "./CampaignGoalEditor";
+import type { GoalData }       from "./CampaignGoalEditor";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,7 @@ type Props = {
   campaign:   CampaignInfo;
   adSets:     AdSetRow[];
   ads:        AdRow[];
+  goal:       GoalData | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -267,6 +270,7 @@ export function CampaignDrillDownView({
   campaign,
   adSets,
   ads,
+  goal,
 }: Props) {
   const [selectedAdSetId, setSelectedAdSetId] = useState<string | null>(null);
 
@@ -329,6 +333,14 @@ export function CampaignDrillDownView({
         totalImpressions={totalImpressions}
         totalClicks={totalClicks}
       />
+
+      {/* Campaign Goals — goal editor section */}
+      <section className="mb-8">
+        <CampaignGoalEditor
+          externalCampaignId={campaign.externalCampaignId}
+          initialGoal={goal}
+        />
+      </section>
 
       {/* Ad Sets */}
       <section className="mb-8">
