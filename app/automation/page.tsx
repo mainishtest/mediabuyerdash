@@ -4,8 +4,7 @@ import { getServerSession }       from "next-auth";
 import { authOptions }            from "../../lib/auth";
 import { prisma }                 from "../../lib/db";
 import {
-  loadDetectionInput,
-  evaluateAutomationRules,
+  buildProposedAutomationActions,
   upsertProposedActions,
   loadProposedActions,
   buildAutomationSummary,
@@ -20,11 +19,10 @@ export default async function AutomationPage() {
   const session     = await getServerSession(authOptions);
   const workspaceId = session?.user?.workspaceId ?? null;
 
-  // Run rule evaluation server-side on every page load.
-  // Results are persisted so the Operations page can show top proposed
+  // Run all rule evaluation (including pacing rules) server-side on every
+  // page load. Results are persisted so Operations can show top proposed
   // actions without re-running evaluation.
-  const input   = await loadDetectionInput(workspaceId);
-  const drafts  = evaluateAutomationRules(input);
+  const drafts = await buildProposedAutomationActions(workspaceId);
   await upsertProposedActions(drafts);
 
   // Load persisted actions + summary + client list for filter dropdown.

@@ -22,6 +22,8 @@ Operations page can show the top proposed actions without re-running evaluation.
 | `refresh_creative` | Propose generating new creative variants |
 | `run_sync` | Prompt user to trigger a Meta data sync |
 | `investigate_client` | Flag a client for general investigation |
+| `set_goals` | Campaign has spend but no ROAS/CPA goals — configure goals first |
+| `review_pacing` | Client is materially over- or under-pacing their monthly budget |
 
 ## Action status flow
 
@@ -43,15 +45,16 @@ audit purposes. Meta write-back will be added in a future phase.
 
 ## Built-in rules (v1)
 
-| Rule | Trigger | Action Type | Priority |
+| Rule function | Trigger | Action Type | Priority |
 |---|---|---|---|
-| `reduce_budget` | ROAS < goal × 0.60 + spend ≥ $200/wk | `reduce_budget` | high |
-| `increase_budget` | ROAS > goal × 1.40 + spend < $2000/wk | `increase_budget` | medium |
-| `stale_sync` | No sync or last sync >48h ago | `run_sync` | medium/high |
-| `sync_failed` | Last sync status = failed | `run_sync` | high |
-| `missing_integration` | No Meta or no Shopify connection | `investigate_client` | high |
-| `weak_roas` | Reconciled ROAS < 1.0 (losing money) | `investigate_client` | high |
-| `creative_fatigue` | Spend +30% but orders −20% vs prior 7d | `review_creative` | medium |
+| `evaluateReduceBudgetRule` | ROAS < goal × 0.60 + spend ≥ $200/wk | `reduce_budget` | high |
+| `evaluateIncreaseBudgetRule` | ROAS > goal × 1.40 + spend < $2000/wk | `increase_budget` | medium |
+| `evaluateRunSyncRule` | No sync or last sync >48h ago, or failed | `run_sync` | medium/high |
+| `evaluateMissingIntegrationRule` | No Meta or no Shopify connection | `investigate_client` | high |
+| `evaluateWeakRoasRule` | Reconciled ROAS < 1.0 (losing money) | `investigate_client` | high |
+| `evaluateCreativeFatigueRule` | Spend +30% but orders −20% vs prior 7d | `review_creative` | medium |
+| `evaluateSetGoalsRule` | Campaign has spend but no ROAS/CPA goal | `set_goals` | medium |
+| `evaluateReviewPacingRule` | Client over- or under-pacing > 10% this month | `review_pacing` | medium/high |
 
 ---
 
@@ -73,15 +76,20 @@ This means:
 
 ```
 lib/automation/
-  types.ts    — AutomationActionType, AutomationActionStatus, AutomationPriority,
-                ProposedAutomationActionDraft, ProposedAutomationActionRow, AutomationSummary
+  types.ts    — AutomationActionType (9 types), AutomationActionStatus (5),
+                AutomationPriority, ProposedAutomationActionDraft,
+                ProposedAutomationActionRow, AutomationSummary
   rules.ts    — evaluateReduceBudgetRule(), evaluateIncreaseBudgetRule(),
                 evaluateRunSyncRule(), evaluateMissingIntegrationRule(),
                 evaluateWeakRoasRule(), evaluateCreativeFatigueRule(),
-                evaluateAutomationRules(), loadDetectionInput() (re-exported)
+                evaluateSetGoalsRule(), evaluateReviewPacingRule(),
+                evaluateAutomationRules() (pure, runs all except pacing),
+                buildProposedAutomationActions() (async, runs ALL rules incl. pacing),
+                loadDetectionInput() (re-exported from alerts/detectors)
   persist.ts  — upsertProposedActions(), loadProposedActions(),
                 loadTopProposedActions(), approveAutomationAction(),
                 rejectAutomationAction(), buildAutomationSummary()
+                  (= summarizeAutomationQueue())
   index.ts    — public re-exports
 
 app/automation/

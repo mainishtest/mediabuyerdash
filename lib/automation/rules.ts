@@ -15,8 +15,12 @@
 // IMPORTANT: Approval does NOT yet write back to Meta. Actions are
 // recommendations only — they require human approval before any execution.
 
-import type { DetectionInput } from "../alerts/detectors";
-import { normalizeUtmValue }   from "../reconciliation/utils";
+import type { DetectionInput }          from "../alerts/detectors";
+import { normalizeUtmValue }            from "../reconciliation/utils";
+import {
+  buildAllClientsPacingSummaries,
+}                                       from "../budgetPacing/service";
+import type { ClientPacingSummary }     from "../budgetPacing/types";
 import type {
   ProposedAutomationActionDraft,
   AutomationPriority,
@@ -473,9 +477,146 @@ export function evaluateAutomationRules(
     ...evaluateMissingIntegrationRule(input),
     ...evaluateWeakRoasRule(input),
     ...evaluateCreativeFatigueRule(input),
+    ...evaluateSetGoalsRule(input),
   ];
 
   // Deduplicate: if two rules produce the same deduplicationKey, keep highest priority.
+  const priorityRank: Record<string, number> = { low: 0, medium: 1, high: 2 };
+  const seen = new Map<string, ProposedAutomationActionDraft>();
+
+  for (const draft of allDrafts) {
+    const existing = seen.get(draft.deduplicationKey);
+    if (
+      !existing ||
+      priorityRank[draft.priority] > priorityRank[existing.priority]
+    ) {
+      seen.set(draft.deduplicationKey, draft);
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
+// ---------------------------------------------------------------------------
+// Rule: set_goals — campaign has no ROAS/CPA goals configured
+// ---------------------------------------------------------------------------
+
+export function evaluateSetGoalsRule(
+  input: DetectionInput
+): ProposedAutomationActionDraft[] {
+  const drafts: ProposedAutomationActionDraft[] = [];
+
+  for (const client of input.clients) {
+    const campaigns = input.clientCampaigns.get(client.id) ?? [];
+
+    for (const campaign of campaigns) {
+      if (campaign.goal !== null) continue;
+
+      // Only flag if there's some spend — avoids noise for paused campaigns.
+      const hasSpend = input.insightRows.some(
+        (r) => r.externalCampaignId === campaign.externalCampaignId && r.spend > 0
+      );
+      if (!hasSpend) continue;
+
+      drafts.push({
+        workspaceId:      client.workspaceId,
+        clientAccountId:  client.id,
+        clientName:       client.name,
+        automationRuleId: null,
+        actionType:       "set_goals",
+        priority:         "medium",
+        entityType:       "campaign",
+        entityId:         campaign.externalCampaignId,
+        entityName:       campaign.name,
+        rationale:        `Campaign has spend but no ROAS or CPA goal set. Without goals, rule-based optimisation cannot evaluate performance or trigger budget actions.`,
+        supportingData:   {},
+        deduplicationKey: dedupKey(client.id, "set_goals", campaign.externalCampaignId),
+        expiresAt:        null,
+      });
+    }
+  }
+
+  return drafts;
+}
+
+// ---------------------------------------------------------------------------
+// Rule: review_pacing — client is materially over- or under-pacing this month
+// ---------------------------------------------------------------------------
+
+export function evaluateReviewPacingRule(
+  input:           DetectionInput,
+  pacingSummaries: ClientPacingSummary[]
+): ProposedAutomationActionDraft[] {
+  const drafts: ProposedAutomationActionDraft[] = [];
+
+  for (const summary of pacingSummaries) {
+    const { clientSnapshot } = summary;
+    const status = clientSnapshot.pacingStatus;
+
+    if (status !== "over_pacing" && status !== "under_pacing") continue;
+
+    // Find matching client info for workspaceId
+    const client = input.clients.find((c) => c.id === summary.clientId);
+    const workspaceId = client?.workspaceId ?? null;
+
+    const pct       = clientSnapshot.pacingPercent;
+    const deviation = Math.abs(pct - 100);
+
+    const priority: AutomationPriority = deviation >= 30 ? "high" : "medium";
+
+    const statusLabel = status === "over_pacing" ? "over-pacing" : "under-pacing";
+    const rationale =
+      status === "over_pacing"
+        ? `Client is ${pct.toFixed(0)}% paced this month — ${deviation.toFixed(0)}% above target. At this rate the monthly budget will be exhausted early.`
+        : `Client is ${pct.toFixed(0)}% paced this month — ${deviation.toFixed(0)}% below target. Underdelivery risks leaving budget unspent.`;
+
+    drafts.push({
+      workspaceId,
+      clientAccountId:  summary.clientId,
+      clientName:       summary.clientName,
+      automationRuleId: null,
+      actionType:       "review_pacing",
+      priority,
+      entityType:       "client",
+      entityId:         summary.clientId,
+      entityName:       summary.clientName,
+      rationale,
+      supportingData:   {
+        pacingStatus:    statusLabel,
+        pacingPercent:   Math.round(pct),
+        spendToDate:     Math.round(clientSnapshot.spendToDate),
+        monthlyBudget:   Math.round(clientSnapshot.monthlyBudget ?? 0),
+        daysElapsed:     clientSnapshot.daysElapsed,
+        daysInPeriod:    clientSnapshot.daysInPeriod,
+      },
+      deduplicationKey: dedupKey(summary.clientId, "review_pacing", summary.clientId),
+      expiresAt:        expiresInDays(5),
+    });
+  }
+
+  return drafts;
+}
+
+// ---------------------------------------------------------------------------
+// buildProposedAutomationActions — async top-level orchestrator
+//   Loads all necessary data in parallel, runs every rule (including pacing),
+//   deduplicates, and returns the complete draft list ready for persistence.
+// ---------------------------------------------------------------------------
+
+export async function buildProposedAutomationActions(
+  workspaceId: string | null
+): Promise<ProposedAutomationActionDraft[]> {
+  const [input, pacingSummaries] = await Promise.all([
+    loadDetectionInput(workspaceId),
+    buildAllClientsPacingSummaries(workspaceId),
+  ]);
+
+  const allDrafts = [
+    ...evaluateAutomationRules(input),                    // pure rules (includes set_goals)
+    ...evaluateReviewPacingRule(input, pacingSummaries),  // pacing rule
+  ];
+
+  // Final dedup across all rules (same key → keep highest priority)
   const priorityRank: Record<string, number> = { low: 0, medium: 1, high: 2 };
   const seen = new Map<string, ProposedAutomationActionDraft>();
 

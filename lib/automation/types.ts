@@ -8,7 +8,9 @@ export type AutomationActionType =
   | "review_creative"
   | "refresh_creative"
   | "run_sync"
-  | "investigate_client";
+  | "investigate_client"
+  | "set_goals"
+  | "review_pacing";
 
 export type AutomationActionStatus =
   | "proposed"

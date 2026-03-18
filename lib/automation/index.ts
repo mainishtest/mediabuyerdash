@@ -18,7 +18,10 @@ export {
   evaluateMissingIntegrationRule,
   evaluateWeakRoasRule,
   evaluateCreativeFatigueRule,
+  evaluateSetGoalsRule,
+  evaluateReviewPacingRule,
   evaluateAutomationRules,
+  buildProposedAutomationActions,
   loadDetectionInput,
 } from "./rules";
 
