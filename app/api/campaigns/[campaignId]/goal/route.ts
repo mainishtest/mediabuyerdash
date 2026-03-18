@@ -9,7 +9,7 @@
 // Protected by NextAuth middleware (all /api routes require auth).
 
 import { NextRequest, NextResponse } from "next/server";
-import { getCampaignGoal, upsertCampaignGoal } from "../../../../lib/campaignGoals/service";
+import { getCampaignGoal, upsertCampaignGoal } from "../../../../../lib/campaignGoals/service";
 
 type RouteParams = { params: { campaignId: string } };
 
