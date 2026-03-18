@@ -29,6 +29,21 @@ import type {
 }                                            from "./types";
 
 // ---------------------------------------------------------------------------
+// Internal type — minimal action row shape needed by this module
+// ---------------------------------------------------------------------------
+
+type ActionRow = {
+  id:              string;
+  workspaceId:     string | null;
+  clientAccountId: string;
+  actionType:      string;
+  status:          string;
+  entityType:      string;
+  entityId:        string;
+  entityName:      string;
+};
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -39,17 +54,6 @@ import type {
 export async function runEligibleAutoExecutions(
   workspaceId: string | null
 ): Promise<AutoExecutionRunSummary> {
-  type ActionRow = {
-    id:              string;
-    workspaceId:     string | null;
-    clientAccountId: string;
-    actionType:      string;
-    status:          string;
-    entityType:      string;
-    entityId:        string;
-    entityName:      string;
-  };
-
   // 1. Load all approved proposed actions
   const approvedActions = await prisma.proposedAutomationAction.findMany({
     where: {
