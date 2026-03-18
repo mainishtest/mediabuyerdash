@@ -20,6 +20,7 @@ import type {
   CampaignPerformanceSnapshot,
   CampaignHealthStatus,
   CampaignActionType,
+  GoalSource,
 } from "../../../../lib/campaignPerformance/types";
 import { SparkLine }   from "../../../../components/charts/SparkLine";
 import { TrendChart }  from "../../../../components/charts/TrendChart";
@@ -117,6 +118,25 @@ function GoalStatusChip({ hasGoal }: { hasGoal: boolean }) {
       Missing goal
     </span>
   );
+}
+
+// Shows where the active goal came from — always shown alongside GoalStatusChip
+function GoalSourceChip({ source }: { source: GoalSource }) {
+  if (source === "explicit") {
+    return (
+      <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-900/20 text-emerald-500 border border-emerald-900/40">
+        Explicit
+      </span>
+    );
+  }
+  if (source === "client_default") {
+    return (
+      <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-900/30 text-indigo-400 border border-indigo-900/40">
+        Client default
+      </span>
+    );
+  }
+  return null;
 }
 
 function statusBadgeVariant(s: string): BadgeVariant {
@@ -370,7 +390,11 @@ function MissingGoalsBanner({
             No campaigns have goals set
           </p>
           <p className="mt-0.5 text-xs text-amber-600">
-            {totalCount} campaign{totalCount !== 1 ? "s" : ""} imported · click &ldquo;Add goal&rdquo; on any campaign or select multiple to bulk-set
+            {totalCount} campaign{totalCount !== 1 ? "s" : ""} imported · set per-campaign goals inline, or{" "}
+            <Link href={`/clients/${clientId}/settings`} className="underline underline-offset-2 hover:text-amber-400">
+              configure client defaults
+            </Link>{" "}
+            as a fallback for all campaigns
           </p>
         </div>
         <button
@@ -390,7 +414,10 @@ function MissingGoalsBanner({
           {missingCount} campaign{missingCount !== 1 ? "s" : ""} missing goals
         </p>
         <p className="mt-0.5 text-xs text-amber-600">
-          {totalCount - missingCount} of {totalCount} campaigns have goals · click &ldquo;Add goal&rdquo; to set inline
+          {totalCount - missingCount} of {totalCount} have goals · click &ldquo;Add goal&rdquo; inline or{" "}
+            <Link href={`/clients/${clientId}/settings`} className="underline underline-offset-2 hover:text-amber-400">
+              set client defaults
+            </Link>
         </p>
       </div>
       <button
@@ -460,9 +487,10 @@ function CampaignCard({
         </div>
       </div>
 
-      {/* Goal status + edit trigger */}
+      {/* Goal status + source + edit trigger */}
       <div className="flex items-center gap-2 flex-wrap">
         <GoalStatusChip hasGoal={hasGoal} />
+        {hasGoal && <GoalSourceChip source={goalOverride ? "explicit" : s.goalSource} />}
         {hasGoal && roasGoal && (
           <span className="text-xs text-slate-500">
             ROAS {roasGoal.toFixed(2)}x · CPA ${cpaGoal?.toFixed(2) ?? "—"}
@@ -595,7 +623,10 @@ function CampaignTableRow({
         {/* Goal column */}
         <td className={TD}>
           <div className="space-y-1">
-            <GoalStatusChip hasGoal={hasGoal} />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <GoalStatusChip hasGoal={hasGoal} />
+              {hasGoal && <GoalSourceChip source={goalOverride ? "explicit" : s.goalSource} />}
+            </div>
             {roasGoal && (
               <p className="text-xs text-slate-500">ROAS {roasGoal.toFixed(2)}x</p>
             )}
@@ -755,7 +786,7 @@ function CampaignActionsSection({ snapshots }: { snapshots: CampaignPerformanceS
 type HealthFilter  = CampaignHealthStatus | "all";
 type StatusFilter  = "all" | "ACTIVE" | "PAUSED";
 type PriorityFilter = "all" | "high" | "medium" | "low";
-type GoalFilter    = "all" | "has_goal" | "missing_goal";
+type GoalFilter    = "all" | "explicit" | "client_default" | "missing_goal";
 
 const SELECT_CLS =
   "rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 " +
@@ -794,7 +825,8 @@ function FilterBar({
         className={SELECT_CLS}
       >
         <option value="all">All campaigns</option>
-        <option value="has_goal">Has goals</option>
+        <option value="explicit">Explicit goals</option>
+        <option value="client_default">Client default</option>
         <option value="missing_goal">Missing goals</option>
       </select>
       <select
@@ -858,22 +890,29 @@ export function CampaignPerformanceView({
 
   const counts = useMemo(() => countCampaignsByHealthStatus(snapshots), [snapshots]);
 
+  // After an inline save the override is "explicit" — use it for source resolution
+  const effectiveSource = (s: CampaignPerformanceSnapshot): GoalSource =>
+    goalOverrides.has(s.externalCampaignId) ? "explicit" : s.goalSource;
+
   const missingGoalsCount = useMemo(
-    () => snapshots.filter((s) => !s.hasGoal && !goalOverrides.has(s.externalCampaignId)).length,
+    () => snapshots.filter((s) => effectiveSource(s) === "none").length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [snapshots, goalOverrides]
   );
 
   const filtered = useMemo(() => {
     return snapshots.filter((s) => {
-      const hasGoalEffective = s.hasGoal || goalOverrides.has(s.externalCampaignId);
-      if (goalFilter === "has_goal"     && !hasGoalEffective) return false;
-      if (goalFilter === "missing_goal" &&  hasGoalEffective) return false;
+      const src = effectiveSource(s);
+      if (goalFilter === "explicit"      && src !== "explicit")       return false;
+      if (goalFilter === "client_default" && src !== "client_default") return false;
+      if (goalFilter === "missing_goal"  && src !== "none")            return false;
       if (healthFilter   !== "all" && s.healthStatus               !== healthFilter)   return false;
       if (statusFilter   !== "all" && s.campaignStatus             !== statusFilter)   return false;
       if (priorityFilter !== "all" && s.recommendation.priority    !== priorityFilter) return false;
       if (search && !s.campaignName.toLowerCase().includes(search.toLowerCase()))      return false;
       return true;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshots, goalFilter, goalOverrides, healthFilter, statusFilter, priorityFilter, search]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -956,12 +995,20 @@ export function CampaignPerformanceView({
               Live metrics for {clientName} · CRM is source of truth for ROAS and CPA · 7-day attribution window
             </p>
           </div>
-          <Link
-            href={`/clients/${clientId}`}
-            className="text-xs text-slate-500 hover:text-slate-300"
-          >
-            Run sync to refresh →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href={`/clients/${clientId}/settings`}
+              className="text-xs text-slate-500 hover:text-slate-300"
+            >
+              Goal defaults →
+            </Link>
+            <Link
+              href={`/clients/${clientId}`}
+              className="text-xs text-slate-500 hover:text-slate-300"
+            >
+              Run sync →
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -1064,10 +1111,24 @@ export function CampaignPerformanceView({
                     </button>
                   }
                 />
-              ) : goalFilter === "has_goal" ? (
+              ) : goalFilter === "explicit" ? (
                 <EmptyState
-                  title="No campaigns have goals yet"
-                  description="Click '+ Add goal' on any campaign to set a ROAS and CPA target inline — no page navigation needed."
+                  title="No campaigns have explicit goals"
+                  description="Use '+ Add goal' on any campaign to set a direct ROAS and CPA target, or configure client defaults as a starting point."
+                  icon="◎"
+                  action={
+                    <button
+                      onClick={() => setGoalFilter("all")}
+                      className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
+                    >
+                      View all campaigns
+                    </button>
+                  }
+                />
+              ) : goalFilter === "client_default" ? (
+                <EmptyState
+                  title="No campaigns using client defaults"
+                  description="Campaigns using the client default appear here. Set defaults in Settings, or all campaigns may already have explicit goals."
                   icon="◎"
                   action={
                     <button

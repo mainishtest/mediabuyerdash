@@ -30,6 +30,14 @@ export interface CampaignRecommendationSummary {
   supportingMetrics: string | null;  // human-readable metric comparison
 }
 
+// ── Goal source ───────────────────────────────────────────────────────────────
+
+// Where the active goal came from (resolution order):
+//   explicit       → MetaCampaignGoal set directly on this campaign
+//   client_default → ClientGoalDefaults falling back for this client
+//   none           → no goal configured at any level
+export type GoalSource = "explicit" | "client_default" | "none";
+
 // ── Main snapshot ─────────────────────────────────────────────────────────────
 
 export interface CampaignPerformanceSnapshot {
@@ -51,7 +59,7 @@ export interface CampaignPerformanceSnapshot {
   evaluatedCpa:  number;  // metaSpend / crmOrders   (0 if no orders)
   evaluatedRoas: number;  // crmRevenue / metaSpend  (0 if no spend)
 
-  // Goals (from CampaignGoal — null if no goal configured)
+  // Goals — resolved from explicit campaign goal or client default (null if neither)
   roasGoalValue: number | null;
   roasGoalType:  "high" | "low" | null;
   cpaGoalValue:  number | null;
@@ -65,7 +73,8 @@ export interface CampaignPerformanceSnapshot {
 
   // Metadata
   hasGoal:        boolean;
-  dataWindowDays: number;  // attribution window used (7 days per product rules)
+  goalSource:     GoalSource;  // where the active goal came from
+  dataWindowDays: number;      // attribution window used (7 days per product rules)
 }
 
 // ── Aggregate counts ──────────────────────────────────────────────────────────

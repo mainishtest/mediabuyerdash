@@ -2,17 +2,17 @@
 // Builds CampaignPerformanceSnapshot[] for a client by joining:
 //   - MetaSyncedCampaign + MetaSyncedInsight  → delivery metrics (spend)
 //   - ShopifyOrder                            → CRM revenue + orders (source of truth)
-//   - MetaCampaignGoal                        → goal targets (direct link by externalCampaignId)
+//   - MetaCampaignGoal                        → explicit campaign-level goal targets
+//   - ClientGoalDefaults                      → fallback goals when no explicit goal set
 //
 // MEASUREMENT POLICY: evaluatedRoas and evaluatedCpa use CRM figures only.
-// Meta data provides spend; Shopify provides the revenue and order count.
-//
-// GOAL LINKING: Goals are read from MetaCampaignGoal (direct FK on externalCampaignId).
-// This replaces the previous name-based join through internal Campaign records.
+// GOAL RESOLUTION ORDER: explicit goal → client default → no goal
+// (centralised in lib/campaignGoals/resolveGoal.ts)
 
 import { prisma } from "../db";
 import { evaluateCampaignAgainstGoals } from "./evaluator";
 import { summarizeCampaignRecommendation } from "./recommendations";
+import { resolveGoal } from "../campaignGoals/resolveGoal";
 import type { CampaignPerformanceSnapshot, CampaignHealthStatus } from "./types";
 
 export async function buildCampaignPerformanceSnapshots(
@@ -39,8 +39,8 @@ export async function buildCampaignPerformanceSnapshots(
 
   const externalCampaignIds = metaCampaigns.map((c) => c.externalCampaignId);
 
-  // ── 3–5. Parallel fetch ──────────────────────────────────────────────────────
-  const [insightAggs, shopifyOrders, campaignGoals] = await Promise.all([
+  // ── 3–6. Parallel fetch ──────────────────────────────────────────────────────
+  const [insightAggs, shopifyOrders, campaignGoals, clientDefaults] = await Promise.all([
     // 3. Spend aggregated by campaign from insight rows
     prisma.metaSyncedInsight.groupBy({
       by:    ["externalCampaignId"],
@@ -54,20 +54,23 @@ export async function buildCampaignPerformanceSnapshots(
       select: { utmCampaign: true, totalPrice: true },
     }),
 
-    // 5. Goals — direct lookup via MetaCampaignGoal (no name matching needed)
+    // 5. Explicit campaign goals
     prisma.metaCampaignGoal.findMany({
       where: { externalCampaignId: { in: externalCampaignIds } },
+    }),
+
+    // 6. Client-level default goals (fallback)
+    prisma.clientGoalDefaults.findUnique({
+      where: { clientAccountId: clientId },
     }),
   ]);
 
   // ── Build lookup maps ────────────────────────────────────────────────────────
 
-  // Spend by externalCampaignId
   const spendById: Record<string, number> = Object.fromEntries(
     insightAggs.map((r) => [r.externalCampaignId, r._sum.spend ?? 0])
   );
 
-  // CRM aggregation by normalized campaign name (utmCampaign → revenue + orders)
   const crmByName: Record<string, { revenue: number; orders: number }> = {};
   for (const order of shopifyOrders) {
     const key = (order.utmCampaign ?? "").toLowerCase().trim();
@@ -77,14 +80,7 @@ export async function buildCampaignPerformanceSnapshots(
     crmByName[key].orders  += 1;
   }
 
-  // Goals by externalCampaignId (direct, reliable link)
-  type GoalRow = {
-    roasGoalType:  string;
-    roasGoalValue: number;
-    cpaGoalType:   string;
-    cpaGoalValue:  number;
-  };
-  const goalsById: Record<string, GoalRow> = Object.fromEntries(
+  const explicitGoalsById = new Map(
     campaignGoals.map((g) => [g.externalCampaignId, g])
   );
 
@@ -93,15 +89,19 @@ export async function buildCampaignPerformanceSnapshots(
     const metaSpend = spendById[mc.externalCampaignId] ?? 0;
     const nameKey   = mc.name.toLowerCase().trim();
     const crm       = crmByName[nameKey] ?? { revenue: 0, orders: 0 };
-    const goal      = goalsById[mc.externalCampaignId] ?? null;
 
-    // CRM-sourced metrics (product rule: CRM is source of truth for ROAS/CPA)
     const evaluatedRoas = metaSpend > 0 ? crm.revenue / metaSpend : 0;
     const evaluatedCpa  = crm.orders > 0 ? metaSpend / crm.orders  : 0;
 
-    const hasGoal = goal !== null;
+    // Centralised goal resolution: explicit → client default → none
+    const resolved = resolveGoal(
+      explicitGoalsById.get(mc.externalCampaignId) ?? null,
+      clientDefaults
+    );
 
-    // Determine health status before calling evaluator
+    const hasGoal    = resolved !== null;
+    const goalSource = resolved?.goalSource ?? "none";
+
     let healthStatus:  CampaignHealthStatus = "no_data";
     let meetsRoasGoal = false;
     let meetsCpaGoal  = false;
@@ -114,28 +114,26 @@ export async function buildCampaignPerformanceSnapshots(
       const ev = evaluateCampaignAgainstGoals({
         evaluatedRoas,
         evaluatedCpa,
-        roasGoalValue: goal.roasGoalValue,
-        roasGoalType:  goal.roasGoalType as "high" | "low",
-        cpaGoalValue:  goal.cpaGoalValue,
-        cpaGoalType:   goal.cpaGoalType  as "high" | "low",
+        roasGoalValue: resolved!.roasGoalValue,
+        roasGoalType:  resolved!.roasGoalType,
+        cpaGoalValue:  resolved!.cpaGoalValue,
+        cpaGoalType:   resolved!.cpaGoalType,
       });
       healthStatus  = ev.healthStatus;
       meetsRoasGoal = ev.meetsRoasGoal;
       meetsCpaGoal  = ev.meetsCpaGoal;
     }
 
-    const partial = {
-      evaluatedRoas,
-      evaluatedCpa,
-      roasGoalValue: goal?.roasGoalValue ?? null,
-      cpaGoalValue:  goal?.cpaGoalValue  ?? null,
-    };
-
     const recommendation = summarizeCampaignRecommendation(
       healthStatus,
       meetsRoasGoal,
       meetsCpaGoal,
-      partial
+      {
+        evaluatedRoas,
+        evaluatedCpa,
+        roasGoalValue: resolved?.roasGoalValue ?? null,
+        cpaGoalValue:  resolved?.cpaGoalValue  ?? null,
+      }
     );
 
     return {
@@ -149,15 +147,16 @@ export async function buildCampaignPerformanceSnapshots(
       crmOrders:          crm.orders,
       evaluatedCpa,
       evaluatedRoas,
-      roasGoalValue:      goal?.roasGoalValue ?? null,
-      roasGoalType:       (goal?.roasGoalType ?? null) as "high" | "low" | null,
-      cpaGoalValue:       goal?.cpaGoalValue  ?? null,
-      cpaGoalType:        (goal?.cpaGoalType  ?? null) as "high" | "low" | null,
+      roasGoalValue:      resolved?.roasGoalValue ?? null,
+      roasGoalType:       resolved?.roasGoalType  ?? null,
+      cpaGoalValue:       resolved?.cpaGoalValue  ?? null,
+      cpaGoalType:        resolved?.cpaGoalType   ?? null,
       meetsRoasGoal,
       meetsCpaGoal,
       healthStatus,
       recommendation,
       hasGoal,
+      goalSource,
       dataWindowDays: 7,
     };
   });
