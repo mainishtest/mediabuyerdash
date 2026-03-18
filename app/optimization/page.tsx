@@ -21,6 +21,7 @@ import {
   loadAdSetsForCampaigns,
   loadAdsForAdSets,
   loadRawPerformanceInputs,
+  loadAdCreatives,
 }                                from "../../lib/optimization/realDataService";
 import {
   evaluateCampaignsFromReconciledMetrics,
@@ -72,6 +73,7 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
         evaluatedRoas={null}
         dateFrom=""
         dateTo=""
+        adCreatives={{}}
       />
     );
   }
@@ -95,6 +97,10 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
       return loadAdsForAdSets(adSetIds);
     })(),
   ]);
+
+  // Load ad creative data (image, copy, CTA) for the detail panel.
+  const adIds      = ads.map((a) => a.id);
+  const adCreatives = await loadAdCreatives(adIds);
 
   // Run goal-aware evaluations (pure functions — no DB access).
   const campaignOutput = evaluateCampaignsFromReconciledMetrics(
@@ -149,6 +155,7 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
       evaluatedRoas={evaluatedRoas}
       dateFrom={dateFrom}
       dateTo={dateTo}
+      adCreatives={adCreatives}
     />
   );
 }

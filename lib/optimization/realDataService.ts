@@ -177,6 +177,74 @@ export async function loadAdsForAdSets(
 }
 
 // ---------------------------------------------------------------------------
+// Ad creative context — creative image + copy loaded from MetaSyncedCreative
+// via the externalCreativeId on MetaSyncedAd.
+// ---------------------------------------------------------------------------
+
+export type AdCreativeData = {
+  imageUrl:     string | null;
+  thumbnailUrl: string | null;
+  body:         string | null;
+  callToAction: string | null;
+  creativeName: string | null;
+};
+
+/**
+ * Load creative data (image, copy, CTA) for a set of ad IDs.
+ * Joins MetaSyncedAd → MetaSyncedCreative via externalCreativeId.
+ * Returns a map keyed by externalAdId — ads without a synced creative get
+ * a record with all-null fields so the panel can show an empty state.
+ */
+export async function loadAdCreatives(
+  adIds: string[]
+): Promise<Record<string, AdCreativeData>> {
+  if (adIds.length === 0) return {};
+
+  const ads = await prisma.metaSyncedAd.findMany({
+    where:  { externalAdId: { in: adIds } },
+    select: { externalAdId: true, externalCreativeId: true },
+  });
+
+  const creativeIds = [
+    ...new Set(
+      ads.map((a) => a.externalCreativeId).filter((id): id is string => !!id)
+    ),
+  ];
+
+  const creatives =
+    creativeIds.length > 0
+      ? await prisma.metaSyncedCreative.findMany({
+          where:  { externalCreativeId: { in: creativeIds } },
+          select: {
+            externalCreativeId: true,
+            name:               true,
+            imageUrl:           true,
+            thumbnailUrl:       true,
+            body:               true,
+            callToAction:       true,
+          },
+        })
+      : [];
+
+  const creativeById = new Map(creatives.map((c) => [c.externalCreativeId, c]));
+
+  const result: Record<string, AdCreativeData> = {};
+  for (const ad of ads) {
+    const creative = ad.externalCreativeId
+      ? creativeById.get(ad.externalCreativeId)
+      : undefined;
+    result[ad.externalAdId] = {
+      imageUrl:     creative?.imageUrl     ?? null,
+      thumbnailUrl: creative?.thumbnailUrl ?? null,
+      body:         creative?.body         ?? null,
+      callToAction: creative?.callToAction ?? null,
+      creativeName: creative?.name         ?? null,
+    };
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // RawPerformanceInput[] builder from ReconciliationMatch
 // ---------------------------------------------------------------------------
 

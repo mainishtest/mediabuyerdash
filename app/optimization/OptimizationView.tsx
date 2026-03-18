@@ -9,6 +9,7 @@ import type {
   GoalAwareActionType,
   OptimizationPriority,
 } from "../../types/goalAwareOptimization";
+import type { AdCreativeData }   from "../../lib/optimization/realDataService";
 import {
   PageHeader,
   SectionCard,
@@ -19,6 +20,7 @@ import {
   EmptyState,
 } from "../../components/ui";
 import { formatCurrency, formatRoas } from "../../lib/metricUtils";
+import { AdDetailPanel }              from "./AdDetailPanel";
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -152,10 +154,12 @@ function EvaluationTable({
   evaluations,
   title,
   description,
+  onRowClick,
 }: {
   evaluations: GoalAwareEvaluationResult[];
   title:       string;
   description: string;
+  onRowClick?: (ev: GoalAwareEvaluationResult) => void;
 }) {
   if (evaluations.length === 0) {
     return (
@@ -184,11 +188,17 @@ function EvaluationTable({
               <th className={`${TH} text-right`}>Actual CPA</th>
               <th className={TH}>Status</th>
               <th className={TH}>Priority</th>
+              {onRowClick && <th className={TH} />}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
             {evaluations.map((ev) => (
-              <EvaluationRow key={`${ev.entityType}-${ev.entityId}`} ev={ev} TD={TD} />
+              <EvaluationRow
+                key={`${ev.entityType}-${ev.entityId}`}
+                ev={ev}
+                TD={TD}
+                onClick={onRowClick ? () => onRowClick(ev) : undefined}
+              />
             ))}
           </tbody>
         </table>
@@ -197,14 +207,25 @@ function EvaluationTable({
   );
 }
 
-function EvaluationRow({ ev, TD }: { ev: GoalAwareEvaluationResult; TD: string }) {
+function EvaluationRow({
+  ev,
+  TD,
+  onClick,
+}: {
+  ev:      GoalAwareEvaluationResult;
+  TD:      string;
+  onClick?: () => void;
+}) {
   const roasMet  = ev.meetsRoasGoal === true;
   const roasMiss = ev.meetsRoasGoal === false;
   const cpaMet   = ev.meetsCpaGoal  === true;
   const cpaMiss  = ev.meetsCpaGoal  === false;
 
   return (
-    <tr className="hover:bg-slate-800/20 transition-colors">
+    <tr
+      className={`hover:bg-slate-800/20 transition-colors ${onClick ? "cursor-pointer" : ""}`}
+      onClick={onClick}
+    >
       <td className={TD}>
         <span className="font-medium text-white">{ev.entityName}</span>
         <span className="ml-2 text-xs text-slate-600">
@@ -243,6 +264,11 @@ function EvaluationRow({ ev, TD }: { ev: GoalAwareEvaluationResult; TD: string }
           {ev.priority.charAt(0).toUpperCase() + ev.priority.slice(1)}
         </Badge>
       </td>
+      {onClick && (
+        <td className={`${TD} text-right`}>
+          <span className="text-xs text-slate-500 group-hover:text-slate-300">View →</span>
+        </td>
+      )}
     </tr>
   );
 }
@@ -331,6 +357,7 @@ type Props = {
   evaluatedRoas:       number | null;
   dateFrom:            string;
   dateTo:              string;
+  adCreatives:         Record<string, AdCreativeData>;
 };
 
 // ---------------------------------------------------------------------------
@@ -351,9 +378,11 @@ export function OptimizationView({
   evaluatedRoas,
   dateFrom,
   dateTo,
+  adCreatives,
 }: Props) {
   const router = useRouter();
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [filters, setFilters]           = useState<FilterState>(EMPTY_FILTERS);
+  const [selectedAdEv, setSelectedAdEv] = useState<GoalAwareEvaluationResult | null>(null);
 
   function handleClientChange(id: string) {
     if (id) {
@@ -580,18 +609,29 @@ export function OptimizationView({
             />
           )}
 
-          {/* Ad evaluations */}
+          {/* Ad evaluations — rows are clickable to open the creative detail panel */}
           {showAds && (
             <EvaluationTable
               evaluations={filterEvals(adEvaluations)}
               title="Ads"
-              description="Ad-level evaluation using grandparent campaign goals as thresholds."
+              description="Ad-level evaluation using grandparent campaign goals as thresholds. Click an ad to view its creative and take action."
+              onRowClick={(ev) => setSelectedAdEv(ev)}
             />
           )}
 
           {/* Recommendations */}
           <RecommendationsList recommendations={filteredRecs} />
         </>
+      )}
+
+      {/* Ad creative detail panel — shown when buyer clicks an ad row */}
+      {selectedAdEv && (
+        <AdDetailPanel
+          ev={selectedAdEv}
+          creative={adCreatives[selectedAdEv.entityId]}
+          clientId={clientId}
+          onClose={() => setSelectedAdEv(null)}
+        />
       )}
     </div>
   );
