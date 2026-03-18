@@ -110,8 +110,7 @@ export function ClientSettingsView({
   // Form state — seeded from server-loaded defaults
   const [roasValue,     setRoasValue]     = useState(defaults ? String(defaults.defaultRoasGoalValue) : "");
   const [cpaValue,      setCpaValue]      = useState(defaults ? String(defaults.defaultCpaGoalValue)  : "");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const defaultsExt = defaults as any;
+  const defaultsExt = defaults as unknown as Record<string, number | null | undefined>;
   const [ctrValue,      setCtrValue]      = useState(defaultsExt?.targetCtr     != null ? String(defaultsExt.targetCtr)     : "");
   const [cvrValue,      setCvrValue]      = useState(defaultsExt?.targetCvr     != null ? String(defaultsExt.targetCvr)     : "");
   const [maxSpendValue, setMaxSpendValue] = useState(defaultsExt?.maxDailySpend != null ? String(defaultsExt.maxDailySpend) : "");
