@@ -52,13 +52,26 @@ The link to the imported campaign is via `externalCampaignId` — Meta's own cam
 
 ## How to Set or Edit a Goal
 
-1. Navigate to a client → **Campaigns**
-2. Click any campaign name to open the campaign drill-down
-3. In the **Campaign Goals** section, click **Add Goal** or **Edit Goals**
-4. Enter ROAS target and CPA target with their goal types
-5. Click **Save Goals**
+### Inline (single campaign)
 
-The goal is saved via `POST /api/campaigns/[externalCampaignId]/goal` and takes effect on the next page load of the campaign list.
+1. Navigate to a client → **Campaigns**
+2. Click **Add goal** (if missing) or **Edit goal** on any campaign card (mobile) or
+   table row (desktop)
+3. Enter ROAS target and CPA target — the form expands inline, no page navigation
+4. Click **Save goal** — the display updates immediately (optimistic)
+
+`roasGoalType` is hardcoded to `"high"` (exceed the target).
+`cpaGoalType` is hardcoded to `"low"` (stay under the target).
+
+### Bulk (multiple campaigns)
+
+1. Check the checkbox on any campaign cards (mobile) or use the header checkbox on
+   the desktop table to select all visible campaigns
+2. The **Bulk Goal Panel** appears above the filter bar
+3. Enter one ROAS and CPA value, click **Apply to N**
+4. All selected campaigns are updated in parallel — display updates immediately
+
+The panel dismisses after apply and clears the selection.
 
 ---
 
@@ -113,9 +126,31 @@ Where `campaignId` = `externalCampaignId` (Meta's campaign ID).
 
 ---
 
-## Next Steps (Not Implemented Here)
+## Inline Editing Architecture
 
-- **Goal-aware live evaluation** using real-time reconciled CRM data
-- **Bulk goal setting** — set a ROAS/CPA target for multiple campaigns at once
+```
+CampaignPerformanceView.tsx
+  InlineGoalForm          — per-campaign ROAS + CPA form, POSTs to API
+  BulkGoalPanel           — fires parallel POSTs for selected campaign IDs
+  CampaignCard            — mobile: checkbox + inline form expansion
+  CampaignTableRow        — desktop: checkbox + expanded <tr> fragment when editing
+```
+
+State:
+
+| State | Type | Purpose |
+|---|---|---|
+| `editingGoalId` | `string \| null` | Which campaign has the form open (one at a time) |
+| `goalOverrides` | `Map<string, GoalData>` | Optimistic updates — override snapshot until reload |
+| `selected` | `Set<string>` | Campaign IDs selected for bulk apply |
+
+`goalOverrides` persists for the page session. DB writes are durable — a hard reload
+shows the correct server-side value.
+
+---
+
+## Next Steps (Not Implemented)
+
 - **Goal templates** — reusable goal presets per client or campaign objective
 - **Goal history** — track how goals change over time
+- **Seasonal goal ranges** — different targets for different date windows

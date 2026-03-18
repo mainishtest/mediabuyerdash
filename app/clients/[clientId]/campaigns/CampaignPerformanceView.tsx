@@ -4,8 +4,10 @@
 // Campaign-level live performance view.
 // Mobile:  stacked cards, 2-col summary grid, thumb-friendly filters.
 // Desktop: 4-col summary row, full table with all metric columns.
+// Inline goal editing: click "Edit goal" / "Add goal" to set ROAS + CPA without
+// navigating to the campaign detail page. Bulk mode: select campaigns → apply one goal.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition, Fragment } from "react";
 import Link from "next/link";
 import { StatCard }   from "../../../../components/ui/StatCard";
 import { SectionCard } from "../../../../components/ui/SectionCard";
@@ -22,6 +24,13 @@ import type {
 import { SparkLine }   from "../../../../components/charts/SparkLine";
 import { TrendChart }  from "../../../../components/charts/TrendChart";
 import type { SparkPoint, DailyPoint } from "../../../../lib/charts/dataService";
+
+// ── Local types ───────────────────────────────────────────────────────────────
+
+type GoalData = {
+  roasGoalValue: number;
+  cpaGoalValue:  number;
+};
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -138,6 +147,206 @@ function GoalDelta({
   );
 }
 
+// ── Inline goal form ──────────────────────────────────────────────────────────
+
+const INPUT_CLS =
+  "w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm " +
+  "text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 " +
+  "focus:ring-emerald-500 min-h-[40px]";
+
+function InlineGoalForm({
+  externalCampaignId,
+  currentRoas,
+  currentCpa,
+  onSave,
+  onCancel,
+}: {
+  externalCampaignId: string;
+  currentRoas:        number | null;
+  currentCpa:         number | null;
+  onSave:             (goal: GoalData) => void;
+  onCancel:           () => void;
+}) {
+  const [roasValue, setRoasValue] = useState(currentRoas ? String(currentRoas) : "");
+  const [cpaValue,  setCpaValue]  = useState(currentCpa  ? String(currentCpa)  : "");
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const roas = parseFloat(roasValue);
+    const cpa  = parseFloat(cpaValue);
+
+    if (!isFinite(roas) || roas <= 0) {
+      setError("ROAS goal must be a positive number (e.g. 2.5)");
+      return;
+    }
+    if (!isFinite(cpa) || cpa <= 0) {
+      setError("CPA goal must be a positive number (e.g. 45.00)");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/campaigns/${externalCampaignId}/goal`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          roasGoalType:  "high",
+          roasGoalValue: roas,
+          cpaGoalType:   "low",
+          cpaGoalValue:  cpa,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error ?? "Failed to save goal");
+        return;
+      }
+      onSave({ roasGoalValue: roas, cpaGoalValue: cpa });
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-3 rounded-lg border border-slate-700 bg-slate-800/60 p-3 space-y-3">
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+        Set Campaign Goals
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">ROAS Target (exceed)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="e.g. 2.50"
+            value={roasValue}
+            onChange={(e) => setRoasValue(e.target.value)}
+            className={INPUT_CLS}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">CPA Target (stay under $)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="e.g. 45.00"
+            value={cpaValue}
+            onChange={(e) => setCpaValue(e.target.value)}
+            className={INPUT_CLS}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      {error && (
+        <p className="text-xs text-rose-400">{error}</p>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50 min-h-[36px]"
+        >
+          {saving ? "Saving…" : "Save goal"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors min-h-[36px]"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── Bulk goal panel ───────────────────────────────────────────────────────────
+
+function BulkGoalPanel({
+  selectedCount,
+  onApply,
+  onClear,
+}: {
+  selectedCount: number;
+  onApply:       (roas: number, cpa: number) => void;
+  onClear:       () => void;
+}) {
+  const [roasValue, setRoasValue] = useState("");
+  const [cpaValue,  setCpaValue]  = useState("");
+  const [error,     setError]     = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function handleApply() {
+    setError(null);
+    const roas = parseFloat(roasValue);
+    const cpa  = parseFloat(cpaValue);
+    if (!isFinite(roas) || roas <= 0) { setError("Enter a valid ROAS target"); return; }
+    if (!isFinite(cpa)  || cpa  <= 0) { setError("Enter a valid CPA target");  return; }
+    startTransition(() => onApply(roas, cpa));
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-indigo-900/60 bg-indigo-950/30 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-indigo-300 mb-2">
+            Bulk goal — {selectedCount} campaign{selectedCount !== 1 ? "s" : ""} selected
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">ROAS</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="e.g. 2.5"
+                value={roasValue}
+                onChange={(e) => setRoasValue(e.target.value)}
+                className="w-28 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[40px]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">CPA ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="e.g. 45"
+                value={cpaValue}
+                onChange={(e) => setCpaValue(e.target.value)}
+                className="w-28 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[40px]"
+              />
+            </div>
+            <button
+              onClick={handleApply}
+              className="rounded-lg bg-indigo-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-600 min-h-[40px]"
+            >
+              Apply to {selectedCount}
+            </button>
+          </div>
+          {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
+        </div>
+        <button
+          onClick={onClear}
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          Clear selection
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Missing Goals Banner ──────────────────────────────────────────────────────
 
 function MissingGoalsBanner({
@@ -161,7 +370,7 @@ function MissingGoalsBanner({
             No campaigns have goals set
           </p>
           <p className="mt-0.5 text-xs text-amber-600">
-            {totalCount} campaign{totalCount !== 1 ? "s" : ""} imported · add goals to enable health scoring and recommendations
+            {totalCount} campaign{totalCount !== 1 ? "s" : ""} imported · click &ldquo;Add goal&rdquo; on any campaign or select multiple to bulk-set
           </p>
         </div>
         <button
@@ -181,7 +390,7 @@ function MissingGoalsBanner({
           {missingCount} campaign{missingCount !== 1 ? "s" : ""} missing goals
         </p>
         <p className="mt-0.5 text-xs text-amber-600">
-          {totalCount - missingCount} of {totalCount} campaigns have goals · click to filter
+          {totalCount - missingCount} of {totalCount} campaigns have goals · click &ldquo;Add goal&rdquo; to set inline
         </p>
       </div>
       <button
@@ -200,21 +409,49 @@ function CampaignCard({
   s,
   clientId,
   sparkData,
+  isEditing,
+  isSelected,
+  goalOverride,
+  onEdit,
+  onCancel,
+  onGoalSaved,
+  onToggleSelect,
 }: {
-  s:         CampaignPerformanceSnapshot;
-  clientId:  string;
-  sparkData: SparkPoint[];
+  s:              CampaignPerformanceSnapshot;
+  clientId:       string;
+  sparkData:      SparkPoint[];
+  isEditing:      boolean;
+  isSelected:     boolean;
+  goalOverride:   GoalData | undefined;
+  onEdit:         () => void;
+  onCancel:       () => void;
+  onGoalSaved:    (goal: GoalData) => void;
+  onToggleSelect: () => void;
 }) {
+  const hasGoal      = goalOverride !== undefined || s.hasGoal;
+  const roasGoal     = goalOverride?.roasGoalValue ?? s.roasGoalValue;
+  const cpaGoal      = goalOverride?.cpaGoalValue  ?? s.cpaGoalValue;
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-      {/* Name + statuses */}
+    <div className={`rounded-xl border bg-slate-900/60 p-4 space-y-3 transition-colors ${
+      isSelected ? "border-indigo-700" : "border-slate-800"
+    }`}>
+      {/* Name + statuses + checkbox */}
       <div className="flex items-start justify-between gap-2">
-        <Link
-          href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
-          className="text-sm font-semibold text-slate-100 leading-tight hover:text-emerald-400 transition-colors"
-        >
-          {s.campaignName}
-        </Link>
+        <div className="flex items-start gap-2 min-w-0">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-700 accent-indigo-500 cursor-pointer"
+          />
+          <Link
+            href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+            className="text-sm font-semibold text-slate-100 leading-tight hover:text-emerald-400 transition-colors"
+          >
+            {s.campaignName}
+          </Link>
+        </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <Badge variant={statusBadgeVariant(s.campaignStatus)}>
             {s.campaignStatus}
@@ -223,26 +460,35 @@ function CampaignCard({
         </div>
       </div>
 
-      {/* Goal status */}
-      <div className="flex items-center gap-2">
-        <GoalStatusChip hasGoal={s.hasGoal} />
-        {s.hasGoal && s.roasGoalValue && (
+      {/* Goal status + edit trigger */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <GoalStatusChip hasGoal={hasGoal} />
+        {hasGoal && roasGoal && (
           <span className="text-xs text-slate-500">
-            ROAS {s.roasGoalValue.toFixed(2)}x · CPA ${s.cpaGoalValue?.toFixed(2) ?? "—"}
+            ROAS {roasGoal.toFixed(2)}x · CPA ${cpaGoal?.toFixed(2) ?? "—"}
           </span>
         )}
-        {!s.hasGoal && (
-          <Link
-            href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
-            className="text-xs text-amber-500 hover:text-amber-300 transition-colors underline underline-offset-2"
-          >
-            Add goal →
-          </Link>
-        )}
+        <button
+          onClick={isEditing ? onCancel : onEdit}
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
+        >
+          {isEditing ? "Cancel" : hasGoal ? "Edit goal" : "Add goal"}
+        </button>
       </div>
 
+      {/* Inline goal form */}
+      {isEditing && (
+        <InlineGoalForm
+          externalCampaignId={s.externalCampaignId}
+          currentRoas={roasGoal ?? null}
+          currentCpa={cpaGoal ?? null}
+          onSave={(goal) => { onGoalSaved(goal); }}
+          onCancel={onCancel}
+        />
+      )}
+
       {/* Spend sparkline */}
-      {sparkData.length > 1 && (
+      {!isEditing && sparkData.length > 1 && (
         <div className="flex items-center gap-2">
           <SparkLine data={sparkData} />
           <span className="text-xs text-slate-600">30d spend trend</span>
@@ -250,33 +496,37 @@ function CampaignCard({
       )}
 
       {/* Key metrics — 2-column */}
-      <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-800/30 p-3">
-        {[
-          { label: "Spend",    value: fmt$(s.metaSpend) },
-          { label: "CRM Rev",  value: fmt$(s.crmRevenue) },
-          { label: "Orders",   value: fmtNum(s.crmOrders) },
-          { label: "ROAS",     value: fmtRoas(s.evaluatedRoas) },
-          { label: "CPA",      value: fmtCpa(s.evaluatedCpa) },
-          { label: "vs Goal",  value: s.hasGoal ? (
-            <span className="text-xs">
-              <GoalDelta actual={s.evaluatedRoas} goal={s.roasGoalValue} higherIsBetter />
-            </span>
-          ) : <span className="text-slate-600 text-xs">No goal</span> },
-        ].map((m) => (
-          <div key={m.label}>
-            <p className="text-xs text-slate-500">{m.label}</p>
-            <p className="text-sm font-medium text-slate-200">{m.value}</p>
-          </div>
-        ))}
-      </div>
+      {!isEditing && (
+        <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-800/30 p-3">
+          {[
+            { label: "Spend",    value: fmt$(s.metaSpend) },
+            { label: "CRM Rev",  value: fmt$(s.crmRevenue) },
+            { label: "Orders",   value: fmtNum(s.crmOrders) },
+            { label: "ROAS",     value: fmtRoas(s.evaluatedRoas) },
+            { label: "CPA",      value: fmtCpa(s.evaluatedCpa) },
+            { label: "vs Goal",  value: roasGoal ? (
+              <span className="text-xs">
+                <GoalDelta actual={s.evaluatedRoas} goal={roasGoal} higherIsBetter />
+              </span>
+            ) : <span className="text-slate-600 text-xs">No goal</span> },
+          ].map((m) => (
+            <div key={m.label}>
+              <p className="text-xs text-slate-500">{m.label}</p>
+              <p className="text-sm font-medium text-slate-200">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Recommendation */}
-      <div className="flex items-start gap-2">
-        <ActionChip action={s.recommendation.actionType} />
-        <p className="text-xs text-slate-400 leading-relaxed">{s.recommendation.reason}</p>
-      </div>
+      {!isEditing && (
+        <div className="flex items-start gap-2">
+          <ActionChip action={s.recommendation.actionType} />
+          <p className="text-xs text-slate-400 leading-relaxed">{s.recommendation.reason}</p>
+        </div>
+      )}
 
-      {s.recommendation.supportingMetrics && (
+      {!isEditing && s.recommendation.supportingMetrics && (
         <p className="text-xs text-slate-600">{s.recommendation.supportingMetrics}</p>
       )}
     </div>
@@ -292,91 +542,130 @@ function CampaignTableRow({
   s,
   clientId,
   sparkData,
+  isEditing,
+  isSelected,
+  goalOverride,
+  onEdit,
+  onCancel,
+  onGoalSaved,
+  onToggleSelect,
 }: {
-  s:         CampaignPerformanceSnapshot;
-  clientId:  string;
-  sparkData: SparkPoint[];
+  s:              CampaignPerformanceSnapshot;
+  clientId:       string;
+  sparkData:      SparkPoint[];
+  isEditing:      boolean;
+  isSelected:     boolean;
+  goalOverride:   GoalData | undefined;
+  onEdit:         () => void;
+  onCancel:       () => void;
+  onGoalSaved:    (goal: GoalData) => void;
+  onToggleSelect: () => void;
 }) {
+  const hasGoal  = goalOverride !== undefined || s.hasGoal;
+  const roasGoal = goalOverride?.roasGoalValue ?? s.roasGoalValue;
+  const cpaGoal  = goalOverride?.cpaGoalValue  ?? s.cpaGoalValue;
+  const colSpan  = 13; // total columns including new checkbox col
+
   return (
-    <tr className="border-b border-slate-800 last:border-0 hover:bg-slate-800/20 transition-colors">
-      <td className={`${TD} max-w-[200px]`}>
-        <Link
-          href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
-          className="font-medium text-slate-100 hover:text-emerald-400 transition-colors truncate block"
-        >
-          {s.campaignName}
-        </Link>
-        <p className="text-xs text-slate-600 font-mono truncate">{s.externalCampaignId}</p>
-      </td>
-      <td className={TD}>
-        <Badge variant={statusBadgeVariant(s.campaignStatus)}>{s.campaignStatus}</Badge>
-      </td>
-      {/* Goal column */}
-      <td className={TD}>
-        <div className="space-y-1">
-          <GoalStatusChip hasGoal={s.hasGoal} />
-          {s.hasGoal && s.roasGoalValue && (
-            <p className="text-xs text-slate-500">
-              ROAS {s.roasGoalValue.toFixed(2)}x
-            </p>
-          )}
-          {s.hasGoal && s.cpaGoalValue && (
-            <p className="text-xs text-slate-500">
-              CPA ${s.cpaGoalValue.toFixed(2)}
-            </p>
-          )}
-          {!s.hasGoal && (
-            <Link
-              href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
-              className="block text-xs text-amber-500 hover:text-amber-300 transition-colors"
+    <Fragment>
+      <tr className={`border-b border-slate-800 last:border-0 transition-colors ${
+        isSelected ? "bg-indigo-950/20" : "hover:bg-slate-800/20"
+      } ${isEditing ? "bg-slate-800/30" : ""}`}>
+        {/* Checkbox */}
+        <td className="px-3 py-3 align-top w-8">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-indigo-500 cursor-pointer"
+          />
+        </td>
+        <td className={`${TD} max-w-[200px]`}>
+          <Link
+            href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+            className="font-medium text-slate-100 hover:text-emerald-400 transition-colors truncate block"
+          >
+            {s.campaignName}
+          </Link>
+          <p className="text-xs text-slate-600 font-mono truncate">{s.externalCampaignId}</p>
+        </td>
+        <td className={TD}>
+          <Badge variant={statusBadgeVariant(s.campaignStatus)}>{s.campaignStatus}</Badge>
+        </td>
+        {/* Goal column */}
+        <td className={TD}>
+          <div className="space-y-1">
+            <GoalStatusChip hasGoal={hasGoal} />
+            {roasGoal && (
+              <p className="text-xs text-slate-500">ROAS {roasGoal.toFixed(2)}x</p>
+            )}
+            {cpaGoal && (
+              <p className="text-xs text-slate-500">CPA ${cpaGoal.toFixed(2)}</p>
+            )}
+            <button
+              onClick={isEditing ? onCancel : onEdit}
+              className="block text-xs text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
             >
-              + Add goal
-            </Link>
-          )}
-        </div>
-      </td>
-      <td className={`${TD} text-right`}>{fmt$(s.metaSpend)}</td>
-      <td className={TD}>
-        <SparkLine data={sparkData} />
-      </td>
-      <td className={`${TD} text-right`}>{fmt$(s.crmRevenue)}</td>
-      <td className={`${TD} text-right`}>{fmtNum(s.crmOrders)}</td>
-      <td className={`${TD} text-right`}>
-        <div className="flex flex-col items-end gap-0.5">
-          <span>{fmtRoas(s.evaluatedRoas)}</span>
-          {s.roasGoalValue && (
-            <span className="text-xs text-slate-500">
-              goal {s.roasGoalValue.toFixed(2)}x
-            </span>
-          )}
-        </div>
-      </td>
-      <td className={`${TD} text-right`}>
-        <div className="flex flex-col items-end gap-0.5">
-          <span>{fmtCpa(s.evaluatedCpa)}</span>
-          {s.cpaGoalValue && (
-            <span className="text-xs text-slate-500">goal ${s.cpaGoalValue.toFixed(2)}</span>
-          )}
-        </div>
-      </td>
-      <td className={`${TD} text-right`}>
-        <div className="flex flex-col items-end gap-0.5">
-          <GoalDelta actual={s.evaluatedRoas} goal={s.roasGoalValue} higherIsBetter />
-          <GoalDelta actual={s.evaluatedCpa}  goal={s.cpaGoalValue}  higherIsBetter={false} />
-        </div>
-      </td>
-      <td className={TD}>
-        <HealthChip status={s.healthStatus} />
-      </td>
-      <td className={TD}>
-        <div className="space-y-1">
-          <ActionChip action={s.recommendation.actionType} />
-          <p className="text-xs text-slate-500 max-w-[180px] leading-relaxed">
-            {s.recommendation.reason}
-          </p>
-        </div>
-      </td>
-    </tr>
+              {isEditing ? "Cancel" : hasGoal ? "Edit" : "+ Add goal"}
+            </button>
+          </div>
+        </td>
+        <td className={`${TD} text-right`}>{fmt$(s.metaSpend)}</td>
+        <td className={TD}>
+          <SparkLine data={sparkData} />
+        </td>
+        <td className={`${TD} text-right`}>{fmt$(s.crmRevenue)}</td>
+        <td className={`${TD} text-right`}>{fmtNum(s.crmOrders)}</td>
+        <td className={`${TD} text-right`}>
+          <div className="flex flex-col items-end gap-0.5">
+            <span>{fmtRoas(s.evaluatedRoas)}</span>
+            {roasGoal && (
+              <span className="text-xs text-slate-500">goal {roasGoal.toFixed(2)}x</span>
+            )}
+          </div>
+        </td>
+        <td className={`${TD} text-right`}>
+          <div className="flex flex-col items-end gap-0.5">
+            <span>{fmtCpa(s.evaluatedCpa)}</span>
+            {cpaGoal && (
+              <span className="text-xs text-slate-500">goal ${cpaGoal.toFixed(2)}</span>
+            )}
+          </div>
+        </td>
+        <td className={`${TD} text-right`}>
+          <div className="flex flex-col items-end gap-0.5">
+            <GoalDelta actual={s.evaluatedRoas} goal={roasGoal ?? null} higherIsBetter />
+            <GoalDelta actual={s.evaluatedCpa}  goal={cpaGoal ?? null}  higherIsBetter={false} />
+          </div>
+        </td>
+        <td className={TD}>
+          <HealthChip status={s.healthStatus} />
+        </td>
+        <td className={TD}>
+          <div className="space-y-1">
+            <ActionChip action={s.recommendation.actionType} />
+            <p className="text-xs text-slate-500 max-w-[180px] leading-relaxed">
+              {s.recommendation.reason}
+            </p>
+          </div>
+        </td>
+      </tr>
+
+      {/* Inline edit row */}
+      {isEditing && (
+        <tr className="border-b border-slate-800 bg-slate-800/40">
+          <td colSpan={colSpan} className="px-4 py-3">
+            <InlineGoalForm
+              externalCampaignId={s.externalCampaignId}
+              currentRoas={roasGoal ?? null}
+              currentCpa={cpaGoal ?? null}
+              onSave={(goal) => { onGoalSaved(goal); }}
+              onCancel={onCancel}
+            />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 
@@ -559,32 +848,90 @@ export function CampaignPerformanceView({
   const [goalFilter,     setGoalFilter]     = useState<GoalFilter>("all");
   const [search,         setSearch]         = useState("");
 
+  // Inline goal editing state
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [goalOverrides,  setGoalOverrides] = useState<Map<string, GoalData>>(new Map());
+
+  // Bulk selection state
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [, startTransition]     = useTransition();
+
   const counts = useMemo(() => countCampaignsByHealthStatus(snapshots), [snapshots]);
 
-  // Missing goals counts (computed from all snapshots, not just filtered)
   const missingGoalsCount = useMemo(
-    () => snapshots.filter((s) => !s.hasGoal).length,
-    [snapshots]
+    () => snapshots.filter((s) => !s.hasGoal && !goalOverrides.has(s.externalCampaignId)).length,
+    [snapshots, goalOverrides]
   );
 
   const filtered = useMemo(() => {
     return snapshots.filter((s) => {
-      if (goalFilter === "has_goal"     && !s.hasGoal) return false;
-      if (goalFilter === "missing_goal" &&  s.hasGoal) return false;
+      const hasGoalEffective = s.hasGoal || goalOverrides.has(s.externalCampaignId);
+      if (goalFilter === "has_goal"     && !hasGoalEffective) return false;
+      if (goalFilter === "missing_goal" &&  hasGoalEffective) return false;
       if (healthFilter   !== "all" && s.healthStatus               !== healthFilter)   return false;
       if (statusFilter   !== "all" && s.campaignStatus             !== statusFilter)   return false;
       if (priorityFilter !== "all" && s.recommendation.priority    !== priorityFilter) return false;
       if (search && !s.campaignName.toLowerCase().includes(search.toLowerCase()))      return false;
       return true;
     });
-  }, [snapshots, goalFilter, healthFilter, statusFilter, priorityFilter, search]);
+  }, [snapshots, goalFilter, goalOverrides, healthFilter, statusFilter, priorityFilter, search]);
 
-  // ── Empty states ───────────────────────────────────────────────────────────
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  function handleGoalSaved(externalCampaignId: string, goal: GoalData) {
+    setGoalOverrides((prev) => new Map(prev).set(externalCampaignId, goal));
+    setEditingGoalId(null);
+  }
+
+  async function handleBulkApply(roas: number, cpa: number) {
+    const ids = Array.from(selected);
+    // fire all requests in parallel — optimistically update immediately
+    const updates = ids.map((id) =>
+      fetch(`/api/campaigns/${id}/goal`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          roasGoalType:  "high",
+          roasGoalValue: roas,
+          cpaGoalType:   "low",
+          cpaGoalValue:  cpa,
+        }),
+      }).catch(() => null)
+    );
+    // optimistic update
+    startTransition(() => {
+      setGoalOverrides((prev) => {
+        const next = new Map(prev);
+        for (const id of ids) next.set(id, { roasGoalValue: roas, cpaGoalValue: cpa });
+        return next;
+      });
+      setSelected(new Set());
+    });
+    await Promise.all(updates);
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    setSelected(new Set(filtered.map((s) => s.externalCampaignId)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  // ── Empty states ──────────────────────────────────────────────────────────
 
   const noSync   = snapshots.length === 0;
   const noFilter = filtered.length === 0 && snapshots.length > 0;
 
-  // ── Summary card data ──────────────────────────────────────────────────────
+  // ── Summary card data ─────────────────────────────────────────────────────
 
   const aboveGoal    = counts.strong + counts.on_target;
   const needsReview  = counts.no_goal + counts.stale + counts.no_data;
@@ -683,6 +1030,15 @@ export function CampaignPerformanceView({
           {/* Opportunities / Risks strip */}
           <OpportunityRiskStrip snapshots={snapshots} />
 
+          {/* Bulk Goal Panel — appears when campaigns are selected */}
+          {selected.size > 0 && (
+            <BulkGoalPanel
+              selectedCount={selected.size}
+              onApply={handleBulkApply}
+              onClear={clearSelection}
+            />
+          )}
+
           {/* Filters */}
           <FilterBar
             healthFilter={healthFilter}     setHealthFilter={setHealthFilter}
@@ -711,7 +1067,7 @@ export function CampaignPerformanceView({
               ) : goalFilter === "has_goal" ? (
                 <EmptyState
                   title="No campaigns have goals yet"
-                  description="Open a campaign from the list below and use the Campaign Goals section to add ROAS and CPA targets."
+                  description="Click '+ Add goal' on any campaign to set a ROAS and CPA target inline — no page navigation needed."
                   icon="◎"
                   action={
                     <button
@@ -734,12 +1090,33 @@ export function CampaignPerformanceView({
             <>
               {/* Mobile: card list */}
               <div className="space-y-3 md:hidden">
+                {/* Select-all shortcut when 2+ campaigns */}
+                {filtered.length > 1 && (
+                  <div className="flex items-center gap-3 px-1">
+                    <button
+                      onClick={selected.size === filtered.length ? clearSelection : selectAllVisible}
+                      className="text-xs text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
+                    >
+                      {selected.size === filtered.length ? "Deselect all" : "Select all"}
+                    </button>
+                    {selected.size > 0 && (
+                      <span className="text-xs text-indigo-400">{selected.size} selected</span>
+                    )}
+                  </div>
+                )}
                 {filtered.map((s) => (
                   <CampaignCard
                     key={s.campaignId}
                     s={s}
                     clientId={clientId}
                     sparkData={sparklines[s.externalCampaignId] ?? []}
+                    isEditing={editingGoalId === s.externalCampaignId}
+                    isSelected={selected.has(s.externalCampaignId)}
+                    goalOverride={goalOverrides.get(s.externalCampaignId)}
+                    onEdit={() => setEditingGoalId(s.externalCampaignId)}
+                    onCancel={() => setEditingGoalId(null)}
+                    onGoalSaved={(goal) => handleGoalSaved(s.externalCampaignId, goal)}
+                    onToggleSelect={() => toggleSelect(s.externalCampaignId)}
                   />
                 ))}
               </div>
@@ -749,6 +1126,19 @@ export function CampaignPerformanceView({
                 <table className="min-w-full">
                   <thead>
                     <tr className="border-b border-slate-700">
+                      <th className="px-3 py-2.5 w-8">
+                        <input
+                          type="checkbox"
+                          checked={selected.size === filtered.length && filtered.length > 0}
+                          onChange={() =>
+                            selected.size === filtered.length
+                              ? clearSelection()
+                              : selectAllVisible()
+                          }
+                          className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-indigo-500 cursor-pointer"
+                          title="Select all visible"
+                        />
+                      </th>
                       <th className={TH}>Campaign</th>
                       <th className={TH}>Status</th>
                       <th className={TH}>Goal</th>
@@ -770,6 +1160,13 @@ export function CampaignPerformanceView({
                         s={s}
                         clientId={clientId}
                         sparkData={sparklines[s.externalCampaignId] ?? []}
+                        isEditing={editingGoalId === s.externalCampaignId}
+                        isSelected={selected.has(s.externalCampaignId)}
+                        goalOverride={goalOverrides.get(s.externalCampaignId)}
+                        onEdit={() => setEditingGoalId(s.externalCampaignId)}
+                        onCancel={() => setEditingGoalId(null)}
+                        onGoalSaved={(goal) => handleGoalSaved(s.externalCampaignId, goal)}
+                        onToggleSelect={() => toggleSelect(s.externalCampaignId)}
                       />
                     ))}
                   </tbody>
