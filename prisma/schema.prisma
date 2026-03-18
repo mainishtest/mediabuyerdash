@@ -95,6 +95,7 @@ model ClientAccount {
   shopifyOrders           ShopifyOrder[]
   clientSyncRuns          ClientSyncRun[]
   goalDefaults            ClientGoalDefaults?
+  budgetPacingTargets     BudgetPacingTarget[]
 }
 
 model Campaign {
@@ -1014,4 +1015,25 @@ model ProposedAutomationAction {
   @@index([clientAccountId])
   @@index([deduplicationKey])
   @@index([status])
+}
+
+// ── Budget Pacing ─────────────────────────────────────────────────────────────
+
+// Monthly (and optional daily) budget targets for a client or campaign.
+// campaignId = null  → client-level target (one per client at most)
+// campaignId = set   → campaign-level target (one per campaign at most)
+// Application-level upsert used instead of @@unique due to nullable campaignId.
+model BudgetPacingTarget {
+  id              String   @id @default(cuid())
+  clientAccountId String
+  campaignId      String?  // null = client-level; externalCampaignId = campaign-level
+  monthlyBudget   Float
+  dailyBudget     Float?   // explicit daily override; if null, implied = monthly / daysInMonth
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([clientAccountId])
+  @@index([clientAccountId, campaignId])
 }

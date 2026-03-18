@@ -12,6 +12,7 @@
 import Link from "next/link";
 import type { AlertEventRow, AlertSeverity }              from "../../lib/alerts/types";
 import type { ProposedAutomationActionRow, AutomationPriority } from "../../lib/automation/types";
+import type { BudgetPacingSnapshot, BudgetPacingStatus } from "../../lib/budgetPacing/types";
 import type {
   OperationsSnapshot,
   OperationsIssue,
@@ -400,16 +401,89 @@ function TopProposedActionsSection({
   );
 }
 
+// ── Pacing risk section ───────────────────────────────────────────────────────
+
+const PACING_STATUS_COLORS: Record<BudgetPacingStatus, string> = {
+  over_pacing:   "bg-rose-900/50 text-rose-300",
+  under_pacing:  "bg-amber-900/50 text-amber-300",
+  on_pacing:     "bg-emerald-900/50 text-emerald-300",
+  no_budget_set: "bg-slate-800 text-slate-500",
+};
+
+const PACING_STATUS_LABELS: Record<BudgetPacingStatus, string> = {
+  over_pacing:   "Over Pacing",
+  under_pacing:  "Under Pacing",
+  on_pacing:     "On Pacing",
+  no_budget_set: "No Budget",
+};
+
+function fmt$(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(1)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
+function PacingRiskSection({ risks }: { risks: BudgetPacingSnapshot[] }) {
+  if (risks.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
+          Pacing Issues
+        </h2>
+        <Link href="/pacing" className="text-xs text-slate-500 hover:text-slate-300">
+          View all →
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {risks.map((r) => (
+          <div
+            key={r.entityId}
+            className={`border-l-4 ${
+              r.pacingStatus === "over_pacing"  ? "border-l-rose-500"  :
+              r.pacingStatus === "under_pacing" ? "border-l-amber-500" : "border-l-slate-700"
+            } rounded-r-lg border border-l-0 border-slate-800 bg-slate-900/40 px-4 py-3`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PACING_STATUS_COLORS[r.pacingStatus]}`}>
+                  {PACING_STATUS_LABELS[r.pacingStatus]}
+                </span>
+                <p className="text-sm text-slate-200 truncate max-w-xs">{r.entityName}</p>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span>{fmt$(r.spendToDate)} spent</span>
+                {r.monthlyBudget && <span>/ {fmt$(r.monthlyBudget)} target</span>}
+                {r.pacingPercent > 0 && (
+                  <span className={
+                    r.pacingStatus === "over_pacing"  ? "text-rose-400"  :
+                    r.pacingStatus === "under_pacing" ? "text-amber-400" : "text-slate-500"
+                  }>
+                    {r.pacingPercent.toFixed(0)}% paced
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function OperationsView({
   snapshot,
   topAlerts = [],
   topProposedActions = [],
+  topPacingRisks = [],
 }: {
   snapshot:             OperationsSnapshot;
   topAlerts?:           AlertEventRow[];
   topProposedActions?:  ProposedAutomationActionRow[];
+  topPacingRisks?:      BudgetPacingSnapshot[];
 }) {
   const hasClients = snapshot.totalClientsCount > 0;
   const genTime    = new Date(snapshot.generatedAt).toLocaleTimeString("en-US", {
@@ -452,6 +526,13 @@ export function OperationsView({
 
           {/* Active Alerts from anomaly detection */}
           <TopAlertsSection alerts={topAlerts} />
+
+          {/* Budget pacing risks — highest-deviation clients this month */}
+          {topPacingRisks.length > 0 && (
+            <div className="mb-8">
+              <PacingRiskSection risks={topPacingRisks} />
+            </div>
+          )}
 
           {/* High-priority proposed automation actions */}
           <TopProposedActionsSection actions={topProposedActions} />
