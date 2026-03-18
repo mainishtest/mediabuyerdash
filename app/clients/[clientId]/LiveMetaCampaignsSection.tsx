@@ -83,9 +83,12 @@ function StatStrip({ data }: { data: ClientMetaData }) {
 
 // ── Mobile campaign card ──────────────────────────────────────────────────────
 
-function CampaignCard({ campaign }: { campaign: ClientMetaCampaignRow }) {
+function CampaignCard({ campaign, clientId }: { campaign: ClientMetaCampaignRow; clientId: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-800/30 p-4">
+    <Link
+      href={`/clients/${clientId}/campaigns/${campaign.externalCampaignId}`}
+      className="block rounded-xl border border-slate-800 bg-slate-800/30 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/50"
+    >
       <div className="mb-2 flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-slate-200 leading-tight">{campaign.name}</p>
         <Badge variant={statusVariant(campaign.status)}>
@@ -121,7 +124,7 @@ function CampaignCard({ campaign }: { campaign: ClientMetaCampaignRow }) {
       <p className="mt-3 text-xs text-slate-600">
         Updated {fmtDate(campaign.updatedAt)}
       </p>
-    </div>
+    </Link>
   );
 }
 
@@ -130,7 +133,7 @@ function CampaignCard({ campaign }: { campaign: ClientMetaCampaignRow }) {
 const TH = "px-4 py-3 text-left text-xs font-medium uppercase tracking-widest text-slate-400";
 const TD = "px-4 py-3 text-sm text-slate-300";
 
-function CampaignTable({ campaigns }: { campaigns: ClientMetaCampaignRow[] }) {
+function CampaignTable({ campaigns, clientId }: { campaigns: ClientMetaCampaignRow[]; clientId: string }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-800">
       <table className="min-w-full text-sm">
@@ -155,7 +158,13 @@ function CampaignTable({ campaigns }: { campaigns: ClientMetaCampaignRow[] }) {
               } hover:bg-slate-800/20`}
             >
               <td className={`${TD} font-medium text-slate-200 max-w-xs`}>
-                <span className="block truncate" title={c.name}>{c.name}</span>
+                <Link
+                  href={`/clients/${clientId}/campaigns/${c.externalCampaignId}`}
+                  className="block truncate hover:text-emerald-400 transition-colors"
+                  title={c.name}
+                >
+                  {c.name}
+                </Link>
                 <span className="block text-xs font-mono text-slate-600 truncate">
                   {c.externalCampaignId}
                 </span>
@@ -299,13 +308,13 @@ export function LiveMetaCampaignsSection({ clientId, data }: Props) {
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">
             {filtered.map((c) => (
-              <CampaignCard key={c.id} campaign={c} />
+              <CampaignCard key={c.id} campaign={c} clientId={clientId} />
             ))}
           </div>
 
           {/* Desktop table */}
           <div className="hidden md:block">
-            <CampaignTable campaigns={filtered} />
+            <CampaignTable campaigns={filtered} clientId={clientId} />
           </div>
 
           <p className="mt-3 text-xs text-slate-600">

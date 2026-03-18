@@ -120,12 +120,17 @@ function GoalDelta({
 
 // ── Mobile campaign card ──────────────────────────────────────────────────────
 
-function CampaignCard({ s }: { s: CampaignPerformanceSnapshot }) {
+function CampaignCard({ s, clientId }: { s: CampaignPerformanceSnapshot; clientId: string }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
       {/* Name + statuses */}
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-100 leading-tight">{s.campaignName}</p>
+        <Link
+          href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+          className="text-sm font-semibold text-slate-100 leading-tight hover:text-emerald-400 transition-colors"
+        >
+          {s.campaignName}
+        </Link>
         <div className="flex shrink-0 items-center gap-1.5">
           <Badge variant={statusBadgeVariant(s.campaignStatus)}>
             {s.campaignStatus}
@@ -173,11 +178,16 @@ function CampaignCard({ s }: { s: CampaignPerformanceSnapshot }) {
 const TH = "px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-widest text-slate-400 whitespace-nowrap";
 const TD = "px-3 py-3 text-sm text-slate-300 align-top";
 
-function CampaignTableRow({ s }: { s: CampaignPerformanceSnapshot }) {
+function CampaignTableRow({ s, clientId }: { s: CampaignPerformanceSnapshot; clientId: string }) {
   return (
     <tr className="border-b border-slate-800 last:border-0 hover:bg-slate-800/20 transition-colors">
       <td className={`${TD} max-w-[200px]`}>
-        <p className="font-medium text-slate-100 truncate">{s.campaignName}</p>
+        <Link
+          href={`/clients/${clientId}/campaigns/${s.externalCampaignId}`}
+          className="font-medium text-slate-100 hover:text-emerald-400 transition-colors truncate block"
+        >
+          {s.campaignName}
+        </Link>
         <p className="text-xs text-slate-600 font-mono truncate">{s.externalCampaignId}</p>
       </td>
       <td className={TD}>
@@ -505,7 +515,7 @@ export function CampaignPerformanceView({
             <>
               {/* Mobile: card list */}
               <div className="space-y-3 md:hidden">
-                {filtered.map((s) => <CampaignCard key={s.campaignId} s={s} />)}
+                {filtered.map((s) => <CampaignCard key={s.campaignId} s={s} clientId={clientId} />)}
               </div>
 
               {/* Desktop: table */}
@@ -527,7 +537,7 @@ export function CampaignPerformanceView({
                   </thead>
                   <tbody>
                     {filtered.map((s) => (
-                      <CampaignTableRow key={s.campaignId} s={s} />
+                      <CampaignTableRow key={s.campaignId} s={s} clientId={clientId} />
                     ))}
                   </tbody>
                 </table>
