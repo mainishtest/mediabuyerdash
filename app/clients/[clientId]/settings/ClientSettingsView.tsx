@@ -1,14 +1,15 @@
 "use client";
 
 // app/clients/[clientId]/settings/ClientSettingsView.tsx
-// Client settings page — currently shows Campaign Goal Defaults.
+// Client settings page — Campaign Goal Defaults.
 //
 // Mobile:  stacked form → coverage summary → apply action, each section full-width.
 // Desktop: defaults form and coverage summary side-by-side (lg: 2-col grid),
 //          apply action spans full width below.
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
+import Link                        from "next/link";
+import { GoalSourceBadge, GoalSourceLegend } from "../../../../components/ui/GoalSourceBadge";
 import type { ClientDefaultsRecord, ClientGoalCoverageSummary } from "../../../../lib/clientGoalDefaults/service";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -107,12 +108,14 @@ export function ClientSettingsView({
   coverage: initialCoverage,
 }: Props) {
   // Form state — seeded from server-loaded defaults
-  const [roasValue, setRoasValue] = useState(
-    defaults ? String(defaults.defaultRoasGoalValue) : ""
-  );
-  const [cpaValue, setCpaValue] = useState(
-    defaults ? String(defaults.defaultCpaGoalValue) : ""
-  );
+  const [roasValue,     setRoasValue]     = useState(defaults ? String(defaults.defaultRoasGoalValue) : "");
+  const [cpaValue,      setCpaValue]      = useState(defaults ? String(defaults.defaultCpaGoalValue)  : "");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const defaultsExt = defaults as any;
+  const [ctrValue,      setCtrValue]      = useState(defaultsExt?.targetCtr     != null ? String(defaultsExt.targetCtr)     : "");
+  const [cvrValue,      setCvrValue]      = useState(defaultsExt?.targetCvr     != null ? String(defaultsExt.targetCvr)     : "");
+  const [maxSpendValue, setMaxSpendValue] = useState(defaultsExt?.maxDailySpend != null ? String(defaultsExt.maxDailySpend) : "");
+  const [showAdvanced,  setShowAdvanced]  = useState(false);
 
   const [saving,  setSaving]  = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -131,33 +134,36 @@ export function ClientSettingsView({
 
   // ── Save defaults ──────────────────────────────────────────────────────────
 
+  function parseOpt(s: string): number | null {
+    const n = parseFloat(s.trim());
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaveErr(null);
     setSaved(false);
 
-    const roas = parseFloat(roasValue);
-    const cpa  = parseFloat(cpaValue);
+    const roas = parseOpt(roasValue);
+    const cpa  = parseOpt(cpaValue);
 
-    if (!isFinite(roas) || roas <= 0) {
+    if (!roas) {
       setSaveErr("Default ROAS must be a positive number (e.g. 2.5)");
-      return;
-    }
-    if (!isFinite(cpa) || cpa <= 0) {
-      setSaveErr("Default CPA must be a positive number (e.g. 45.00)");
       return;
     }
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/clients/${clientId}/goal-defaults`, {
+      // POST to new goals API — writes all 5 fields + keeps legacy fields in sync.
+      const res = await fetch(`/api/goals/client/${clientId}`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          defaultRoasGoalType:  "high",
-          defaultRoasGoalValue: roas,
-          defaultCpaGoalType:   "low",
-          defaultCpaGoalValue:  cpa,
+          targetRoas:    roas,
+          targetCpa:     cpa,
+          targetCtr:     parseOpt(ctrValue),
+          targetCvr:     parseOpt(cvrValue),
+          maxDailySpend: parseOpt(maxSpendValue),
         }),
       });
       if (!res.ok) {
@@ -166,7 +172,6 @@ export function ClientSettingsView({
         return;
       }
       setSaved(true);
-      // Update coverage to reflect defaults now exist
       startTransition(() =>
         setCoverage((prev) => ({
           ...prev,
@@ -217,7 +222,7 @@ export function ClientSettingsView({
   }
 
   const campaignsNeedingDefault = coverage.totalCampaigns - coverage.explicitGoals;
-  const hasUnsavedForm = roasValue !== "" || cpaValue !== "";
+  const hasUnsavedForm = roasValue !== "";
 
   return (
     <>
@@ -253,90 +258,128 @@ export function ClientSettingsView({
 
           {/* ── Default Goals Form ─────────────────────────────────────── */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="mb-1 text-base font-semibold text-slate-100">
-              Campaign Goal Defaults
-            </h2>
-            <p className="mb-5 text-xs text-slate-500">
-              Set a fallback ROAS and CPA target for all campaigns. Campaigns with
-              explicit goals always take priority.
-            </p>
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-base font-semibold text-slate-100">
+                  Campaign Goal Defaults
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Fallback targets for campaigns without explicit goals.
+                </p>
+              </div>
+              <GoalSourceBadge source="client" />
+            </div>
 
             <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className={LABEL_CLS}>
-                  Default ROAS Target
-                  <span className="ml-1 text-slate-600 font-normal">(aim to exceed)</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="e.g. 2.50"
-                  value={roasValue}
-                  onChange={(e) => { setRoasValue(e.target.value); setSaved(false); }}
-                  className={INPUT_CLS}
-                  disabled={saving}
-                />
+
+              {/* Primary: ROAS + CPA */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={LABEL_CLS}>
+                    Target ROAS
+                    <span className="ml-1 text-slate-600 font-normal">(aim to exceed)</span>
+                  </label>
+                  <input
+                    type="number" step="0.01" min="0.01" placeholder="e.g. 2.50"
+                    value={roasValue}
+                    onChange={(e) => { setRoasValue(e.target.value); setSaved(false); }}
+                    className={INPUT_CLS} disabled={saving}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>
+                    Target CPA ($)
+                    <span className="ml-1 text-slate-600 font-normal">(stay under)</span>
+                  </label>
+                  <input
+                    type="number" step="0.01" min="0.01" placeholder="e.g. 45.00"
+                    value={cpaValue}
+                    onChange={(e) => { setCpaValue(e.target.value); setSaved(false); }}
+                    className={INPUT_CLS} disabled={saving}
+                  />
+                </div>
               </div>
 
+              {/* Advanced: CTR, CVR, max spend */}
               <div>
-                <label className={LABEL_CLS}>
-                  Default CPA Target ($)
-                  <span className="ml-1 text-slate-600 font-normal">(stay under)</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="e.g. 45.00"
-                  value={cpaValue}
-                  onChange={(e) => { setCpaValue(e.target.value); setSaved(false); }}
-                  className={INPUT_CLS}
-                  disabled={saving}
-                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  <span>{showAdvanced ? "▲" : "▼"}</span>
+                  Advanced targets
+                  <span className="text-slate-600 font-normal">(CTR, CVR, budget cap)</span>
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                      <label className={LABEL_CLS}>Target CTR (%)</label>
+                      <input
+                        type="number" step="0.01" min="0.001" max="100"
+                        placeholder="e.g. 1.50"
+                        value={ctrValue}
+                        onChange={(e) => { setCtrValue(e.target.value); setSaved(false); }}
+                        className={INPUT_CLS} disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Target CVR (%)</label>
+                      <input
+                        type="number" step="0.01" min="0.001" max="100"
+                        placeholder="e.g. 2.00"
+                        value={cvrValue}
+                        onChange={(e) => { setCvrValue(e.target.value); setSaved(false); }}
+                        className={INPUT_CLS} disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Max Daily Spend ($)</label>
+                      <input
+                        type="number" step="1" min="1"
+                        placeholder="e.g. 500"
+                        value={maxSpendValue}
+                        onChange={(e) => { setMaxSpendValue(e.target.value); setSaved(false); }}
+                        className={INPUT_CLS} disabled={saving}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {saveErr && (
-                <p className="text-xs text-rose-400">{saveErr}</p>
-              )}
-
+              {saveErr && <p className="text-xs text-rose-400">{saveErr}</p>}
               {saved && (
                 <p className="text-xs text-emerald-400">
-                  Defaults saved. Campaigns without explicit goals will now use these targets.
+                  Defaults saved. Campaigns without explicit goals will use these targets.
                 </p>
               )}
 
               <button
                 type="submit"
                 disabled={saving || !hasUnsavedForm}
-                className="w-full rounded-lg bg-emerald-700 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-40 min-h-[44px]"
+                className="w-full rounded-lg bg-emerald-700 py-3 text-sm font-semibold text-white
+                           transition-colors hover:bg-emerald-600 disabled:opacity-40 min-h-[44px]"
               >
-                {saving
-                  ? "Saving…"
-                  : defaults
-                  ? "Update defaults"
-                  : "Save defaults"}
+                {saving ? "Saving…" : defaults ? "Update defaults" : "Save defaults"}
               </button>
             </form>
 
             {/* Current defaults display */}
             {defaults && !saved && (
-              <div className="mt-5 rounded-lg bg-slate-800/40 px-4 py-3 space-y-1">
+              <div className="mt-5 rounded-lg bg-slate-800/40 px-4 py-3 space-y-1.5">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
                   Current defaults
                 </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">ROAS</span>
-                  <span className="text-sm font-medium text-slate-200">
-                    {defaults.defaultRoasGoalValue.toFixed(2)}x (exceed)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">CPA</span>
-                  <span className="text-sm font-medium text-slate-200">
-                    ${defaults.defaultCpaGoalValue.toFixed(2)} (stay under)
-                  </span>
-                </div>
+                {[
+                  { label: "ROAS", value: `${defaults.defaultRoasGoalValue.toFixed(2)}×` },
+                  { label: "CPA",  value: `$${defaults.defaultCpaGoalValue.toFixed(2)}` },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">{label}</span>
+                    <span className="text-sm font-medium text-slate-200">{value}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -386,23 +429,11 @@ export function ClientSettingsView({
             )}
 
             {/* Legend */}
-            <div className="mt-5 space-y-1.5">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
+            <div className="mt-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
                 Resolution order
               </p>
-              {[
-                { color: "bg-emerald-600", label: "Explicit goal", desc: "Set directly on the campaign" },
-                { color: "bg-indigo-600",  label: "Client default", desc: "No explicit goal — uses these defaults" },
-                { color: "bg-amber-600",   label: "Missing",        desc: "No explicit goal, no defaults set" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-start gap-2">
-                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.color}`} />
-                  <div>
-                    <span className="text-xs font-medium text-slate-300">{item.label}</span>
-                    <span className="text-xs text-slate-600"> — {item.desc}</span>
-                  </div>
-                </div>
-              ))}
+              <GoalSourceLegend />
             </div>
           </div>
         </div>

@@ -1,5 +1,7 @@
 // lib/creativePerformance/types.ts
 // Typed models for the creative performance layer.
+
+import type { ResolvedGoal, GoalSource } from "../goals/types";
 //
 // Design rules:
 //   - One CreativePerformanceRow per ad (externalAdId) within a date window.
@@ -62,6 +64,11 @@ export type CreativePerformanceRow = {
   cpa:  number | null;  // spend / conversions; null when conversions = 0
   roas: number;         // revenue / spend; 0 when spend = 0 or revenue = 0
   cvr:  number | null;  // conversions / clicks * 100; null when clicks = 0
+
+  // ── Resolved goal (campaign → client → system default) ───────────────────
+  // Inherited from the campaign this ad belongs to.
+  resolvedGoal: ResolvedGoal;
+  goalSource:   GoalSource;
 };
 
 // ---------------------------------------------------------------------------

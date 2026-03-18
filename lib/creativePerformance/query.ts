@@ -19,6 +19,14 @@ import { prisma }                  from "../db";
 import type { CreativePerformanceRow, CreativePerformanceQuery } from "./types";
 import { computeCreativeMetrics }  from "./metrics";
 import {
+  getCampaignGoalsForCampaigns,
+  getClientGoalsForClients,
+}                                  from "../goals/service";
+import {
+  resolveGoalForCreative,
+  getGoalSource,
+}                                  from "../goals/resolve";
+import {
   attributeOrdersToAds,
   dateRangeToUtc,
   toTimezoneDate,
@@ -219,6 +227,13 @@ export async function getCreativePerformance(
   const creativeMap   = new Map(syncedCreatives.map(c => [c.externalCreativeId, c]));
   const adMap         = new Map(syncedAds.map(a => [a.externalAdId, a]));
 
+  // ── 7b. Load goals for goal resolution ────────────────────────────────────
+  const uniqueCampaignIds = [...new Set(syncedAds.map(a => a.externalCampaignId))];
+  const [campaignGoalMap, clientGoalMap] = await Promise.all([
+    getCampaignGoalsForCampaigns(uniqueCampaignIds),
+    getClientGoalsForClients(clientIds),
+  ]);
+
   const adsForAttribution: AdForAttribution[] = syncedAds.map(a => ({
     externalAdId:        a.externalAdId,
     externalCampaignId:  a.externalCampaignId,
@@ -296,6 +311,12 @@ export async function getCreativePerformance(
 
     const metrics = computeCreativeMetrics(rawMetrics);
 
+    // Resolve goal for this creative (inherits from campaign → client → system default)
+    const campaignGoal  = campaignGoalMap.get(ad.externalCampaignId) ?? null;
+    const clientGoal    = clientGoalMap.get(clientId)                ?? null;
+    const resolvedGoal  = resolveGoalForCreative(campaignGoal, clientGoal);
+    const goalSource    = getGoalSource(campaignGoal, clientGoal);
+
     rows.push({
       adId,
       adName:          ad.name,
@@ -319,6 +340,8 @@ export async function getCreativePerformance(
       windowMatchedConversions: rev?.windowMatch ?? 0,
       unattributedConversions:  totalUnattributed,
       attributionWindowDays:    windowDays,
+      resolvedGoal,
+      goalSource,
     });
   }
 

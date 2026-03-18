@@ -590,10 +590,18 @@ model MetaSyncedCampaign {
 model MetaCampaignGoal {
   id                 String   @id @default(cuid())
   externalCampaignId String   @unique
+  // Legacy fields — kept for backward compat with existing evaluation + alert code.
   roasGoalType       String   // "high" | "low"
   roasGoalValue      Float
   cpaGoalType        String   // "high" | "low"
   cpaGoalValue       Float
+  // Extended goal fields (Phase 3 goals system).
+  // null = not set at this level; resolution falls through to client or system default.
+  targetRoas         Float?
+  targetCpa          Float?
+  targetCtr          Float?   // percentage, e.g. 1.5 means 1.5%
+  targetCvr          Float?   // percentage, e.g. 2.0 means 2.0%
+  maxDailySpend      Float?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -608,10 +616,17 @@ model MetaCampaignGoal {
 model ClientGoalDefaults {
   id                   String   @id @default(cuid())
   clientAccountId      String   @unique
+  // Legacy fields — kept for backward compat.
   defaultRoasGoalType  String   @default("high")  // "high" | "low"
   defaultRoasGoalValue Float
   defaultCpaGoalType   String   @default("low")   // "high" | "low"
   defaultCpaGoalValue  Float
+  // Extended goal fields (Phase 3 goals system).
+  targetRoas           Float?
+  targetCpa            Float?
+  targetCtr            Float?
+  targetCvr            Float?
+  maxDailySpend        Float?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
