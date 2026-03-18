@@ -10,6 +10,7 @@
 // Receives a pre-computed OperationsSnapshot — no data fetching here.
 
 import Link from "next/link";
+import type { AlertEventRow, AlertSeverity } from "../../lib/alerts/types";
 import type {
   OperationsSnapshot,
   OperationsIssue,
@@ -275,7 +276,57 @@ function SummaryStrip({ snapshot }: { snapshot: OperationsSnapshot }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function OperationsView({ snapshot }: { snapshot: OperationsSnapshot }) {
+// ── Top alerts strip (for Operations page) ───────────────────────────────────
+
+function alertSeverityBorder(s: AlertSeverity) {
+  if (s === "high")   return "border-l-rose-500";
+  if (s === "medium") return "border-l-amber-500";
+  return "border-l-slate-600";
+}
+function alertSeverityBadge(s: AlertSeverity) {
+  if (s === "high")   return "bg-rose-900/50 text-rose-300";
+  if (s === "medium") return "bg-amber-900/50 text-amber-300";
+  return "bg-slate-800 text-slate-400";
+}
+
+function TopAlertsSection({ alerts }: { alerts: AlertEventRow[] }) {
+  if (alerts.length === 0) return null;
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-50">Active Alerts</h2>
+          <p className="text-xs text-slate-500">Top open anomalies across all clients.</p>
+        </div>
+        <Link href="/alerts" className="text-xs text-slate-500 hover:text-slate-300">
+          View all alerts →
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {alerts.map((a) => (
+          <div
+            key={a.id}
+            className={`border-l-4 ${alertSeverityBorder(a.severity)} rounded-r-lg border border-l-0 border-slate-800 bg-slate-900/40 px-4 py-3`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ${alertSeverityBadge(a.severity)}`}>
+                  {a.severity}
+                </span>
+                <p className="text-sm text-slate-200">{a.summary}</p>
+              </div>
+              <span className="shrink-0 text-xs text-slate-600">{a.clientName}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export function OperationsView({ snapshot, topAlerts = [] }: { snapshot: OperationsSnapshot; topAlerts?: AlertEventRow[] }) {
   const hasClients = snapshot.totalClientsCount > 0;
   const genTime    = new Date(snapshot.generatedAt).toLocaleTimeString("en-US", {
     hour: "numeric", minute: "2-digit", hour12: true,
@@ -314,6 +365,9 @@ export function OperationsView({ snapshot }: { snapshot: OperationsSnapshot }) {
         <>
           {/* Summary strip */}
           <SummaryStrip snapshot={snapshot} />
+
+          {/* Active Alerts from anomaly detection */}
+          <TopAlertsSection alerts={topAlerts} />
 
           {/* Issues + Opportunities — 2-col on desktop, stacked on mobile */}
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

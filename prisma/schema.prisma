@@ -88,6 +88,7 @@ model ClientAccount {
   reconciliationMatches   ReconciliationMatch[]
   reconciliationSummaries          ReconciliationSummary[]
   reconciledCampaignPerformances   ReconciledCampaignPerformance[]
+  alertEvents                      AlertEvent[]
   metaSelectedAccounts             MetaSelectedAdAccount[]
   shopifyConnections      ShopifyConnection[]
   shopifyOrders           ShopifyOrder[]
@@ -794,6 +795,38 @@ model ReconciledCampaignPerformance {
 
   @@unique([clientAccountId, externalCampaignId, dateFrom, dateTo])
   @@index([clientAccountId, dateFrom])
+}
+
+// Alert events detected by the anomaly detection engine.
+// Created/updated on each detection run; dismissed by user action.
+model AlertEvent {
+  id                String    @id @default(cuid())
+  workspaceId       String?
+  clientAccountId   String
+  clientName        String
+  alertType         String    // AlertType values
+  severity          String    // AlertSeverity values
+  status            String    @default("open") // open | acknowledged | resolved
+  source            String    // AlertSource values
+  entityType        String    // "client" | "campaign" | "integration"
+  entityId          String
+  entityName        String
+  summary           String
+  supportingMetrics String    @default("{}") // JSON-encoded Record<string,string|number>
+  deduplicationKey  String    // {clientId}:{alertType}:{entityId} — used for upsert logic
+  detectedAt        DateTime  @default(now())
+  lastDetectedAt    DateTime  @default(now())
+  acknowledgedAt    DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([clientAccountId, status])
+  @@index([status, severity])
+  @@index([workspaceId, status])
+  @@index([deduplicationKey])
 }
 
 // ── Client-scoped sync runs ───────────────────────────────────────────────────

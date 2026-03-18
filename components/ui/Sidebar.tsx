@@ -14,6 +14,7 @@ interface NavItem {
 // Primary nav — only routes that exist and matter to the agency owner.
 const NAV_ITEMS: NavItem[] = [
   { href: "/operations",     label: "Operations"    },
+  { href: "/alerts",         label: "Alerts"        },
   { href: "/dashboard",      label: "Dashboard"     },
   { href: "/clients",        label: "Clients"       },
   { href: "/integrations",   label: "Integrations"  },
