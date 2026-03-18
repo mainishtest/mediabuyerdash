@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/reconciliation", label: "Reconciliation" },
   { href: "/optimization",   label: "Optimization"  },
   { href: "/creative-lab",   label: "Creative Lab"  },
+  { href: "/notifications",  label: "Notifications" },
 ];
 
 function SidebarFooter({ onClose }: { onClose?: () => void }) {

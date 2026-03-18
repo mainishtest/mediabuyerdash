@@ -22,8 +22,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships         WorkspaceMembership[]
-  passwordResetTokens PasswordResetToken[]
+  memberships            WorkspaceMembership[]
+  passwordResetTokens    PasswordResetToken[]
+  notificationPreference NotificationPreference?
+  notificationLogs       NotificationLog[]
 }
 
 // Single-use password reset tokens. Expire after 1 hour.
@@ -63,6 +65,50 @@ model WorkspaceMembership {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
+}
+
+// ── Notification preferences & delivery log ───────────────────────────────────
+
+// Per-user opt-in preferences for email notifications.
+// Created with defaults on first access; updated by the user on /notifications.
+model NotificationPreference {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  emailEnabled      Boolean  @default(true)
+  immediateAlerts   Boolean  @default(true)   // send high-priority alerts as they occur
+  dailyDigest       Boolean  @default(true)   // send a daily summary email
+  alertHighPriority Boolean  @default(true)   // include high-priority alert emails
+  alertSyncFailure  Boolean  @default(true)   // include stale/failed sync alerts
+  alertPacing       Boolean  @default(true)   // include pacing issue alerts
+  alertBelowGoal    Boolean  @default(true)   // include campaigns-below-goal alerts
+  alertMissingGoals Boolean  @default(false)  // include missing-goals recommendations
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Audit log for every notification attempted.
+// deduplicationKey prevents double-sends for the same event + user.
+model NotificationLog {
+  id               String    @id @default(cuid())
+  userId           String
+  workspaceId      String?
+  channel          String    @default("email")    // email (v1 only)
+  eventType        String                          // immediate_alert | daily_digest
+  priority         String    @default("medium")   // low | medium | high
+  subject          String
+  deduplicationKey String?
+  status           String    @default("pending")  // pending | sent | failed | skipped
+  errorMessage     String?
+  sentAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([deduplicationKey])
 }
 
 // ── Ad hierarchy ────────────────────────────────────────────────────────────
