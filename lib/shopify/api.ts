@@ -124,9 +124,37 @@ async function shopifyGraphQL<T>(
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
- * Fetch all orders processed within the last `dayRange` days.
- * Uses cursor-based pagination so large stores are handled safely.
+ * Stream orders page-by-page since `since`, calling `onPage` after each page.
+ * This avoids accumulating all orders in memory and lets the caller write to
+ * the DB incrementally — critical for large stores or tight serverless timeouts.
  */
+export async function streamOrdersSince(
+  shopDomain: string,
+  accessToken: string,
+  since: Date,
+  onPage: (orders: RawShopifyOrder[]) => Promise<void>
+): Promise<void> {
+  const sinceStr  = since.toISOString().slice(0, 10);
+  let cursor: string | null = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const data: OrdersQueryData = await shopifyGraphQL<OrdersQueryData>(
+      shopDomain,
+      accessToken,
+      ORDERS_QUERY,
+      { first: 50, after: cursor, query: `created_at:>='${sinceStr}'` }
+    );
+
+    const orders = data.orders.edges.map((e: { node: RawShopifyOrder }) => e.node);
+    if (orders.length > 0) await onPage(orders);
+
+    hasNextPage = data.orders.pageInfo.hasNextPage;
+    cursor      = data.orders.pageInfo.endCursor;
+  }
+}
+
+/** @deprecated Use streamOrdersSince for large stores. Kept for compatibility. */
 export async function fetchRecentOrders(
   shopDomain: string,
   accessToken: string,
@@ -134,29 +162,9 @@ export async function fetchRecentOrders(
 ): Promise<RawShopifyOrder[]> {
   const since = new Date();
   since.setDate(since.getDate() - dayRange);
-  const sinceStr = since.toISOString().slice(0, 10);
-
-  const allOrders: RawShopifyOrder[] = [];
-  let cursor: string | null = null;
-  let hasNextPage             = true;
-  const pageSize              = 50;
-
-  while (hasNextPage) {
-    const data: OrdersQueryData = await shopifyGraphQL<OrdersQueryData>(
-      shopDomain,
-      accessToken,
-      ORDERS_QUERY,
-      {
-        first: pageSize,
-        after: cursor,
-        query: `created_at:>='${sinceStr}'`,
-      }
-    );
-
-    allOrders.push(...data.orders.edges.map((e: { node: RawShopifyOrder }) => e.node));
-    hasNextPage = data.orders.pageInfo.hasNextPage;
-    cursor      = data.orders.pageInfo.endCursor;
-  }
-
-  return allOrders;
+  const all: RawShopifyOrder[] = [];
+  await streamOrdersSince(shopDomain, accessToken, since, async (page) => {
+    all.push(...page);
+  });
+  return all;
 }

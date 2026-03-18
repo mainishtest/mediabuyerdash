@@ -1,4 +1,5 @@
-export const dynamic = "force-dynamic";
+export const dynamic    = "force-dynamic";
+export const maxDuration = 300;
 
 import { notFound }              from "next/navigation";
 import { prisma }                from "../../../../../lib/db";

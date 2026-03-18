@@ -1,7 +1,7 @@
 import { getShopifyConnectionById, getClientShopifyConnection } from "./db";
-import { fetchRecentOrders }        from "./api";
+import { streamOrdersSince }        from "./api";
 import { mapOrder, mapLineItemsForOrder } from "./mappers";
-import { createSyncLog, completeSyncLog, upsertOrder, replaceLineItems } from "./syncDb";
+import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems } from "./syncDb";
 
 export interface ShopifySyncSummary {
   status:          "completed" | "partial" | "failed";
@@ -13,8 +13,9 @@ export interface ShopifySyncSummary {
 }
 
 /**
- * Orchestrate a full read-only Shopify order sync for a given connection ID.
- * - Fetches the last 30 days of orders via the GraphQL Admin API.
+ * Orchestrate an incremental Shopify order sync for a given connection ID.
+ * - Fetches orders since the latest already-synced order (fallback: 30 days).
+ * - Streams page-by-page, writing to DB as each page arrives.
  * - Upserts each order (with workspaceId + clientAccountId) and replaces line items.
  * - Writes a ShopifySyncLog audit entry.
  * - Returns a summary for the UI.
@@ -77,34 +78,42 @@ async function _runSync(
   const counts  = { ordersSynced: 0, lineItemsSynced: 0 };
   const errors: string[] = [];
 
+  // Incremental window: start from 1 day before the latest order so we
+  // catch any late-arriving updates, falling back to 30 days on first sync.
+  const latestOrderDate = await getLatestOrderDate(connection.id);
+  const since = latestOrderDate
+    ? new Date(latestOrderDate.getTime() - 24 * 60 * 60 * 1000)
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   try {
-    const rawOrders = await fetchRecentOrders(
+    await streamOrdersSince(
       connection.shopDomain,
       connection.accessToken,
-      30
-    );
+      since,
+      async (pageOrders) => {
+        for (const rawOrder of pageOrders) {
+          try {
+            const mapped = mapOrder(
+              rawOrder,
+              connection.id,
+              connection.clientAccountId ?? null,
+              connection.workspaceId     ?? null
+            );
+            const saved = await upsertOrder(mapped);
 
-    for (const rawOrder of rawOrders) {
-      try {
-        const mapped = mapOrder(
-          rawOrder,
-          connection.id,
-          connection.clientAccountId ?? null,
-          connection.workspaceId     ?? null
-        );
-        const saved = await upsertOrder(mapped);
+            const lineItems = mapLineItemsForOrder(rawOrder, saved.id);
+            await replaceLineItems(saved.id, lineItems);
 
-        const lineItems = mapLineItemsForOrder(rawOrder, saved.id);
-        await replaceLineItems(saved.id, lineItems);
-
-        counts.ordersSynced   += 1;
-        counts.lineItemsSynced += lineItems.length;
-      } catch (err) {
-        errors.push(
-          `Order ${rawOrder.id}: ${err instanceof Error ? err.message : String(err)}`
-        );
+            counts.ordersSynced   += 1;
+            counts.lineItemsSynced += lineItems.length;
+          } catch (err) {
+            errors.push(
+              `Order ${rawOrder.id}: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
       }
-    }
+    );
   } catch (err) {
     errors.push(
       `Order fetch failed: ${err instanceof Error ? err.message : String(err)}`

@@ -39,6 +39,16 @@ export async function getLatestSyncLog(shopifyConnectionId: string) {
   });
 }
 
+/** Returns the most recent orderCreatedAt for this connection, or null if no orders exist. */
+export async function getLatestOrderDate(shopifyConnectionId: string): Promise<Date | null> {
+  const latest = await prisma.shopifyOrder.findFirst({
+    where:   { shopifyConnectionId },
+    orderBy: { orderCreatedAt: "desc" },
+    select:  { orderCreatedAt: true },
+  });
+  return latest?.orderCreatedAt ?? null;
+}
+
 // ── Order + line-item writes ───────────────────────────────────────────────────
 
 export async function upsertOrder(order: MappedOrder) {
