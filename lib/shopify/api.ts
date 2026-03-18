@@ -25,15 +25,19 @@ export interface RawShopifyOrder {
   totalTaxSet:        RawShopifyMoneyBag;
   totalDiscountsSet:  RawShopifyMoneyBag;
   customer?: { id: string; email?: string };
-  utmParameters?: {
-    source?:   string;
-    medium?:   string;
-    campaign?: string;
-    content?:  string;
-    term?:     string;
+  customerJourneySummary?: {
+    firstVisit?: {
+      utmParameters?: {
+        source?:   string;
+        medium?:   string;
+        campaign?: string;
+        content?:  string;
+        term?:     string;
+      };
+      landingPage?:  string;
+      referrerUrl?:  string;
+    };
   };
-  landingSite?:   string;
-  referringSite?: string;
   lineItems: {
     edges: Array<{ node: RawShopifyLineItem }>;
   };
@@ -62,9 +66,13 @@ const ORDERS_QUERY = `
           totalTaxSet        { shopMoney { amount } }
           totalDiscountsSet  { shopMoney { amount } }
           customer           { id email }
-          utmParameters      { source medium campaign content term }
-          landingSite
-          referringSite
+          customerJourneySummary {
+            firstVisit {
+              utmParameters { source medium campaign content term }
+              landingPage
+              referrerUrl
+            }
+          }
           lineItems(first: 50) {
             edges {
               node {

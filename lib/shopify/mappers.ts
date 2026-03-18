@@ -61,13 +61,13 @@ export function mapOrder(
     totalDiscount:   money(raw.totalDiscountsSet),
     customerId:      raw.customer?.id          ?? null,
     customerEmail:   raw.customer?.email       ?? null,
-    utmSource:       raw.utmParameters?.source   ?? null,
-    utmMedium:       raw.utmParameters?.medium   ?? null,
-    utmCampaign:     raw.utmParameters?.campaign ?? null,
-    utmContent:      raw.utmParameters?.content  ?? null,
-    utmTerm:         raw.utmParameters?.term      ?? null,
-    landingPage:     raw.landingSite   ?? null,
-    referringSite:   raw.referringSite ?? null,
+    utmSource:       raw.customerJourneySummary?.firstVisit?.utmParameters?.source   ?? null,
+    utmMedium:       raw.customerJourneySummary?.firstVisit?.utmParameters?.medium   ?? null,
+    utmCampaign:     raw.customerJourneySummary?.firstVisit?.utmParameters?.campaign ?? null,
+    utmContent:      raw.customerJourneySummary?.firstVisit?.utmParameters?.content  ?? null,
+    utmTerm:         raw.customerJourneySummary?.firstVisit?.utmParameters?.term     ?? null,
+    landingPage:     raw.customerJourneySummary?.firstVisit?.landingPage  ?? null,
+    referringSite:   raw.customerJourneySummary?.firstVisit?.referrerUrl  ?? null,
   };
 }
 
