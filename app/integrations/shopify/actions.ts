@@ -90,9 +90,28 @@ export async function connectShopifyClientCredentialsAction(
     );
 
     if (!tokenRes.ok) {
-      const text = await tokenRes.text().catch(() => "");
+      const contentType = tokenRes.headers.get("content-type") ?? "";
+      let shopifyError = "";
+
+      if (contentType.includes("application/json")) {
+        const errJson = await tokenRes.json().catch(() => ({})) as { error?: string; error_description?: string };
+        shopifyError = errJson.error_description ?? errJson.error ?? "";
+      } else {
+        // Shopify returns HTML for some errors — extract the plain-text message
+        const html = await tokenRes.text().catch(() => "");
+        const match = html.match(/Oauth error ([^<:]+):\s*([^<]+)/);
+        shopifyError = match ? `${match[1].trim()}: ${match[2].trim()}` : "";
+      }
+
+      if (shopifyError.includes("app_not_installed")) {
+        return {
+          error:
+            "This app is not installed on the store. Install the custom app on the store first (Shopify admin → Apps → Develop apps → Install), then try again.",
+        };
+      }
+
       return {
-        error: `Shopify rejected the credentials (HTTP ${tokenRes.status}). Check your client ID and secret. ${text}`.trim(),
+        error: `Shopify rejected the credentials (HTTP ${tokenRes.status})${shopifyError ? `: ${shopifyError}` : ". Check your client ID and secret."}`,
       };
     }
 
