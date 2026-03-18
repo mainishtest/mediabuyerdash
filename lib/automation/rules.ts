@@ -16,6 +16,7 @@
 // recommendations only — they require human approval before any execution.
 
 import type { DetectionInput }          from "../alerts/detectors";
+import { loadDetectionInput }           from "../alerts/detectors";
 import { normalizeUtmValue }            from "../reconciliation/utils";
 import {
   buildAllClientsPacingSummaries,
@@ -633,5 +634,5 @@ export async function buildProposedAutomationActions(
   return Array.from(seen.values());
 }
 
-// Public re-export of loader so callers only need this module.
-export { loadDetectionInput } from "../alerts/detectors";
+// Re-export loader so callers only need this module.
+export { loadDetectionInput };
