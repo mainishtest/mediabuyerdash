@@ -87,7 +87,7 @@ export function SourceOfTruthSection({ clientId, rows, dateFrom, dateTo }: Props
             <Link href={`/reconciliation?clientId=${clientId}`} className="text-slate-400 hover:text-slate-200 underline">
               Reconciliation
             </Link>{" "}
-            and click "Run Reconciliation" to compute CRM-verified metrics.
+            and click &ldquo;Run Reconciliation&rdquo; to compute CRM-verified metrics.
           </p>
         </div>
       ) : (
