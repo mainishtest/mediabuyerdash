@@ -22,7 +22,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/integrations",   label: "Integrations"  },
   { href: "/reconciliation", label: "Reconciliation" },
   { href: "/optimization",   label: "Optimization"  },
-  { href: "/creative-lab",   label: "Creative Lab"  },
+  { href: "/creative-lab",            label: "Creative Lab"    },
+  { href: "/creative-fatigue",        label: "Creative Fatigue" },
   { href: "/notifications",             label: "Notifications"   },
   { href: "/automation/auto-execution", label: "Auto-Execution"  },
 ];
