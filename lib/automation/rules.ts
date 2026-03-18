@@ -485,7 +485,6 @@ export function evaluatePauseCampaignRule(
 
     for (const campaign of campaigns) {
       if (!campaign.goal) continue;
-      if (campaign.status !== "ACTIVE") continue;
 
       const reconciled = reconciledList.find(
         (r) => r.externalCampaignId === campaign.externalCampaignId
