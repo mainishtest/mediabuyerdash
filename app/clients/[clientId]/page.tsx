@@ -45,6 +45,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
         currency:  dbAccount.currency,
         timezone:  dbAccount.timezone,
         createdAt: dbAccount.createdAt.toISOString().slice(0, 10),
+        clientPortalPasswordHash: dbAccount.clientPortalPasswordHash ?? null,
       }
     : null;
 

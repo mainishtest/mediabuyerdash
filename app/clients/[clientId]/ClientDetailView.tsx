@@ -107,6 +107,14 @@ export function ClientDetailView({
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalCopied, setPortalCopied] = useState(false);
 
+  // Portal password state
+  const [portalPassword,        setPortalPassword]        = useState("");
+  const [portalPasswordSaving,  setPortalPasswordSaving]  = useState(false);
+  const [portalPasswordMsg,     setPortalPasswordMsg]     = useState<string | null>(null);
+  const [portalPasswordSet,     setPortalPasswordSet]     = useState(
+    !!(account as { clientPortalPasswordHash?: string | null }).clientPortalPasswordHash
+  );
+
   async function generatePortalLink() {
     setPortalLoading(true);
     try {
@@ -127,6 +135,44 @@ export function ClientDetailView({
     navigator.clipboard.writeText(portalLink);
     setPortalCopied(true);
     setTimeout(() => setPortalCopied(false), 2000);
+  }
+
+  async function savePortalPassword() {
+    if (!portalPassword.trim()) return;
+    setPortalPasswordSaving(true);
+    setPortalPasswordMsg(null);
+    try {
+      const res = await fetch(`/api/clients/${account.id}/portal-password`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ password: portalPassword.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setPortalPasswordSet(true);
+      setPortalPassword("");
+      setPortalPasswordMsg("Password set — share it with your client alongside the link.");
+      setTimeout(() => setPortalPasswordMsg(null), 4000);
+    } catch {
+      setPortalPasswordMsg("Failed to save password.");
+    } finally {
+      setPortalPasswordSaving(false);
+    }
+  }
+
+  async function clearPortalPassword() {
+    setPortalPasswordSaving(true);
+    setPortalPasswordMsg(null);
+    try {
+      await fetch(`/api/clients/${account.id}/portal-password`, { method: "DELETE" });
+      setPortalPasswordSet(false);
+      setPortalPassword("");
+      setPortalPasswordMsg("Password removed — portal is now open to anyone with the link.");
+      setTimeout(() => setPortalPasswordMsg(null), 4000);
+    } catch {
+      setPortalPasswordMsg("Failed to remove password.");
+    } finally {
+      setPortalPasswordSaving(false);
+    }
   }
 
   const [goalOverrides, setGoalOverrides] = useState<Record<string, GoalOverride>>(
@@ -302,6 +348,59 @@ export function ClientDetailView({
             </a>
           </div>
         )}
+
+        {/* Portal password management */}
+        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="text-xs font-semibold text-slate-400">Portal Password</p>
+            {portalPasswordSet && (
+              <span className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                Active
+              </span>
+            )}
+          </div>
+          {portalPasswordSet ? (
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-xs text-slate-500">
+                A password is required to view the portal. Change it below or remove it.
+              </p>
+              <button
+                onClick={clearPortalPassword}
+                disabled={portalPasswordSaving}
+                className="shrink-0 rounded-md border border-slate-600 px-2.5 py-1 text-xs
+                  text-slate-400 transition-colors hover:border-red-700 hover:text-red-400 disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">
+              No password set — anyone with the link can view the portal.
+            </p>
+          )}
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={portalPassword}
+              onChange={e => setPortalPassword(e.target.value)}
+              placeholder={portalPasswordSet ? "Set a new password…" : "Set a password…"}
+              className="flex-1 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5
+                text-xs text-slate-200 placeholder-slate-600 outline-none
+                focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+            />
+            <button
+              onClick={savePortalPassword}
+              disabled={portalPasswordSaving || !portalPassword.trim()}
+              className="shrink-0 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium
+                text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
+            >
+              {portalPasswordSaving ? "Saving…" : "Save"}
+            </button>
+          </div>
+          {portalPasswordMsg && (
+            <p className="mt-1.5 text-xs text-emerald-400">{portalPasswordMsg}</p>
+          )}
+        </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">

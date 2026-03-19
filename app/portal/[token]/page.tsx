@@ -56,6 +56,7 @@ type Summary = {
 type PortalData = {
   client: { name: string; brandName: string; currency: string };
   dateRange: { from: string; to: string };
+  dataSource?: "utm_reconciled" | "meta_insights";
   summary: Summary;
   dailyRows: DailyRow[];
   campaignRows: CampaignRow[];
@@ -366,6 +367,73 @@ function DailyTable({ rows, currency }: { rows: DailyRow[]; currency: string }) 
 
 // ─── Main portal page ─────────────────────────────────────────────────────────
 
+// ─── Password gate ────────────────────────────────────────────────────────────
+
+function PasswordGate({ token, onSuccess }: { token: string; onSuccess: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error,    setError]    = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${token}/auth`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        onSuccess();
+      } else {
+        const body = await res.json();
+        setError(body.error ?? "Incorrect password");
+      }
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-8 shadow-2xl">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
+          Performance Report
+        </p>
+        <h1 className="mb-6 text-xl font-bold text-white">Enter your access password</h1>
+        <form onSubmit={submit} className="space-y-4">
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Password"
+            autoFocus
+            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3
+                       text-sm text-slate-200 placeholder-slate-600 outline-none
+                       focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+          />
+          {error && (
+            <p className="text-sm text-red-400">{error}</p>
+          )}
+          <button
+            type="submit"
+            disabled={loading || !password}
+            className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold
+                       text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {loading ? "Verifying…" : "View Report"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 type PageProps = { params: { token: string } };
 
 const PRESETS = [
@@ -377,22 +445,28 @@ const PRESETS = [
 export default function ClientPortalPage({ params }: PageProps) {
   const { token } = params;
 
-  const [fromDate, setFromDate] = useState(daysAgo(30));
-  const [toDate,   setToDate]   = useState(today());
-  const [data,     setData]     = useState<PortalData | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"chart" | "daily" | "campaigns" | "ads">("chart");
+  const [fromDate,       setFromDate]       = useState(daysAgo(30));
+  const [toDate,         setToDate]         = useState(today());
+  const [data,           setData]           = useState<PortalData | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [activeTab,      setActiveTab]      = useState<"chart" | "daily" | "campaigns" | "ads">("chart");
+  const [needsPassword,  setNeedsPassword]  = useState(false);
 
   const fetchData = useCallback(async (from: string, to: string) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/portal/${token}?from=${from}&to=${to}`);
+      if (res.status === 401) {
+        const body = await res.json();
+        if (body.requiresPassword) { setNeedsPassword(true); setLoading(false); return; }
+      }
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? "Failed to load data");
       }
+      setNeedsPassword(false);
       setData(await res.json());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -404,6 +478,10 @@ export default function ClientPortalPage({ params }: PageProps) {
   useEffect(() => {
     fetchData(fromDate, toDate);
   }, [fetchData, fromDate, toDate]);
+
+  if (needsPassword) {
+    return <PasswordGate token={token} onSuccess={() => fetchData(fromDate, toDate)} />;
+  }
 
   if (loading) {
     return (
@@ -619,8 +697,10 @@ export default function ClientPortalPage({ params }: PageProps) {
         {/* Footer */}
         <div className="border-t border-slate-800 pt-6 text-center">
           <p className="text-xs text-slate-600">
-            Data reflects Meta ad spend reconciled against Shopify attributed revenue.
-            Revenue figures use a 7-day attribution window.
+            {data.dataSource === "meta_insights"
+              ? "Data reflects Meta ad spend and delivery metrics. Revenue figures will appear once Shopify reconciliation is complete."
+              : "Data reflects Meta ad spend reconciled against Shopify attributed revenue. Revenue figures use a 7-day attribution window."
+            }
           </p>
           <p className="mt-1 text-xs text-slate-700">
             Report generated {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}

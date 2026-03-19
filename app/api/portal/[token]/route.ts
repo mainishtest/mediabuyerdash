@@ -1,80 +1,178 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
+import { createHmac }                from "crypto";
+import { prisma }                    from "../../../../lib/db";
 
 type RouteContext = { params: { token: string } };
+
+// ── Cookie helpers (duplicated from auth/route.ts to avoid circular import) ──
+
+function cookieName(token: string) {
+  return `portal_auth_${token.slice(0, 16)}`;
+}
+
+function makeCookieValue(token: string): string {
+  const secret = process.env.NEXTAUTH_SECRET ?? "fallback-secret";
+  return createHmac("sha256", secret).update(token).digest("hex");
+}
+
+function isAuthenticated(req: NextRequest, token: string): boolean {
+  const value = req.cookies.get(cookieName(token))?.value;
+  return value === makeCookieValue(token);
+}
 
 /**
  * GET /api/portal/[token]?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * Public (no auth) — returns aggregated stats for the client linked to the token.
- * Response shape:
- * {
- *   client: { name, brandName, currency },
- *   summary: { totalSpend, totalRevenue, totalOrders, totalImpressions, totalClicks, overallRoas, overallCpa },
- *   dailyRows: [{ date, spend, revenue, orders, impressions, clicks, roas, cpa }],
- *   campaignRows: [{ campaignId, campaignName, spend, revenue, orders, roas, cpa, impressions, clicks }],
- *   adRows: [{ adId, adName, campaignName, spend, revenue, orders, roas, cpa, impressions, clicks }],
- * }
+ * Public but password-gated when clientPortalPasswordHash is set.
+ * Returns { requiresPassword: true } if the client has a password and the
+ * request does not carry a valid auth cookie.
+ *
+ * Data sources (in priority order):
+ *   1. UTMPerformanceRow  — reconciled Meta + Shopify (spend + revenue + orders)
+ *   2. MetaSyncedInsight  — raw Meta sync data (spend + impressions + clicks)
+ *      Used as fallback when UTMPerformanceRow is empty for the date range.
  */
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { token } = params;
 
   const account = await prisma.clientAccount.findUnique({
-    where: { clientPortalToken: token },
-    select: { id: true, name: true, brandName: true, currency: true },
+    where:  { clientPortalToken: token },
+    select: {
+      id:                      true,
+      name:                    true,
+      brandName:               true,
+      currency:                true,
+      clientPortalPasswordHash: true,
+    },
   });
 
   if (!account) {
     return NextResponse.json({ error: "Invalid or expired portal link" }, { status: 404 });
   }
 
-  const url = new URL(req.url);
-  const today = new Date().toISOString().slice(0, 10);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  const from = url.searchParams.get("from") ?? thirtyDaysAgo;
-  const to   = url.searchParams.get("to")   ?? today;
+  // ── Password gate ──────────────────────────────────────────────────────────
+  if (account.clientPortalPasswordHash && !isAuthenticated(req, token)) {
+    return NextResponse.json({ requiresPassword: true }, { status: 401 });
+  }
 
-  const clientId = account.id;
+  const url           = new URL(req.url);
+  const today         = new Date().toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const from          = url.searchParams.get("from") ?? thirtyDaysAgo;
+  const to            = url.searchParams.get("to")   ?? today;
+  const clientId      = account.id;
 
-  // Fetch UTM performance rows for date range (contains daily spend + reconciled revenue)
+  // ── 1. Try UTM performance rows (reconciled data) ─────────────────────────
   const utmRows = await prisma.uTMPerformanceRow.findMany({
     where: {
       clientAccountId: clientId,
       date: { gte: from, lte: to },
     },
     select: {
-      date: true,
-      campaignId: true,
-      campaignName: true,
-      adId: true,
-      adName: true,
-      spend: true,
-      impressions: true,
-      clicks: true,
-      conversions: true,
-      revenue: true,
+      date: true, campaignId: true, campaignName: true,
+      adId: true, adName: true,
+      spend: true, impressions: true, clicks: true, conversions: true, revenue: true,
     },
     orderBy: { date: "asc" },
   });
 
-  // ── Daily totals ─────────────────────────────────────────────────────────────
+  // ── 2. Fallback: MetaSyncedInsight (raw Meta data) ────────────────────────
+  // Used when no UTM rows exist — provides spend/impressions/clicks at minimum.
+  let usingFallback = false;
+
+  type NormRow = {
+    date: string; campaignId: string; campaignName: string;
+    adId: string; adName: string;
+    spend: number; impressions: number; clicks: number;
+    conversions: number; revenue: number;
+  };
+
+  let rows: NormRow[];
+
+  if (utmRows.length === 0) {
+    usingFallback = true;
+
+    // Find the ad account IDs linked to this client
+    const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
+      where:  { clientAccountId: clientId },
+      select: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+    });
+
+    const adAccountIds = selectedAccounts
+      .map((s) => s.accessibleAdAccount.externalAdAccountId)
+      .filter(Boolean);
+
+    if (adAccountIds.length > 0) {
+      const insights = await prisma.metaSyncedInsight.findMany({
+        where: {
+          externalAdAccountId: { in: adAccountIds },
+          dateStart: { gte: from, lte: to },
+          level: "campaign",
+        },
+        select: {
+          dateStart: true,
+          externalCampaignId: true,
+          spend: true, impressions: true, clicks: true,
+        },
+        orderBy: { dateStart: "asc" },
+      });
+
+      // Also pull campaign names from MetaSyncedCampaign
+      const campaignIds = [...new Set(insights.map((i) => i.externalCampaignId).filter(Boolean))];
+      const campaigns = campaignIds.length > 0
+        ? await prisma.metaSyncedCampaign.findMany({
+            where:  { externalCampaignId: { in: campaignIds } },
+            select: { externalCampaignId: true, name: true },
+          })
+        : [];
+      const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
+
+      rows = insights.map((i) => ({
+        date:         i.dateStart,
+        campaignId:   i.externalCampaignId,
+        campaignName: campaignNameMap.get(i.externalCampaignId) ?? i.externalCampaignId,
+        adId:         "",
+        adName:       "",
+        spend:        i.spend,
+        impressions:  i.impressions,
+        clicks:       i.clicks,
+        conversions:  0,
+        revenue:      0,
+      }));
+    } else {
+      rows = [];
+    }
+  } else {
+    rows = utmRows.map((r) => ({
+      date:         r.date,
+      campaignId:   r.campaignId   ?? "",
+      campaignName: r.campaignName ?? "",
+      adId:         r.adId         ?? "",
+      adName:       r.adName       ?? "",
+      spend:        r.spend,
+      impressions:  r.impressions,
+      clicks:       r.clicks,
+      conversions:  r.conversions,
+      revenue:      r.revenue,
+    }));
+  }
+
+  // ── Daily totals ──────────────────────────────────────────────────────────
   const dailyMap = new Map<string, {
     date: string; spend: number; revenue: number; orders: number;
     impressions: number; clicks: number;
   }>();
 
-  for (const row of utmRows) {
-    const existing = dailyMap.get(row.date) ?? {
+  for (const row of rows) {
+    const d = dailyMap.get(row.date) ?? {
       date: row.date, spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
     };
-    existing.spend       += row.spend;
-    existing.revenue     += row.revenue;
-    existing.orders      += row.conversions;
-    existing.impressions += row.impressions;
-    existing.clicks      += row.clicks;
-    dailyMap.set(row.date, existing);
+    d.spend       += row.spend;
+    d.revenue     += row.revenue;
+    d.orders      += row.conversions;
+    d.impressions += row.impressions;
+    d.clicks      += row.clicks;
+    dailyMap.set(row.date, d);
   }
 
   const dailyRows = Array.from(dailyMap.values()).map((d) => ({
@@ -83,17 +181,17 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     cpa:  d.orders > 0 ? d.spend / d.orders : null,
   }));
 
-  // ── Campaign totals ──────────────────────────────────────────────────────────
+  // ── Campaign totals ───────────────────────────────────────────────────────
   const campaignMap = new Map<string, {
     campaignId: string; campaignName: string;
     spend: number; revenue: number; orders: number; impressions: number; clicks: number;
   }>();
 
-  for (const row of utmRows) {
-    const key = row.campaignId ?? row.campaignName ?? "unknown";
+  for (const row of rows) {
+    const key      = row.campaignId || row.campaignName || "unknown";
     const existing = campaignMap.get(key) ?? {
-      campaignId:   row.campaignId   ?? "",
-      campaignName: row.campaignName ?? "Unknown Campaign",
+      campaignId:   row.campaignId,
+      campaignName: row.campaignName || "Unknown Campaign",
       spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
     };
     existing.spend       += row.spend;
@@ -112,26 +210,28 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  // ── Ad-level totals ──────────────────────────────────────────────────────────
+  // ── Ad-level totals ───────────────────────────────────────────────────────
   const adMap = new Map<string, {
     adId: string; adName: string; campaignName: string;
     spend: number; revenue: number; orders: number; impressions: number; clicks: number;
   }>();
 
-  for (const row of utmRows) {
-    const key = row.adId ?? row.adName ?? "unknown";
-    const existing = adMap.get(key) ?? {
-      adId:         row.adId      ?? "",
-      adName:       row.adName    ?? "Unknown Ad",
-      campaignName: row.campaignName ?? "",
-      spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
-    };
-    existing.spend       += row.spend;
-    existing.revenue     += row.revenue;
-    existing.orders      += row.conversions;
-    existing.impressions += row.impressions;
-    existing.clicks      += row.clicks;
-    adMap.set(key, existing);
+  if (!usingFallback) {
+    for (const row of rows) {
+      const key      = row.adId || row.adName || "unknown";
+      const existing = adMap.get(key) ?? {
+        adId:         row.adId,
+        adName:       row.adName || "Unknown Ad",
+        campaignName: row.campaignName ?? "",
+        spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
+      };
+      existing.spend       += row.spend;
+      existing.revenue     += row.revenue;
+      existing.orders      += row.conversions;
+      existing.impressions += row.impressions;
+      existing.clicks      += row.clicks;
+      adMap.set(key, existing);
+    }
   }
 
   const adRows = Array.from(adMap.values())
@@ -142,22 +242,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  // ── Summary ──────────────────────────────────────────────────────────────────
+  // ── Summary ───────────────────────────────────────────────────────────────
   const totalSpend       = dailyRows.reduce((s, d) => s + d.spend, 0);
   const totalRevenue     = dailyRows.reduce((s, d) => s + d.revenue, 0);
   const totalOrders      = dailyRows.reduce((s, d) => s + d.orders, 0);
   const totalImpressions = dailyRows.reduce((s, d) => s + d.impressions, 0);
   const totalClicks      = dailyRows.reduce((s, d) => s + d.clicks, 0);
-
-  const summary = {
-    totalSpend,
-    totalRevenue,
-    totalOrders,
-    totalImpressions,
-    totalClicks,
-    overallRoas: totalSpend > 0 ? totalRevenue / totalSpend : null,
-    overallCpa:  totalOrders > 0 ? totalSpend / totalOrders : null,
-  };
 
   return NextResponse.json({
     client: {
@@ -165,8 +255,17 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       brandName: account.brandName ?? account.name,
       currency:  account.currency,
     },
-    dateRange: { from, to },
-    summary,
+    dateRange:    { from, to },
+    dataSource:   usingFallback ? "meta_insights" : "utm_reconciled",
+    summary: {
+      totalSpend,
+      totalRevenue,
+      totalOrders,
+      totalImpressions,
+      totalClicks,
+      overallRoas: totalSpend > 0 ? totalRevenue / totalSpend : null,
+      overallCpa:  totalOrders > 0 ? totalSpend / totalOrders : null,
+    },
     dailyRows,
     campaignRows,
     adRows,
