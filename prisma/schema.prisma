@@ -542,6 +542,121 @@ model LaunchDraftVariant {
   draft LaunchDraft @relation(fields: [launchDraftId], references: [id], onDelete: Cascade)
 }
 
+// ── Experiment results ────────────────────────────────────────────────────────
+
+// An experiment pairs a control creative against a challenger creative and
+// evaluates their performance over a defined window using CRM + Meta data.
+// All IDs linking to Meta entities are stored as plain external-ID strings.
+model ExperimentRecord {
+  id               String   @id @default(cuid())
+  clientAccountId  String
+  campaignId       String?  // internal campaign reference (optional)
+  name             String
+  description      String?
+  status           String   @default("active") // active | evaluating | completed | archived | failed
+  comparisonMode   String   @default("simultaneous") // simultaneous | sequential
+
+  // Control variant (existing / baseline creative)
+  controlCreativeId      String?
+  controlAdExternalId    String?
+  controlAdSetExternalId String?
+  controlCampaignExternalId String?
+  controlLabel           String   @default("Control")
+
+  // Challenger variant (newly launched creative)
+  challengerPrepItemId       String?  // links to PublishPrepRecord.id
+  challengerAdExternalId     String?
+  challengerAdSetExternalId  String?
+  challengerCampaignExternalId String?
+  challengerLabel            String   @default("Challenger")
+
+  // Shared ad account (needed for MetaSyncedInsight queries)
+  externalAdAccountId String?
+
+  // Success criteria
+  primaryMetric            String   @default("roas_7d")
+  secondaryMetrics         String?  // JSON array of metric keys
+  successThreshold         Float    @default(0.10) // 10% relative lift
+  minSpendPerVariant       Float    @default(50.0)
+  minConversionsPerVariant Int      @default(5)
+  evaluationWindowDays     Int      @default(7)
+
+  // Evaluation window
+  startedAt        DateTime  @default(now())
+  evaluationEndsAt DateTime?
+  completedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results   ExperimentResultRecord[]
+  learnings ExperimentLearningRecord[]
+
+  @@index([clientAccountId])
+  @@index([challengerPrepItemId])
+  @@index([status])
+}
+
+// Stores the evaluated result of one experiment run.
+// Re-evaluation overwrites the previous result row (upsert on experimentId).
+model ExperimentResultRecord {
+  id           String @id @default(cuid())
+  experimentId String @unique  // one result per experiment at a time
+
+  outcome        String  // ExperimentOutcome
+  winningVariant String? // "control" | "challenger" | null
+  confidence     Float   @default(0)
+
+  // Raw snapshots (JSON: ExperimentMetricSnapshot)
+  controlSnapshotJson    String?
+  challengerSnapshotJson String?
+
+  // Comparison summary
+  primaryMetricDelta Float?
+  primaryMetricLift  Float?
+  guardrailBreaches  String?  // JSON array of strings
+  outcomeReasons     String?  // JSON array of strings
+
+  // Action guidance
+  recommendedAction String?
+  recommendedNote   String?
+  learningSummary   String?
+
+  evaluatedAt DateTime @default(now())
+
+  experiment ExperimentRecord @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId])
+}
+
+// Reusable learning extracted from a completed experiment.
+// Tagged for reuse by Creative Lab brief generation and scoring.
+model ExperimentLearningRecord {
+  id              String @id @default(cuid())
+  experimentId    String
+  clientAccountId String
+
+  // Tags for cross-workflow reuse
+  briefIntent    String?  // matches CreativeBrief.intent
+  draftType      String?  // matches CreativeBrief.draftType
+  winningPattern String?  // short label for what drove the win
+
+  outcomeLabel    String
+  insightText     String   // 1-2 sentence learning, human-readable
+  detailJson      String?  // JSON: key deltas, snippets, metrics
+
+  usableForBriefs  Boolean @default(true)
+  usableForScoring Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  experiment ExperimentRecord @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([clientAccountId])
+  @@index([briefIntent])
+  @@index([experimentId])
+}
+
 // ── Publish preparation ───────────────────────────────────────────────────────
 
 // A publish prep record packages one approved creative draft variant into a
