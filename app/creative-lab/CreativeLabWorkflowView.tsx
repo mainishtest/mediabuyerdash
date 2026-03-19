@@ -444,6 +444,12 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
       {/* Bottom nav — link to generate tool + fatigue page */}
       <div className="flex flex-wrap gap-3 border-t border-slate-800/60 pt-4">
         <Link
+          href="/creative-lab/refresh-queue"
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          Creative Refresh Queue →
+        </Link>
+        <Link
           href="/creative-lab/generate"
           className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
