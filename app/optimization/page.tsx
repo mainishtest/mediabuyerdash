@@ -102,6 +102,44 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
   const adIds      = ads.map((a) => a.id);
   const adCreatives = await loadAdCreatives(adIds);
 
+  // Fan out campaign-level rows to per-ad-set rows when ReconciliationMatch
+  // rows don't carry metaAdSetId (the common case). Each campaign row is split
+  // evenly across its ad sets so the ad set evaluator has something to work with.
+  const adSetRows = rawRows.flatMap((row) => {
+    if (row.adSetId) return [row];
+    const campaignAdSets = adSets.filter((as) => as.campaignId === row.campaignId);
+    if (campaignAdSets.length === 0) return [];
+    const n = campaignAdSets.length;
+    return campaignAdSets.map((as) => ({
+      ...row,
+      adSetId:   as.id,
+      adSetName: as.name,
+      metaSpend:       row.metaSpend / n,
+      metaClicks:      row.metaClicks / n,
+      metaImpressions: row.metaImpressions / n,
+      crmOrders:       row.crmOrders / n,
+      crmRevenue:      row.crmRevenue / n,
+    }));
+  });
+
+  // Fan out ad-set rows to per-ad rows when no metaAdId is present.
+  const adRows = adSetRows.flatMap((row) => {
+    if (row.adId) return [row];
+    const adSetAds = ads.filter((ad) => ad.adSetId === row.adSetId);
+    if (adSetAds.length === 0) return [];
+    const n = adSetAds.length;
+    return adSetAds.map((ad) => ({
+      ...row,
+      adId:   ad.id,
+      adName: ad.name,
+      metaSpend:       row.metaSpend / n,
+      metaClicks:      row.metaClicks / n,
+      metaImpressions: row.metaImpressions / n,
+      crmOrders:       row.crmOrders / n,
+      crmRevenue:      row.crmRevenue / n,
+    }));
+  });
+
   // Run goal-aware evaluations (pure functions — no DB access).
   const campaignOutput = evaluateCampaignsFromReconciledMetrics(
     rawRows,
@@ -111,7 +149,7 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
   );
 
   const adSetOutput = evaluateAdSetsFromReconciledMetrics(
-    rawRows,
+    adSetRows,
     adSets,
     campaigns,
     dateFrom,
@@ -119,7 +157,7 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
   );
 
   const adOutput = evaluateAdsFromReconciledMetrics(
-    rawRows,
+    adRows,
     ads,
     adSets,
     campaigns,

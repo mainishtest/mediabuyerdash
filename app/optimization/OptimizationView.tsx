@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type {
   GoalAwareEvaluationResult,
@@ -154,11 +154,13 @@ function EvaluationTable({
   evaluations,
   title,
   description,
+  clientId,
   onRowClick,
 }: {
   evaluations: GoalAwareEvaluationResult[];
   title:       string;
   description: string;
+  clientId:    string | null;
   onRowClick?: (ev: GoalAwareEvaluationResult) => void;
 }) {
   if (evaluations.length === 0) {
@@ -188,7 +190,7 @@ function EvaluationTable({
               <th className={`${TH} text-right`}>Actual CPA</th>
               <th className={TH}>Status</th>
               <th className={TH}>Priority</th>
-              {onRowClick && <th className={TH} />}
+              <th className={TH} />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -197,6 +199,7 @@ function EvaluationTable({
                 key={`${ev.entityType}-${ev.entityId}`}
                 ev={ev}
                 TD={TD}
+                clientId={clientId}
                 onClick={onRowClick ? () => onRowClick(ev) : undefined}
               />
             ))}
@@ -207,19 +210,81 @@ function EvaluationTable({
   );
 }
 
+function CreativeLabDropdown({ clientId }: { clientId: string | null }) {
+  const router  = useRouter();
+  const [open, setOpen] = useState(false);
+  const ref     = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const base = clientId
+    ? `/creative-lab/generate?clientId=${encodeURIComponent(clientId)}`
+    : "/creative-lab/generate";
+
+  return (
+    <div ref={ref} className="relative inline-block text-left">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-700
+                   bg-indigo-950/60 px-3 py-1.5 text-xs font-medium text-indigo-300
+                   hover:bg-indigo-900/60 hover:text-indigo-200 transition-colors"
+      >
+        Fix Creative
+        <svg className="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+          <path d="M6 8L1 3h10L6 8z"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-20 mt-1.5 w-48 rounded-xl
+                        border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+          <button
+            onClick={(e) => { e.stopPropagation(); router.push(`${base}&type=image`); }}
+            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm
+                       text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <span className="text-base">🖼</span>
+            Image Variations
+          </button>
+          <div className="border-t border-slate-700/60" />
+          <button
+            onClick={(e) => { e.stopPropagation(); router.push(`${base}&type=copy`); }}
+            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm
+                       text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <span className="text-base">✍️</span>
+            Copy Variations
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EvaluationRow({
   ev,
   TD,
+  clientId,
   onClick,
 }: {
-  ev:      GoalAwareEvaluationResult;
-  TD:      string;
+  ev:       GoalAwareEvaluationResult;
+  TD:       string;
+  clientId: string | null;
   onClick?: () => void;
 }) {
   const roasMet  = ev.meetsRoasGoal === true;
   const roasMiss = ev.meetsRoasGoal === false;
   const cpaMet   = ev.meetsCpaGoal  === true;
   const cpaMiss  = ev.meetsCpaGoal  === false;
+
+  const isActionable = ev.status === "underperforming" || ev.status === "critical";
 
   return (
     <tr
@@ -264,11 +329,14 @@ function EvaluationRow({
           {ev.priority.charAt(0).toUpperCase() + ev.priority.slice(1)}
         </Badge>
       </td>
-      {onClick && (
-        <td className={`${TD} text-right`}>
-          <span className="text-xs text-slate-500 group-hover:text-slate-300">View →</span>
-        </td>
-      )}
+      <td className={`${TD} text-right`}>
+        {isActionable
+          ? <CreativeLabDropdown clientId={clientId} />
+          : onClick
+            ? <span className="text-xs text-slate-600">View →</span>
+            : null
+        }
+      </td>
     </tr>
   );
 }
@@ -597,6 +665,7 @@ export function OptimizationView({
               evaluations={filterEvals(campaignEvaluations)}
               title="Campaigns"
               description="Campaign-level evaluation against configured ROAS and CPA goals."
+              clientId={clientId}
             />
           )}
 
@@ -606,6 +675,7 @@ export function OptimizationView({
               evaluations={filterEvals(adSetEvaluations)}
               title="Ad Sets"
               description="Ad set evaluation using parent campaign goals as thresholds."
+              clientId={clientId}
             />
           )}
 
@@ -615,6 +685,7 @@ export function OptimizationView({
               evaluations={filterEvals(adEvaluations)}
               title="Ads"
               description="Ad-level evaluation using grandparent campaign goals as thresholds. Click an ad to view its creative and take action."
+              clientId={clientId}
               onRowClick={(ev) => setSelectedAdEv(ev)}
             />
           )}
