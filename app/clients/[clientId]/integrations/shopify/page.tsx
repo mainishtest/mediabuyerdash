@@ -57,7 +57,7 @@ export default async function ClientShopifyPage({ params }: PageProps) {
       syncLog={syncLog}
       orderCount={orderData?.orderCount    ?? 0}
       lineItemCount={orderData?.lineItemCount ?? 0}
-      totalRevenue={orderData?.totalRevenue  ?? 0}
+      facebookRevenue={orderData?.facebookRevenue ?? 0}
       recentOrders={
         (orderData?.recentOrders ?? []).map((o) => ({
           id:             o.id,

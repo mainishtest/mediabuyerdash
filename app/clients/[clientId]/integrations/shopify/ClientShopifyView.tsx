@@ -71,7 +71,7 @@ interface Props {
   syncLog:       SyncLog | null;
   orderCount:    number;
   lineItemCount: number;
-  totalRevenue:  number;
+  facebookRevenue: number;
   recentOrders:  Order[];
 }
 
@@ -161,7 +161,7 @@ export function ClientShopifyView({
   syncLog,
   orderCount,
   lineItemCount,
-  totalRevenue,
+  facebookRevenue,
   recentOrders,
 }: Props) {
   const [shopInput,      setShopInput]      = useState("");
@@ -244,8 +244,8 @@ export function ClientShopifyView({
         <StatCard label="Orders Synced"  value={orderCount.toLocaleString()} />
         <StatCard label="Line Items"      value={lineItemCount.toLocaleString()} />
         <StatCard
-          label="Total Revenue"
-          value={totalRevenue > 0 ? fmt(totalRevenue) : "—"}
+          label="Facebook Revenue"
+          value={facebookRevenue > 0 ? fmt(facebookRevenue) : "—"}
         />
         <StatCard
           label="Last Sync"

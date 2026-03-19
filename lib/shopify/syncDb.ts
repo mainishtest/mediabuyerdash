@@ -120,7 +120,7 @@ export async function getOrderSummary(shopifyConnectionId: string) {
 
 /** Summary scoped to a client account (used by client-scoped pages). */
 export async function getClientOrderSummary(clientAccountId: string) {
-  const [orderCount, lineItemCount, recentOrders] = await Promise.all([
+  const [orderCount, lineItemCount, recentOrders, facebookRevenueAgg] = await Promise.all([
     prisma.shopifyOrder.count({ where: { clientAccountId } }),
     prisma.shopifyOrderLineItem.count({
       where: { order: { clientAccountId } },
@@ -133,9 +133,16 @@ export async function getClientOrderSummary(clientAccountId: string) {
         lineItems: { select: { id: true } },
       },
     }),
+    prisma.shopifyOrder.aggregate({
+      where: {
+        clientAccountId,
+        utmSource: { equals: "facebook", mode: "insensitive" },
+      },
+      _sum: { totalPrice: true },
+    }),
   ]);
 
-  const totalRevenue = recentOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+  const facebookRevenue = facebookRevenueAgg._sum.totalPrice ?? 0;
 
-  return { orderCount, lineItemCount, recentOrders, totalRevenue };
+  return { orderCount, lineItemCount, recentOrders, facebookRevenue };
 }
