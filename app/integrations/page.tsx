@@ -28,12 +28,12 @@ export default async function IntegrationsPage() {
       connectionStatus: true,
       tokenExpiresAt:  true,
       createdAt:       true,
-      selectedAdAccounts: {
+      selectedAccounts: {
         select: {
           id:              true,
           clientAccountId: true,
           accessibleAdAccount: {
-            select: { externalAdAccountId: true, name: true },
+            select: { externalAdAccountId: true, accountName: true },
           },
         },
       },
@@ -99,7 +99,7 @@ export default async function IntegrationsPage() {
                 {metaConnections.map((conn) => {
                   const isActive  = conn.connectionStatus === "active";
                   const isExpired = conn.tokenExpiresAt && new Date(conn.tokenExpiresAt) < new Date();
-                  const mapped    = conn.selectedAdAccounts.filter((a) => a.clientAccountId);
+                  const mapped    = conn.selectedAccounts.filter((a) => a.clientAccountId);
                   return (
                     <tr key={conn.id} className="hover:bg-slate-800/20 transition-colors">
                       <td className={`${TD} font-medium text-white`}>
@@ -117,7 +117,7 @@ export default async function IntegrationsPage() {
                           <div className="space-y-0.5">
                             {mapped.map((a) => (
                               <div key={a.id} className="text-xs">
-                                <span className="text-slate-400">{a.accessibleAdAccount?.name ?? a.accessibleAdAccount?.externalAdAccountId}</span>
+                                <span className="text-slate-400">{a.accessibleAdAccount?.accountName ?? a.accessibleAdAccount?.externalAdAccountId}</span>
                                 {a.clientAccountId && (
                                   <span className="ml-1.5 text-slate-600">
                                     → {clientNameById.get(a.clientAccountId) ?? a.clientAccountId}
