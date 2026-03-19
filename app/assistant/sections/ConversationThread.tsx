@@ -36,7 +36,7 @@ function AssistantBubble({
         </div>
         <div className="px-4 py-4 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm space-y-4">
           {message.response ? (
-            <ResponseCard response={message.response} onFollowUp={onFollowUp} />
+            <ResponseCard responseId={message.id} response={message.response} onFollowUp={onFollowUp} />
           ) : (
             <p className="text-slate-400 text-sm">{message.content}</p>
           )}
