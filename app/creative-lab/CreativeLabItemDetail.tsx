@@ -2,21 +2,32 @@
 
 // app/creative-lab/CreativeLabItemDetail.tsx
 // Detail panel for a selected Creative Lab item.
-// Shown as a right-side panel on desktop, inline section on mobile.
+// Shown as a sticky right panel on desktop, inline section on mobile.
+//
+// Sections:
+//   Header         — status + source badges, headline, campaign, client, close
+//   Rationale      — recommendation text + suggested action
+//   Creative       — thumbnail preview (if available) + ad copy + CTA
+//   Performance    — 14-day metrics snapshot (CRM source of truth for ROAS/CPA)
+//   Fatigue        — signals and recommended action (if fatigue context exists)
+//   Notes          — buyer textarea, saved on blur (persisted to DB)
+//   Activity       — append-only log of state transitions
+//   Linked Entities — quick links to campaign, creative generator, fatigue page
+//   Actions        — status transition buttons
 
-import Link from "next/link";
-import type { CreativeLabItem, CreativeLabStatus } from "../../types/creativeLab";
-import { Badge } from "../../components/ui";
-import { SectionCard } from "../../components/ui";
-import { formatCurrency } from "../../lib/metricUtils";
+import { useState, useCallback }                      from "react";
+import Link                                           from "next/link";
+import type { CreativeLabItem, CreativeLabStatus }    from "../../types/creativeLab";
+import { Badge, SectionCard }                         from "../../components/ui";
+import { formatCurrency }                             from "../../lib/metricUtils";
 import { STATUS_LABEL, STATUS_VARIANT, SOURCE_LABEL, SOURCE_VARIANT } from "./CreativeLabItemCard";
 
 // ---------------------------------------------------------------------------
-// Action button helpers
+// Button helpers
 // ---------------------------------------------------------------------------
 
 const BTN_BASE =
-  "w-full rounded-xl px-4 py-3 text-sm font-medium transition-colors sm:py-2.5";
+  "w-full rounded-xl px-4 py-3 text-sm font-medium transition-colors sm:py-2.5 active:scale-95";
 
 function PrimaryBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
@@ -26,7 +37,15 @@ function PrimaryBtn({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-function SecondaryBtn({ onClick, children, className = "" }: { onClick: () => void; children: React.ReactNode; className?: string }) {
+function SecondaryBtn({
+  onClick,
+  children,
+  className = "",
+}: {
+  onClick:    () => void;
+  children:   React.ReactNode;
+  className?: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -39,17 +58,30 @@ function SecondaryBtn({ onClick, children, className = "" }: { onClick: () => vo
 
 function DangerBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`${BTN_BASE} border border-rose-800/50 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50`}>
+    <button
+      onClick={onClick}
+      className={`${BTN_BASE} border border-rose-800/50 bg-rose-950/30 text-rose-300 hover:bg-rose-950/50`}
+    >
       {children}
     </button>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Metric row — used in performance snapshot table
+// Metric row
 // ---------------------------------------------------------------------------
 
-function MetricRow({ label, value, highlight }: { label: string; value: string; highlight?: "good" | "warn" | "bad" }) {
+function MetricRow({
+  label,
+  value,
+  highlight,
+  sub,
+}: {
+  label:      string;
+  value:      string;
+  highlight?: "good" | "warn" | "bad";
+  sub?:       string;
+}) {
   const color =
     highlight === "good" ? "text-emerald-400" :
     highlight === "warn" ? "text-amber-300"   :
@@ -57,35 +89,53 @@ function MetricRow({ label, value, highlight }: { label: string; value: string; 
 
   return (
     <div className="flex items-center justify-between py-1.5 text-sm">
-      <span className="text-slate-500">{label}</span>
+      <div>
+        <span className="text-slate-500">{label}</span>
+        {sub && <span className="ml-1 text-xs text-slate-600">({sub})</span>}
+      </div>
       <span className={`font-medium tabular-nums ${color}`}>{value}</span>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Detail panel
+// Props
 // ---------------------------------------------------------------------------
 
 type Props = {
-  item:               CreativeLabItem;
-  onStatusChange:     (id: string, status: CreativeLabStatus, note?: string) => void;
-  onClose:            () => void;
+  item:           CreativeLabItem;
+  onStatusChange: (id: string, status: CreativeLabStatus, note?: string) => void;
+  onNotesSave:    (id: string, notes: string) => void;
+  onClose:        () => void;
 };
 
-export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) {
+// ---------------------------------------------------------------------------
+// Detail panel
+// ---------------------------------------------------------------------------
+
+export function CreativeLabItemDetail({ item, onStatusChange, onNotesSave, onClose }: Props) {
   const pc = item.performanceContext;
   const fc = item.fatigueContext;
 
-  const canReview       = item.status === "queued"     || item.status === "draft";
-  const canApprove      = item.status === "in_review"  || item.status === "needs_revision";
-  const canRevise       = item.status === "in_review"  || item.status === "queued";
-  const canReject       = item.status !== "rejected"   && item.status !== "archived";
-  const canRequeue      = item.status === "rejected"   || item.status === "blocked" || item.status === "needs_revision";
+  const [localNotes, setLocalNotes] = useState(item.notes ?? "");
+
+  // Save notes on blur (debounced at the point of usage)
+  const handleNotesBlur = useCallback(() => {
+    onNotesSave(item.id, localNotes);
+  }, [item.id, localNotes, onNotesSave]);
+
+  const canReview  = item.status === "queued"     || item.status === "draft";
+  const canApprove = item.status === "in_review"  || item.status === "needs_revision";
+  const canRevise  = item.status === "in_review"  || item.status === "queued";
+  const canReject  = item.status !== "rejected"   && item.status !== "archived";
+  const canRequeue = item.status === "rejected"   || item.status === "blocked" || item.status === "needs_revision";
+
+  const hasThumbnail = !!(pc?.thumbnailUrl);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/80">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-5 py-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -100,16 +150,13 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
             {item.recommendationHeadline}
           </h3>
           {item.campaignName && (
-            <p className="mt-0.5 text-xs text-slate-500">
-              Campaign: {item.campaignName}
-            </p>
+            <p className="mt-0.5 text-xs text-slate-500">Campaign: {item.campaignName}</p>
           )}
           {item.clientName && (
             <p className="text-xs text-slate-600">{item.clientName}</p>
           )}
         </div>
 
-        {/* Close — useful on mobile */}
         <button
           onClick={onClose}
           className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300"
@@ -121,7 +168,7 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
 
       <div className="space-y-0 divide-y divide-slate-800/60">
 
-        {/* Rationale */}
+        {/* ── Rationale ── */}
         <div className="px-5 py-4">
           <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
             Why This Item
@@ -131,35 +178,66 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
           </p>
           {item.suggestedNextAction && (
             <div className="mt-3 rounded-lg border border-indigo-900/40 bg-indigo-950/20 px-3 py-2">
-              <p className="text-xs font-medium text-indigo-300">
-                Suggested action
-              </p>
-              <p className="mt-0.5 text-xs text-slate-300">
-                {item.suggestedNextAction}
-              </p>
+              <p className="text-xs font-medium text-indigo-300">Suggested action</p>
+              <p className="mt-0.5 text-xs text-slate-300">{item.suggestedNextAction}</p>
             </div>
           )}
         </div>
 
-        {/* Performance snapshot */}
+        {/* ── Creative preview ── */}
+        {(hasThumbnail || pc?.adCopy) && (
+          <div className="px-5 py-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Creative
+            </p>
+
+            {/* Thumbnail */}
+            {hasThumbnail ? (
+              <div className="mb-3 overflow-hidden rounded-xl border border-slate-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pc!.thumbnailUrl!}
+                  alt={item.creativeName ?? "Creative preview"}
+                  className="w-full max-h-52 object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ) : (
+              <div className="mb-3 flex h-20 items-center justify-center rounded-xl
+                              border border-slate-800 bg-slate-900/40">
+                <p className="text-xs text-slate-600">No image synced for this creative</p>
+              </div>
+            )}
+
+            {/* Ad copy */}
+            {pc?.adCopy && (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
+                  {pc.adCopy}
+                </p>
+                {pc.callToAction && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    CTA: <span className="text-slate-400">{pc.callToAction}</span>
+                  </p>
+                )}
+              </div>
+            )}
+            {item.creativeName && (
+              <p className="mt-1.5 text-xs text-slate-600">Creative: {item.creativeName}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── Performance snapshot ── */}
         {pc && (
           <div className="px-5 py-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Performance Snapshot
+              Performance Snapshot <span className="normal-case font-normal text-slate-600">(14 days)</span>
             </p>
             <div className="divide-y divide-slate-800/40">
-              <MetricRow
-                label="Ad Spend (14d)"
-                value={formatCurrency(pc.spend)}
-              />
-              <MetricRow
-                label="Impressions"
-                value={pc.impressions.toLocaleString()}
-              />
-              <MetricRow
-                label="Clicks"
-                value={pc.clicks.toLocaleString()}
-              />
+              <MetricRow label="Ad Spend"       value={formatCurrency(pc.spend)} />
+              <MetricRow label="Impressions"    value={pc.impressions.toLocaleString()} />
+              <MetricRow label="Clicks"         value={pc.clicks.toLocaleString()} />
               <MetricRow
                 label="CTR"
                 value={`${pc.avgCtr.toFixed(2)}%`}
@@ -174,42 +252,41 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
               )}
               {pc.campaignRoas != null && (
                 <MetricRow
-                  label="Campaign ROAS (CRM)"
+                  label="Campaign ROAS"
                   value={`${pc.campaignRoas.toFixed(2)}x`}
                   highlight={pc.campaignRoas >= 2 ? "good" : pc.campaignRoas < 1 ? "bad" : undefined}
+                  sub="CRM-verified"
                 />
               )}
               {pc.campaignCpa != null && (
                 <MetricRow
-                  label="Campaign CPA (CRM)"
+                  label="Campaign CPA"
                   value={formatCurrency(pc.campaignCpa)}
+                  sub="CRM-verified"
                 />
               )}
             </div>
             <p className="mt-2 text-xs text-slate-600">
-              ROAS and CPA sourced from Shopify/CRM — not Meta self-reported.
+              ROAS and CPA are Shopify/CRM data — not Meta self-reported.
             </p>
           </div>
         )}
 
-        {/* Ad copy preview */}
-        {pc?.adCopy && (
+        {/* ── Missing performance context ── */}
+        {!pc && (
           <div className="px-5 py-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Ad Copy
+              Performance
             </p>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
-              {pc.adCopy}
-            </p>
-            {pc.callToAction && (
-              <p className="mt-2 text-xs text-slate-500">
-                CTA: <span className="text-slate-400">{pc.callToAction}</span>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-6 text-center">
+              <p className="text-xs text-slate-600">
+                No performance data available. Run a Meta sync and reconciliation to populate metrics.
               </p>
-            )}
+            </div>
           </div>
         )}
 
-        {/* Fatigue signals */}
+        {/* ── Fatigue signals ── */}
         {fc && fc.fatigueSignals.length > 0 && (
           <div className="px-5 py-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -232,27 +309,45 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
             {fc.recommendedAction && (
               <p className="mt-3 text-xs text-slate-500">
                 Recommended:{" "}
-                <span className="text-slate-300">
-                  {fc.recommendedAction.replaceAll("_", " ")}
-                </span>
+                <span className="text-slate-300">{fc.recommendedAction.replaceAll("_", " ")}</span>
               </p>
             )}
           </div>
         )}
 
-        {/* Activity log */}
+        {/* ── Buyer notes ── */}
+        <div className="px-5 py-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Notes
+          </p>
+          <textarea
+            value={localNotes}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            onBlur={handleNotesBlur}
+            placeholder="Add notes for this creative item…"
+            rows={3}
+            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-800/60
+                       px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600
+                       focus:border-slate-600 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-slate-600">Saved automatically when you click away.</p>
+        </div>
+
+        {/* ── Activity log ── */}
         <div className="px-5 py-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
             Activity
           </p>
           {item.activityLog.length === 0 ? (
-            <p className="text-xs text-slate-600">No activity yet.</p>
+            <p className="text-xs text-slate-600">No activity yet — take an action below.</p>
           ) : (
             <ul className="space-y-2">
-              {item.activityLog.map((entry) => (
-                <li key={entry.id} className="text-xs text-slate-400">
+              {[...item.activityLog].reverse().map((entry) => (
+                <li key={entry.id} className="text-xs">
                   <span className="text-slate-300">{entry.action}</span>
-                  {entry.note && <span className="ml-1 text-slate-500">— {entry.note}</span>}
+                  {entry.note && (
+                    <span className="ml-1 text-slate-500">— {entry.note}</span>
+                  )}
                   <span className="ml-2 text-slate-600">
                     {new Date(entry.timestamp).toLocaleString()}
                   </span>
@@ -262,8 +357,8 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
           )}
         </div>
 
-        {/* Links to linked entities */}
-        {(item.campaignId || item.creativeId) && (
+        {/* ── Linked entities ── */}
+        {(item.campaignId || item.creativeId || item.clientAccountId) && (
           <div className="px-5 py-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
               Linked Entities
@@ -271,7 +366,7 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
             <div className="flex flex-wrap gap-2">
               {item.campaignId && (
                 <Link
-                  href={`/operations?campaignId=${encodeURIComponent(item.campaignId)}`}
+                  href={`/optimization?clientId=${encodeURIComponent(item.clientAccountId)}`}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700
                     bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
                 >
@@ -280,7 +375,7 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
               )}
               {item.creativeId && (
                 <Link
-                  href={`/creative-lab/generate`}
+                  href={`/creative-lab/generate?clientId=${encodeURIComponent(item.clientAccountId)}`}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700
                     bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
                 >
@@ -293,14 +388,14 @@ export function CreativeLabItemDetail({ item, onStatusChange, onClose }: Props) 
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700
                     bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
                 >
-                  ↗ Creative Fatigue
+                  ↗ Fatigue Analysis
                 </Link>
               )}
             </div>
           </div>
         )}
 
-        {/* Action buttons */}
+        {/* ── Action buttons ── */}
         <div className="px-5 py-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
             Actions

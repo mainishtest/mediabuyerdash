@@ -142,34 +142,73 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
   }
 
   function handleStatusChange(id: string, newStatus: CreativeLabStatus, note?: string) {
+    const item = items.find((i) => i.id === id);
+    const fromStatus = item?.status ?? null;
+
+    // Optimistic UI update
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
+      prev.map((it) => {
+        if (it.id !== id) return it;
 
         const entry: CreativeLabActivity = {
           id:        Math.random().toString(36).slice(2),
-          action:    `Status changed to "${newStatus.replace("_", " ")}"`,
+          action:    `Status changed to "${newStatus.replace(/_/g, " ")}"`,
           note:      note ?? null,
           actor:     null,
           timestamp: new Date().toISOString(),
         };
 
         return {
-          ...item,
+          ...it,
           status: newStatus,
           reviewState:
             newStatus === "in_review" ? "reviewing"
             : newStatus === "approved" || newStatus === "rejected" ? "reviewed"
-            : item.reviewState,
+            : it.reviewState,
           approvalState:
             newStatus === "approved" ? "approved"
             : newStatus === "rejected" ? "rejected"
-            : item.approvalState,
+            : it.approvalState,
           updatedAt:   new Date().toISOString(),
-          activityLog: [...item.activityLog, entry],
+          activityLog: [...it.activityLog, entry],
         };
       }),
     );
+
+    // Persist to DB (fire-and-forget — optimistic update already applied)
+    if (item) {
+      fetch(`/api/creative-lab/items/${encodeURIComponent(id)}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          action:          "status",
+          toStatus:        newStatus,
+          fromStatus,
+          note:            note ?? undefined,
+          clientAccountId: item.clientAccountId,
+        }),
+      }).catch((err) => console.error("[creative-lab status save]", err));
+    }
+  }
+
+  function handleNotesSave(id: string, notes: string) {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, notes, updatedAt: new Date().toISOString() } : it)),
+    );
+
+    fetch(`/api/creative-lab/items/${encodeURIComponent(id)}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        action:          "notes",
+        notes,
+        clientAccountId: item.clientAccountId,
+      }),
+    }).catch((err) => console.error("[creative-lab notes save]", err));
   }
 
   const hasFilters =
@@ -363,6 +402,7 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
                           <CreativeLabItemDetail
                             item={selectedItem}
                             onStatusChange={handleStatusChange}
+                            onNotesSave={handleNotesSave}
                             onClose={() => setSelectedId(null)}
                           />
                         </div>
@@ -381,6 +421,7 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
               <CreativeLabItemDetail
                 item={selectedItem}
                 onStatusChange={handleStatusChange}
+                onNotesSave={handleNotesSave}
                 onClose={() => setSelectedId(null)}
               />
             </div>

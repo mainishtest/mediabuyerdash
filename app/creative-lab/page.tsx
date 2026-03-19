@@ -1,25 +1,32 @@
 // app/creative-lab/page.tsx
 // Creative Lab — workflow queue landing page.
 //
-// Loads creative performance data from the existing Meta sync + reconciliation
-// pipeline, maps snapshots into CreativeLabItem workflow entities, and
-// passes them to the client-side WorkflowView.
+// Data flow:
+//   1. Load creative performance snapshots from Meta sync + reconciliation.
+//   2. Build CreativeLabItems with stable, deterministic IDs.
+//   3. Load persisted workflow state from DB (status, notes, activityLog).
+//   4. Merge: overlay DB state onto snapshot-derived items.
+//   5. Pass merged items to the client WorkflowView.
 //
-// The original AI generation pipeline is accessible at /creative-lab/generate.
+// The original AI generation pipeline is at /creative-lab/generate.
 
 export const dynamic = "force-dynamic";
 
-import { getServerSession }                      from "next-auth";
-import { authOptions }                            from "../../lib/auth";
-import { prisma }                                 from "../../lib/db";
+import { getServerSession }                           from "next-auth";
+import { authOptions }                                from "../../lib/auth";
+import { prisma }                                     from "../../lib/db";
 import {
   loadCreativePerformanceData,
   buildCreativePerformanceSnapshots,
-}                                                 from "../../lib/creativelab/performance";
-import { buildCreativeLabItem }                   from "../../lib/creativelab/workflowUtils";
-import { CreativeLabWorkflowView }                from "./CreativeLabWorkflowView";
+}                                                     from "../../lib/creativelab/performance";
+import { buildCreativeLabItem }                       from "../../lib/creativelab/workflowUtils";
+import {
+  buildWorkflowItemId,
+  getWorkflowStates,
+}                                                     from "../../lib/creativelab/db";
+import { CreativeLabWorkflowView }                    from "./CreativeLabWorkflowView";
 import type { CreativeLabItem, CreativeLabSourceType } from "../../types/creativeLab";
-import type { CreativePerformanceSnapshot }       from "../../lib/creativelab/types";
+import type { CreativePerformanceSnapshot }            from "../../lib/creativelab/types";
 
 export const metadata = {
   title: "Creative Lab — Media Buying Dashboard",
@@ -35,7 +42,7 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
 
   const selectedClientId = searchParams?.clientId ?? null;
 
-  // Load all clients for the filter selector
+  // Load all clients for the filter selector.
   const clients = await prisma.clientAccount
     .findMany({
       select:  { id: true, name: true },
@@ -44,21 +51,25 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
     })
     .catch(() => []);
 
-  // Load creative performance snapshots from the existing evaluation pipeline.
-  // Gracefully returns empty array on DB error (e.g. no Meta sync yet).
+  // Load creative performance snapshots from the evaluation pipeline.
+  // Gracefully falls back to empty on DB error or missing Meta sync.
   const perfData  = await loadCreativePerformanceData(workspaceId).catch(() => null);
   const snapshots = perfData ? buildCreativePerformanceSnapshots(perfData) : [];
 
-  // Build workflow items from snapshots.
-  // Skip "insufficient_data" — not enough signal to recommend action.
-  const items: CreativeLabItem[] = snapshots
+  // Build workflow items with stable, deterministic IDs.
+  const rawItems: Array<{ id: string; item: CreativeLabItem }> = snapshots
     .filter((s) => s.evaluationStatus !== "insufficient_data")
     .map((snapshot, idx) => {
+      const id         = buildWorkflowItemId(
+        snapshot.clientAccountId,
+        snapshot.externalCreativeId,
+        snapshot.externalCampaignId,
+      );
       const sourceType = deriveSourceType(snapshot);
       const { headline, rationale, nextAction } = deriveRecommendation(snapshot);
 
-      return buildCreativeLabItem({
-        id:                      `snap_${snapshot.externalCreativeId}_${idx}`,
+      const item = buildCreativeLabItem({
+        id,
         clientAccountId:         snapshot.clientAccountId,
         clientName:              snapshot.clientName,
         sourceType,
@@ -67,7 +78,33 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
         suggestedNextAction:     nextAction,
         snapshot,
       });
+
+      return { id, item };
     });
+
+  // Load any persisted workflow state from DB for these item IDs.
+  const persistedStates = await getWorkflowStates(
+    rawItems.map((r) => r.id),
+  ).catch(() => new Map<string, never>());
+
+  // Merge: overlay DB state (status, notes, activityLog) where it exists.
+  const items: CreativeLabItem[] = rawItems.map(({ id, item }) => {
+    const persisted = persistedStates.get(id);
+    if (!persisted) return item;
+
+    return {
+      ...item,
+      status: persisted.status as CreativeLabItem["status"],
+      notes:  persisted.notes ?? null,
+      activityLog: persisted.activityLog.map((e) => ({
+        id:        e.id,
+        action:    e.action,
+        note:      e.note,
+        actor:     null,
+        timestamp: e.createdAt.toISOString(),
+      })),
+    };
+  });
 
   return (
     <CreativeLabWorkflowView
@@ -79,7 +116,7 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — map CreativePerformanceSnapshot signals to workflow vocabulary
+// Helpers
 // ---------------------------------------------------------------------------
 
 function deriveSourceType(s: CreativePerformanceSnapshot): CreativeLabSourceType {

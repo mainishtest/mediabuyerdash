@@ -1144,3 +1144,38 @@ model BudgetPacingTarget {
   @@index([clientAccountId])
   @@index([clientAccountId, campaignId])
 }
+
+// ---------------------------------------------------------------------------
+// Creative Lab workflow persistence
+// ---------------------------------------------------------------------------
+
+// Persists the mutable workflow state for a Creative Lab item.
+// id is deterministic: cl_{clientAccountId}_{creativeId}_{campaignId}
+// Performance context is always loaded fresh from the Meta sync pipeline.
+model CreativeLabWorkflowItem {
+  id              String   @id
+  clientAccountId String
+  status          String   @default("queued")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  activityLog     CreativeLabActivityLog[]
+
+  @@index([clientAccountId])
+  @@index([status])
+}
+
+// One entry per state transition or buyer note — append-only audit trail.
+model CreativeLabActivityLog {
+  id         String                  @id @default(cuid())
+  itemId     String
+  item       CreativeLabWorkflowItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  action     String
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime                @default(now())
+
+  @@index([itemId])
+}
