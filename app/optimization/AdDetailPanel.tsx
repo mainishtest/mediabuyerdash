@@ -149,7 +149,7 @@ export function AdDetailPanel({ ev, creative, clientId, onClose }: Props) {
                 <img
                   src={creative!.imageUrl ?? creative!.thumbnailUrl!}
                   alt={creative!.creativeName ?? ev.entityName}
-                  className="w-full max-h-64 object-cover"
+                  className="w-full max-h-64 object-contain"
                 />
               </div>
             ) : (
