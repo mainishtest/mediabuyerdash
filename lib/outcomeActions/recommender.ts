@@ -309,9 +309,9 @@ export function buildOutcomeActionRecommendations(
       rec(
         "send_loser_to_creative_lab",
         "Send Challenger Back to Creative Lab",
-        `Challenger did not beat control (ROAS: ${chlSnap.roas.toFixed(2)}x vs ${ctlSnap.roas.toFixed(2)}x). Return for creative refresh.`,
+        `Challenger did not beat control (ROAS: ${chlSnap?.roas.toFixed(2) ?? "?"}x vs ${ctlSnap.roas.toFixed(2)}x). Return for creative refresh.`,
         {
-          loserHandlingPlan:   buildLoserHandlingPlan(chlSnap, experiment, loserBriefLink),
+          loserHandlingPlan:   chlSnap ? buildLoserHandlingPlan(chlSnap, experiment, loserBriefLink) : null,
           relatedEntityType:   "brief",
           relatedEntityName:   "Creative Lab",
           automationActionType: "refresh_creative",
