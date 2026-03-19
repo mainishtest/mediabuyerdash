@@ -41,9 +41,10 @@ const NAV: NavEntry[] = [
     label: "Performance",
     icon:  "◈",
     children: [
-      { kind: "leaf", href: "/reconciliation", label: "Reconciliation" },
-      { kind: "leaf", href: "/optimization",   label: "Optimization"   },
-      { kind: "leaf", href: "/pacing",         label: "Pacing"         },
+      { kind: "leaf", href: "/reports/executive", label: "Executive Report" },
+      { kind: "leaf", href: "/reconciliation",  label: "Reconciliation"  },
+      { kind: "leaf", href: "/optimization",    label: "Optimization"    },
+      { kind: "leaf", href: "/pacing",          label: "Pacing"          },
     ],
   },
   {
