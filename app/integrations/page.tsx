@@ -19,9 +19,8 @@ export default async function IntegrationsPage() {
   const session     = await getServerSession(authOptions);
   const workspaceId = session?.user?.workspaceId ?? null;
 
-  // Load workspace Meta connections
+  // Load Meta connections (no workspaceId field — global to the instance)
   const metaConnections = await prisma.metaConnection.findMany({
-    where:   workspaceId ? { workspaceId } : {},
     orderBy: { createdAt: "desc" },
     select: {
       id:              true,
