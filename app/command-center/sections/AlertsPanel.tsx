@@ -27,7 +27,7 @@ function AlertRow({ item }: { item: CommandCenterAlertItem }) {
           </span>
           <span className="text-xs text-slate-500">{formatAlertType(item.alertType)}</span>
           {item.isAcknowledged && (
-            <span className="text-xs text-slate-600">· ack'd</span>
+            <span className="text-xs text-slate-600">· ack&apos;d</span>
           )}
         </div>
         <p className="mt-1 text-sm font-medium text-slate-200">{item.entityName}</p>
