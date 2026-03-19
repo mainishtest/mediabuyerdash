@@ -1,24 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac }                from "crypto";
 import { prisma }                    from "../../../../lib/db";
+import { isPortalAuthenticated }     from "../../../../lib/portalAuth";
 
 type RouteContext = { params: { token: string } };
-
-// ── Cookie helpers (duplicated from auth/route.ts to avoid circular import) ──
-
-function cookieName(token: string) {
-  return `portal_auth_${token.slice(0, 16)}`;
-}
-
-function makeCookieValue(token: string): string {
-  const secret = process.env.NEXTAUTH_SECRET ?? "fallback-secret";
-  return createHmac("sha256", secret).update(token).digest("hex");
-}
-
-function isAuthenticated(req: NextRequest, token: string): boolean {
-  const value = req.cookies.get(cookieName(token))?.value;
-  return value === makeCookieValue(token);
-}
 
 /**
  * GET /api/portal/[token]?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -51,7 +35,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }
 
   // ── Password gate ──────────────────────────────────────────────────────────
-  if (account.clientPortalPasswordHash && !isAuthenticated(req, token)) {
+  if (account.clientPortalPasswordHash && !isPortalAuthenticated(req, token)) {
     return NextResponse.json({ requiresPassword: true }, { status: 401 });
   }
 
