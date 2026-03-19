@@ -2,15 +2,6 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "../../../lib/db";
-import { campaigns, adSets, ads } from "../../../lib/sampleData";
-import { hourlyMetrics } from "../../../lib/sampleMetrics";
-import { adSetPerformance, adPerformance } from "../../../lib/data/index";
-import {
-  getCampaignsByAccountId,
-  getAdSetsByCampaignId,
-  getAdsByAdSetId
-} from "../../../lib/selectors";
-import { aggregateByCampaign } from "../../../lib/aggregations";
 import { ClientDetailView }              from "./ClientDetailView";
 import { getClientIntegrationStatus }   from "../../../lib/clientIntegrations";
 import { getClientReadiness }           from "../../../lib/clientSync/readiness";
@@ -86,28 +77,15 @@ export default async function ClientDetailPage({ params }: PageProps) {
     loadCampaignPerformance(clientId),
   ]);
 
-  const clientCampaigns = getCampaignsByAccountId(campaigns, clientId);
-  const clientAdSets    = clientCampaigns.flatMap((c) =>
-    getAdSetsByCampaignId(adSets, c.id)
-  );
-  const clientAds       = clientAdSets.flatMap((as) =>
-    getAdsByAdSetId(ads, as.id)
-  );
-
-  const campaignSummaries = aggregateByCampaign(
-    hourlyMetrics.filter((m) => m.accountId === clientId)
-  );
-
-  // Filter performance summaries to only entities belonging to this client.
-  const clientAdSetIds = new Set(clientAdSets.map((as) => as.id));
-  const clientAdIds    = new Set(clientAds.map((ad) => ad.id));
-
-  const clientAdSetPerformance = adSetPerformance.filter((s) =>
-    clientAdSetIds.has(s.adSetId)
-  );
-  const clientAdPerformance = adPerformance.filter((s) =>
-    clientAdIds.has(s.adId)
-  );
+  // Legacy mock campaign/adset/ad data has been removed.
+  // These props are kept for backwards-compat with ClientDetailView but are
+  // empty — the view falls back to the real DB-backed sections for all data.
+  const clientCampaigns        = [] as import("../../../types/media").Campaign[];
+  const clientAdSets           = [] as import("../../../types/media").AdSet[];
+  const clientAds              = [] as import("../../../types/media").Ad[];
+  const campaignSummaries      = [] as import("../../../lib/aggregations").CampaignSummary[];
+  const clientAdSetPerformance = [] as import("../../../lib/data/adSetPerformance").AdSetPerformanceSummary[];
+  const clientAdPerformance    = [] as import("../../../lib/data/adPerformance").AdPerformanceSummary[];
 
   // Derive date range from the reconciled rows (all share the same dateFrom/dateTo).
   const reconciledDateFrom = reconciledCampaigns[0]?.dateFrom ?? null;
