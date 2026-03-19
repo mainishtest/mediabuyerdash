@@ -54,6 +54,7 @@ const NAV: NavEntry[] = [
     children: [
       { kind: "leaf", href: "/creative-lab",     label: "Creative Lab"     },
       { kind: "leaf", href: "/creative-fatigue", label: "Creative Fatigue" },
+      { kind: "leaf", href: "/insights/memory",  label: "Learning Memory"  },
     ],
   },
   {
