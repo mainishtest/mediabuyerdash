@@ -542,6 +542,59 @@ model LaunchDraftVariant {
   draft LaunchDraft @relation(fields: [launchDraftId], references: [id], onDelete: Cascade)
 }
 
+// ── Publish preparation ───────────────────────────────────────────────────────
+
+// A publish prep record packages one approved creative draft variant into a
+// validated, guardrail-checked launch plan ready for human-reviewed publication.
+// briefId + variantId reference CreativeBriefRecord / CreativeDraftVariantRecord
+// as plain strings (no FK) to keep migration surface minimal.
+model PublishPrepRecord {
+  id               String    @id @default(cuid())
+  briefId          String
+  variantId        String
+  clientAccountId  String
+  status           String    @default("draft")
+  executionMode    String    @default("manual_publish")
+
+  // Source snapshot (denormalised for self-contained display)
+  variantTitle     String
+  variantType      String    // copy | image
+  briefIntent      String
+  briefDraftType   String
+  clientName       String
+  campaignName     String?
+  creativeName     String?
+
+  // Target mapping
+  targetCampaignId         String?
+  targetCampaignName       String?
+  targetCampaignExternalId String?
+  targetAdSetId            String?
+  targetAdSetName          String?
+  targetAdSetExternalId    String?
+  destinationUrl           String?
+  ctaType                  String?
+
+  // Payload + validation + guardrails (JSON blobs)
+  payloadJson    String?   // PublishPayloadPreview
+  validationJson String?   // PublishValidationResult
+  guardrailJson  String?   // PublishGuardrailResult[]
+
+  // Approval + publish state
+  launchNotes        String?
+  approvedForLaunch  Boolean   @default(false)
+  approvedAt         DateTime?
+  publishedAt        DateTime?
+  publishError       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([briefId])
+  @@index([variantId])
+  @@index([clientAccountId])
+}
+
 // ── Meta sync ─────────────────────────────────────────────────────────────────
 
 // Audit record for each sync run.

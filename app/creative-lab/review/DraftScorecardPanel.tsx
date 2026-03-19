@@ -8,7 +8,8 @@
 //   Mobile:  stacked — score header → content → collapsible dimensions → actions
 //   Desktop: used inside side-by-side or full-width depending on parent layout
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import Link from "next/link";
 import type {
   CreativeDraftScorecard,
   CreativeScoreDimension,
@@ -216,6 +217,35 @@ export function DraftScorecardPanel({
   isTop = false,
 }: Props) {
   const [dimensionsExpanded, setDimensionsExpanded] = useState(false);
+  const [prepPending, setPrepPending]   = useState(false);
+  const [prepItemId,  setPrepItemId]    = useState<string | null>(null);
+  const [prepError,   setPrepError]     = useState<string | null>(null);
+
+  // Create a publish prep item from this approved variant
+  const handleCreatePrepItem = useCallback(async () => {
+    if (prepPending) return;
+    setPrepPending(true);
+    setPrepError(null);
+    try {
+      const res  = await fetch("/api/creative-lab/publish-prep", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ briefId, variantId: scorecard.variantId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPrepItemId(data.id);
+        // Also call the parent approve action to update variant review state
+        onAction(scorecard.variantId, "approve_for_publish_prep");
+      } else {
+        setPrepError(data.error ?? "Failed to create prep item.");
+      }
+    } catch {
+      setPrepError("Network error — try again.");
+    } finally {
+      setPrepPending(false);
+    }
+  }, [prepPending, briefId, scorecard.variantId, onAction]);
 
   const readinessClass = READINESS_COLOR[scorecard.approvalReadiness];
   const readinessBg    = READINESS_BG[scorecard.approvalReadiness];
@@ -321,15 +351,32 @@ export function DraftScorecardPanel({
             Review Actions
           </p>
           <div className="space-y-2">
+            {/* Prep creation feedback */}
+            {prepItemId && (
+              <div className="rounded-xl border border-emerald-700/40 bg-emerald-950/20 px-3 py-2.5 flex items-center justify-between gap-2">
+                <p className="text-xs text-emerald-300">Prep item created</p>
+                <Link
+                  href={`/creative-lab/publish-prep`}
+                  className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                >
+                  Open Publish Prep →
+                </Link>
+              </div>
+            )}
+            {prepError && (
+              <p className="text-xs text-rose-400">{prepError}</p>
+            )}
+
             {/* Primary: approve or needs revision — full width on mobile */}
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => onAction(scorecard.variantId, "approve_for_publish_prep")}
+                onClick={prepItemId ? undefined : handleCreatePrepItem}
+                disabled={prepPending || !!prepItemId}
                 className="rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-3 py-3
                   text-xs font-medium text-emerald-300 hover:bg-emerald-950/50
-                  active:scale-95 transition-all"
+                  active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Approve for Publish Prep
+                {prepPending ? "Creating…" : prepItemId ? "Prep Created ✓" : "Approve for Publish Prep"}
               </button>
               <button
                 onClick={() => onAction(scorecard.variantId, "needs_revision")}
