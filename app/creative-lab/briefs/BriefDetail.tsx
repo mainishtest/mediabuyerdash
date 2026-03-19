@@ -126,7 +126,7 @@ function VariantCard({
           {variant.hook && (
             <div>
               <p className="text-xs text-slate-600">Hook</p>
-              <p className="mt-0.5 text-sm font-medium leading-snug text-slate-100">"{variant.hook}"</p>
+              <p className="mt-0.5 text-sm font-medium leading-snug text-slate-100">&ldquo;{variant.hook}&rdquo;</p>
             </div>
           )}
           {variant.body && (
