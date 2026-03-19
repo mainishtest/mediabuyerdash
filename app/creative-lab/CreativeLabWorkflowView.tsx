@@ -231,13 +231,22 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
         description="Review creative opportunities, track refresh work, and prepare actions from performance signals."
         badge={<Badge variant="purple">Workflow Queue</Badge>}
         actions={
-          <Link
-            href="/creative-lab/generate"
-            className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm
-              font-medium text-slate-200 transition-colors hover:bg-slate-700"
-          >
-            AI Generator →
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/creative-lab/briefs"
+              className="rounded-lg border border-violet-700/50 bg-violet-950/30 px-4 py-2 text-sm
+                font-medium text-violet-300 transition-colors hover:bg-violet-950/50"
+            >
+              Creative Briefs →
+            </Link>
+            <Link
+              href="/creative-lab/generate"
+              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm
+                font-medium text-slate-200 transition-colors hover:bg-slate-700"
+            >
+              AI Generator →
+            </Link>
+          </div>
         }
       />
 
@@ -448,6 +457,12 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
           className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
           Creative Refresh Queue →
+        </Link>
+        <Link
+          href="/creative-lab/briefs"
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          Creative Briefs →
         </Link>
         <Link
           href="/creative-lab/generate"

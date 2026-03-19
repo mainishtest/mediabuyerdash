@@ -1179,3 +1179,48 @@ model CreativeLabActivityLog {
 
   @@index([itemId])
 }
+
+// ---------------------------------------------------------------------------
+// Creative Brief records
+// ---------------------------------------------------------------------------
+
+// Persists one generated brief per action triggered from the refresh queue.
+// briefJson stores the assembled input + structured sections (no drafts).
+// Draft variants are stored separately for individual review decisions.
+model CreativeBriefRecord {
+  id              String   @id @default(cuid())
+  clientAccountId String
+  campaignId      String?
+  creativeId      String?
+  sourceItemId    String?
+  draftType       String
+  intent          String
+  status          String   @default("draft")
+  briefJson       String
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variants CreativeDraftVariantRecord[]
+
+  @@index([clientAccountId])
+  @@index([status])
+  @@index([sourceItemId])
+}
+
+// One row per generated draft variant. reviewDecision is set by the buyer.
+model CreativeDraftVariantRecord {
+  id             String              @id @default(cuid())
+  briefId        String
+  brief          CreativeBriefRecord @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  variantType    String
+  title          String
+  contentJson    String
+  reviewDecision String?
+  reviewNote     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([briefId])
+}

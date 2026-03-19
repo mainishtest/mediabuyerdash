@@ -9,10 +9,13 @@
 //   Signals       — source signals table (what triggered this item)
 //   Performance   — 14-day snapshot (CRM-verified ROAS/CPA)
 //   Creative      — thumbnail + ad copy
-//   Actions       — thumb-friendly action buttons
+//   Actions       — thumb-friendly action buttons (wired to brief generation)
 
+import { useState, useCallback }      from "react";
+import { useRouter }                  from "next/navigation";
 import Link                           from "next/link";
 import type { CreativeRefreshQueueItem } from "../../../types/creativeRefreshQueue";
+import type { CreativeDraftType }     from "../../../types/creativeBrief";
 import { Badge }                      from "../../../components/ui";
 import { formatCurrency }             from "../../../lib/metricUtils";
 import {
@@ -113,6 +116,60 @@ type Props = {
 // ---------------------------------------------------------------------------
 
 export function RefreshQueueItemDetail({ item, onAction, onClose }: Props) {
+  const router = useRouter();
+  const [generatingBrief, setGeneratingBrief] = useState<CreativeDraftType | null>(null);
+
+  const handleGenerateBrief = useCallback(
+    async (draftType: CreativeDraftType) => {
+      setGeneratingBrief(draftType);
+      try {
+        const res = await fetch("/api/creative-lab/briefs", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceItemId:            item.id,
+            clientAccountId:         item.clientAccountId,
+            clientName:              item.clientName,
+            campaignId:              item.campaignId ?? null,
+            campaignName:            item.campaignName ?? null,
+            creativeId:              item.creativeId ?? null,
+            creativeName:            item.creativeName ?? null,
+            spend:                   item.spend,
+            impressions:             item.impressions,
+            clicks:                  item.clicks,
+            avgCtr:                  item.avgCtr,
+            avgFrequency:            item.avgFrequency ?? null,
+            campaignRoas:            item.campaignRoas ?? null,
+            campaignCpa:             item.campaignCpa ?? null,
+            adCopy:                  item.adCopy ?? null,
+            callToAction:            item.callToAction ?? null,
+            thumbnailUrl:            item.thumbnailUrl ?? null,
+            fatigueStatus:           item.fatigueStatus ?? null,
+            evaluationStatus:        item.evaluationStatus,
+            priorityReason:          item.priorityReason,
+            signalLabels:            item.sourceSignals.map((s) => s.label),
+            recommendedActionType:   item.recommendation.actionType,
+            recommendationRationale: item.recommendation.rationale,
+            draftType,
+          }),
+        });
+
+        if (res.ok) {
+          router.push(
+            `/creative-lab/briefs?clientId=${encodeURIComponent(item.clientAccountId)}`,
+          );
+        } else {
+          const err = await res.json().catch(() => ({}));
+          console.error("[generate brief]", err);
+        }
+      } catch (err) {
+        console.error("[generate brief]", err);
+      } finally {
+        setGeneratingBrief(null);
+      }
+    },
+    [item, router],
+  );
   const hasThumbnail = !!(item.thumbnailUrl);
   const rec          = item.recommendation;
 
@@ -296,28 +353,54 @@ export function RefreshQueueItemDetail({ item, onAction, onClose }: Props) {
         {/* ── Action buttons ── */}
         <div className="px-5 py-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Actions
+            Generate Brief
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {rec.actionType !== "monitor_only" && (
-              <PrimaryBtn onClick={() => onAction(item.id, rec.actionType)}>
-                {rec.actionType === "generate_new_copy_variations"  && "Generate 3 New Copy Variations"}
-                {rec.actionType === "generate_new_image_variations" && "Generate 3 Image Variation Briefs"}
-                {rec.actionType === "generate_full_refresh_brief"   && "Generate Full Refresh Brief"}
-                {rec.actionType === "pause_creative_candidate"      && "Mark as Pause Candidate"}
-                {rec.actionType === "review_creative"               && "Open in Creative Lab"}
+              <PrimaryBtn
+                onClick={() => {
+                  if (rec.actionType === "generate_new_copy_variations")  handleGenerateBrief("copy_variation");
+                  else if (rec.actionType === "generate_new_image_variations") handleGenerateBrief("image_brief");
+                  else if (rec.actionType === "generate_full_refresh_brief")   handleGenerateBrief("full_refresh_brief");
+                  else onAction(item.id, rec.actionType);
+                }}
+              >
+                {generatingBrief ? "Generating…" : (
+                  <>
+                    {rec.actionType === "generate_new_copy_variations"  && "Generate 3 New Copy Variations"}
+                    {rec.actionType === "generate_new_image_variations" && "Generate 3 Image Variation Briefs"}
+                    {rec.actionType === "generate_full_refresh_brief"   && "Generate Full Refresh Brief"}
+                    {rec.actionType === "pause_creative_candidate"      && "Mark as Pause Candidate"}
+                    {rec.actionType === "review_creative"               && "Open in Creative Lab"}
+                  </>
+                )}
               </PrimaryBtn>
             )}
 
-            {/* Secondary actions always available */}
-            <SecondaryBtn onClick={() => onAction(item.id, "generate_new_copy_variations")}>
-              3 New Copy Variations
+            {/* Brief generation actions — always available */}
+            <SecondaryBtn
+              onClick={() => !generatingBrief && handleGenerateBrief("copy_variation")}
+              className={generatingBrief === "copy_variation" ? "opacity-60" : ""}
+            >
+              {generatingBrief === "copy_variation" ? "Generating…" : "3 Copy Variations"}
             </SecondaryBtn>
-            <SecondaryBtn onClick={() => onAction(item.id, "generate_new_image_variations")}>
-              3 Image Variation Briefs
+            <SecondaryBtn
+              onClick={() => !generatingBrief && handleGenerateBrief("headline_variation")}
+              className={generatingBrief === "headline_variation" ? "opacity-60" : ""}
+            >
+              {generatingBrief === "headline_variation" ? "Generating…" : "3 Headline Variations"}
             </SecondaryBtn>
-            <SecondaryBtn onClick={() => onAction(item.id, "generate_full_refresh_brief")}>
-              Full Refresh Brief
+            <SecondaryBtn
+              onClick={() => !generatingBrief && handleGenerateBrief("image_brief")}
+              className={generatingBrief === "image_brief" ? "opacity-60" : ""}
+            >
+              {generatingBrief === "image_brief" ? "Generating…" : "3 Image Variation Briefs"}
+            </SecondaryBtn>
+            <SecondaryBtn
+              onClick={() => !generatingBrief && handleGenerateBrief("full_refresh_brief")}
+              className={generatingBrief === "full_refresh_brief" ? "opacity-60" : ""}
+            >
+              {generatingBrief === "full_refresh_brief" ? "Generating…" : "Full Refresh Brief"}
             </SecondaryBtn>
             <SecondaryBtn onClick={() => onAction(item.id, "monitor_only")} className="text-slate-500">
               Mark as Monitor Only
@@ -326,6 +409,13 @@ export function RefreshQueueItemDetail({ item, onAction, onClose }: Props) {
 
           {/* Linked entity nav */}
           <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href={`/creative-lab/briefs?clientId=${encodeURIComponent(item.clientAccountId)}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-700/50
+                bg-violet-950/30 px-3 py-1.5 text-xs text-violet-300 hover:bg-violet-950/50 transition-colors"
+            >
+              ↗ View Briefs
+            </Link>
             <Link
               href={`/creative-lab?clientId=${encodeURIComponent(item.clientAccountId)}`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700
