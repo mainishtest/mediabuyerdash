@@ -160,17 +160,10 @@ export default async function OutcomeActionsPage({ searchParams }: Props) {
             <SectionCard
               key={experiment.id}
               title={experiment.name}
-              description={
-                <span className="flex flex-wrap items-center gap-3">
-                  <span className="text-xs text-slate-500">
-                    {experiment.result?.outcome?.replace(/_/g, " ") ?? "Not evaluated"}
-                  </span>
-                  <span className={`text-xs font-semibold ${topPriColor}`}>
-                    Top: {topAction}
-                  </span>
-                  <span className="text-xs text-slate-600">
-                    {summary.totalActions} action{summary.totalActions !== 1 ? "s" : ""} · {summary.readyForApproval} ready
-                  </span>
+              description={`${experiment.result?.outcome?.replace(/_/g, " ") ?? "Not evaluated"} · ${summary.totalActions} action${summary.totalActions !== 1 ? "s" : ""} · ${summary.readyForApproval} ready`}
+              actions={
+                <span className={`text-xs font-semibold ${topPriColor}`}>
+                  Top: {topAction}
                 </span>
               }
             >
