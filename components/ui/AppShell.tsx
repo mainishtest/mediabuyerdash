@@ -55,6 +55,13 @@ function WorkspaceHeader() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Portal pages render with no chrome — clients access them via shareable link.
+  const isPortal = pathname?.startsWith("/portal/");
+  if (isPortal) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950">

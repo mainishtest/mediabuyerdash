@@ -103,6 +103,31 @@ export function ClientDetailView({
   reconciledDateTo,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("campaigns");
+  const [portalLink, setPortalLink] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalCopied, setPortalCopied] = useState(false);
+
+  async function generatePortalLink() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${account.id}/portal-token`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      const { token } = await res.json();
+      const url = `${window.location.origin}/portal/${token}`;
+      setPortalLink(url);
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
+  function copyPortalLink() {
+    if (!portalLink) return;
+    navigator.clipboard.writeText(portalLink);
+    setPortalCopied(true);
+    setTimeout(() => setPortalCopied(false), 2000);
+  }
 
   const [goalOverrides, setGoalOverrides] = useState<Record<string, GoalOverride>>(
     Object.fromEntries(
@@ -239,10 +264,45 @@ export function ClientDetailView({
               <p className="mt-1 text-sm text-slate-400">{account.brandName}</p>
             )}
           </div>
-          <Badge variant={clientStatusVariant(account.status)}>
-            {account.status.charAt(0).toUpperCase() + account.status.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={clientStatusVariant(account.status)}>
+              {account.status.charAt(0).toUpperCase() + account.status.slice(1)}
+            </Badge>
+            <button
+              onClick={generatePortalLink}
+              disabled={portalLoading}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs
+                font-medium text-slate-300 transition-colors hover:border-emerald-600
+                hover:bg-emerald-900/30 hover:text-emerald-300 disabled:opacity-50"
+            >
+              {portalLoading ? "Generating…" : "Share with Client"}
+            </button>
+          </div>
         </div>
+
+        {/* Portal link panel */}
+        {portalLink && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-900/20 px-3 py-2">
+            <span className="flex-1 truncate text-xs text-emerald-300">{portalLink}</span>
+            <button
+              onClick={copyPortalLink}
+              className="shrink-0 rounded-md border border-emerald-700 px-2.5 py-1 text-xs
+                font-medium text-emerald-400 transition-colors hover:bg-emerald-900/40"
+            >
+              {portalCopied ? "Copied!" : "Copy link"}
+            </button>
+            <a
+              href={portalLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-md border border-slate-700 px-2.5 py-1 text-xs
+                text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+            >
+              Preview
+            </a>
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">
             {account.currency}
