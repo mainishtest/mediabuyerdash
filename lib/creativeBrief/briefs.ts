@@ -413,26 +413,32 @@ export function buildCreativeDraftSet(
 ): CreativeDraftSet {
   const generatedAt = new Date().toISOString();
 
-  // Build a CreativeDiagnosisInput compatible with existing generators
+  // Build a CreativeDiagnosisInput compatible with existing generators.
+  // Generators only use adId, adName, and cpaGoalValue — other fields use safe defaults.
   const diagInput: CreativeDiagnosisInput = {
-    adId:         input.creativeId  ?? input.sourceItemId,
+    adId:         input.creativeId   ?? input.sourceItemId,
     adName:       input.creativeName ?? "Creative",
     campaignId:   input.campaignId   ?? "",
     campaignName: input.campaignName ?? "",
-    clientId:     input.clientAccountId,
-    clientName:   input.clientName,
+    actualCpa:    input.campaignCpa  ?? 0,
+    actualRoas:   input.campaignRoas ?? 0,
     spend:        input.spend,
-    ctr:          input.avgCtr,
-    frequency:    input.avgFrequency ?? 0,
+    conversions:  0,
     cpaGoalValue: input.campaignCpa  ?? 0,
+    cpaGoalType:  "low",
     roasGoalValue: input.campaignRoas ?? 0,
-    adCopyHook:   input.adCopy?.slice(0, 100) ?? null,
-    adCopyBody:   input.adCopy ?? null,
-    adCopyCallToAction: input.callToAction ?? null,
-    imageHeadline:      null,
-    imageStyle:         null,
-    dominantMessage:    null,
-    visualTheme:        null,
+    roasGoalType:  "high",
+    copy: {
+      hook:         input.adCopy?.slice(0, 100) ?? "",
+      body:         input.adCopy ?? "",
+      callToAction: input.callToAction ?? "",
+    },
+    image: {
+      imageHeadline:   "",
+      imageStyle:      "",
+      dominantMessage: "",
+      visualTheme:     "",
+    },
   };
 
   let variants: CreativeDraftVariant[];
@@ -446,7 +452,6 @@ export function buildCreativeDraftSet(
       conceptSummary: c.conceptSummary,
       visualChanges:  c.visualChanges,
       goal:           c.goal,
-      directResponseAngle: c.directResponseAngle ?? null,
       reviewDecision: null,
       reviewNote:     null,
       reviewedAt:     null,
