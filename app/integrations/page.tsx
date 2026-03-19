@@ -212,7 +212,7 @@ export default async function IntegrationsPage() {
         <Link href="/clients" className="text-slate-300 underline hover:text-white">
           Clients
         </Link>{" "}
-        and open a client's setup page.
+        and open a client&apos;s setup page.
       </div>
     </div>
   );
