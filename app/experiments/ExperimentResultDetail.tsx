@@ -9,9 +9,11 @@
 //   Mobile:  stacked — outcome → comparison → reasons → learnings → actions
 //   Desktop: used inside sticky right panel
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link         from "next/link";
 import type { ExperimentWithResult } from "../../types/experiment";
+import type { OutcomeActionRecommendation } from "../../types/outcomeActions";
+import { OutcomeActionsPanel } from "./OutcomeActionsPanel";
 import {
   OUTCOME_LABEL,
   OUTCOME_COLOR,
@@ -186,6 +188,20 @@ export function ExperimentResultDetail({ experiment, onEvaluate, onArchive, acti
   const lift        = r?.primaryMetricLift;
   const liftPct     = lift !== null && lift !== undefined ? (lift * 100).toFixed(1) : null;
 
+  // Outcome action recommendations — loaded client-side after evaluation
+  const [recs,       setRecs]       = useState<OutcomeActionRecommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!experiment.result) return;
+    setRecsLoading(true);
+    fetch(`/api/experiments/${experiment.id}/actions`)
+      .then((r) => r.json())
+      .then((data) => { if (data.ok) setRecs(data.recommendations ?? []); })
+      .catch(() => {})
+      .finally(() => setRecsLoading(false));
+  }, [experiment.id, experiment.result?.outcome]);
+
   return (
     <div className="space-y-5">
 
@@ -272,6 +288,20 @@ export function ExperimentResultDetail({ experiment, onEvaluate, onArchive, acti
       <SectionCard title="Experiment Learnings" description="Tagged for reuse in Creative Lab and brief generation.">
         <LearningsPanel experiment={experiment} />
       </SectionCard>
+
+      {/* ── Outcome action recommendations ── */}
+      {(isCompleted || recs.length > 0) && (
+        <SectionCard
+          title="Recommended Next Actions"
+          description="Guarded action proposals based on experiment outcome. Approval routes through the automation workflow."
+        >
+          <OutcomeActionsPanel
+            experimentId={experiment.id}
+            recommendations={recs}
+            isLoading={recsLoading}
+          />
+        </SectionCard>
+      )}
 
       {/* ── Experiment details ── */}
       <SectionCard title="Experiment Details">
