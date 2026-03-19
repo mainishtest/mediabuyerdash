@@ -101,6 +101,7 @@ export async function POST(
   // Build automation proposal draft (reuses existing automation layer)
   const draft: ProposedAutomationActionDraft = {
     workspaceId:     workspaceId ?? null,
+    automationRuleId: null,
     clientAccountId: experiment.clientAccountId,
     clientName:      `Client ${experiment.clientAccountId}`,
     actionType:      rec.automationActionType as ProposedAutomationActionDraft["actionType"],
@@ -110,13 +111,11 @@ export async function POST(
     entityName:      rec.relatedEntityName ?? experiment.name,
     rationale:       `[Experiment: ${experiment.name}] ${rec.rationale}`,
     supportingData: {
-      experimentId:    experiment.id,
-      outcome:         experiment.result?.outcome,
-      confidence:      experiment.result?.confidence,
-      primaryLift:     experiment.result?.primaryMetricLift,
+      experimentId:       experiment.id,
+      outcome:            experiment.result?.outcome ?? "",
+      confidence:         experiment.result?.confidence ?? 0,
+      primaryLift:        experiment.result?.primaryMetricLift ?? 0,
       recommendationType: rec.actionType,
-      scalePlan:       rec.scalePlan,
-      loserHandlingPlan: rec.loserHandlingPlan,
     },
     deduplicationKey: `${experiment.id}:${rec.automationActionType}:${rec.relatedEntityId ?? experiment.clientAccountId}`,
     expiresAt:        new Date(Date.now() + 7 * 86_400_000),  // 7 days

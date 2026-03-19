@@ -200,7 +200,8 @@ export function ExperimentResultDetail({ experiment, onEvaluate, onArchive, acti
       .then((data) => { if (data.ok) setRecs(data.recommendations ?? []); })
       .catch(() => {})
       .finally(() => setRecsLoading(false));
-  }, [experiment.id, experiment.result?.outcome]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experiment.id, experiment.result?.outcome]); // experiment.result identity changes cause re-fetch via outcome change
 
   return (
     <div className="space-y-5">
