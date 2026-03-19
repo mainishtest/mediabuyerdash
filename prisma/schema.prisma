@@ -1209,18 +1209,45 @@ model CreativeBriefRecord {
 }
 
 // One row per generated draft variant. reviewDecision is set by the buyer.
+// generationJobId links AI-generated variants back to the job that created them.
 model CreativeDraftVariantRecord {
-  id             String              @id @default(cuid())
-  briefId        String
-  brief          CreativeBriefRecord @relation(fields: [briefId], references: [id], onDelete: Cascade)
-  variantType    String
-  title          String
-  contentJson    String
-  reviewDecision String?
-  reviewNote     String?
-  reviewedAt     DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id              String              @id @default(cuid())
+  briefId         String
+  brief           CreativeBriefRecord @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  variantType     String
+  title           String
+  contentJson     String
+  reviewDecision  String?
+  reviewNote      String?
+  reviewedAt      DateTime?
+  generationJobId String?             // null for brief-scaffolded variants; set for AI-generated
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([briefId])
+  @@index([generationJobId])
+}
+
+// ---------------------------------------------------------------------------
+// Creative Generation Job records
+// ---------------------------------------------------------------------------
+
+// One row per AI generation run. Tracks provider, mode, token usage, latency.
+// Variants produced by this job are stored in CreativeDraftVariantRecord
+// with generationJobId linking back here.
+model CreativeGenerationJobRecord {
+  id           String    @id @default(cuid())
+  briefId      String
+  mode         String    // CreativeGenerationMode
+  provider     String    @default("mock")
+  status       String    @default("running")  // running | completed | failed
+  variantCount Int       @default(0)
+  tokensUsed   Int?
+  latencyMs    Int?
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([briefId])
+  @@index([status])
 }

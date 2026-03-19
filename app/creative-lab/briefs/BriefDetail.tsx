@@ -350,6 +350,21 @@ export function BriefDetail({ brief, onStatusChange, onVariantReview, onClose }:
             </SecondaryBtn>
           </div>
 
+          {/* AI generation entry point */}
+          <div className="mt-4 rounded-xl border border-indigo-800/40 bg-indigo-950/20 p-3">
+            <p className="text-xs font-semibold text-indigo-300">Generate AI Drafts</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Turn this brief into AI-generated copy and image direction using performance context.
+            </p>
+            <Link
+              href={`/creative-lab/generation?briefId=${encodeURIComponent(brief.id)}`}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5
+                text-xs font-medium text-white hover:bg-indigo-500 active:scale-95 transition-colors"
+            >
+              ◉ Generate AI Drafts →
+            </Link>
+          </div>
+
           {/* Linked entity navigation */}
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
