@@ -365,6 +365,24 @@ export function BriefDetail({ brief, onStatusChange, onVariantReview, onClose }:
             </Link>
           </div>
 
+          {/* Score & Review entry point */}
+          {brief.draftSet.variants.length > 0 && (
+            <div className="mt-3 rounded-xl border border-sky-800/40 bg-sky-950/20 p-3">
+              <p className="text-xs font-semibold text-sky-300">Score &amp; Review Drafts</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {brief.draftSet.variants.length} variant{brief.draftSet.variants.length !== 1 ? "s" : ""} ready — evaluate quality, rank, and determine approval readiness.
+              </p>
+              <Link
+                href={`/creative-lab/review?briefId=${encodeURIComponent(brief.id)}`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-sky-700/50
+                  bg-sky-900/30 px-4 py-2.5 text-xs font-medium text-sky-200
+                  hover:bg-sky-900/50 active:scale-95 transition-colors"
+              >
+                ◈ Score &amp; Review →
+              </Link>
+            </div>
+          )}
+
           {/* Linked entity navigation */}
           <div className="mt-4 flex flex-wrap gap-2">
             <Link

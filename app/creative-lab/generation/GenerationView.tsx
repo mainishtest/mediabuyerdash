@@ -393,6 +393,16 @@ export function GenerationView({ brief, initialJobs }: Props) {
                     Regenerate
                   </button>
                 )}
+
+                {hasGenerated && (
+                  <Link
+                    href={`/creative-lab/review?briefId=${encodeURIComponent(brief.id)}`}
+                    className="rounded-xl border border-sky-700/50 bg-sky-950/20 px-4 py-3 text-sm
+                      font-medium text-sky-200 hover:bg-sky-950/40 active:scale-95 transition-colors"
+                  >
+                    ◈ Score &amp; Review
+                  </Link>
+                )}
               </div>
 
               {/* Generating pulse */}
