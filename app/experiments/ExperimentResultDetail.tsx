@@ -62,7 +62,7 @@ function SnapshotCard({ experiment }: { experiment: ExperimentWithResult }) {
 
   if (!ctl || !chl) return (
     <div className="rounded-xl border border-dashed border-slate-800 px-4 py-4">
-      <p className="text-xs text-slate-600">Performance data not yet loaded — click "Evaluate Now" to run ingestion.</p>
+      <p className="text-xs text-slate-600">Performance data not yet loaded — click &ldquo;Evaluate Now&rdquo; to run ingestion.</p>
     </div>
   );
 
