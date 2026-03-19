@@ -9,6 +9,7 @@
 // Desktop: richer card list with inline metadata columns
 
 import { useState, useMemo, useTransition } from "react";
+import Link from "next/link";
 import type { AlertEventRow, AlertSummary, AlertType, AlertSeverity, AlertStatus } from "../../lib/alerts/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -127,6 +128,67 @@ function FilterBar({
   );
 }
 
+// ── Contextual action buttons ─────────────────────────────────────────────────
+
+type ActionButton = {
+  label:   string;
+  href:    string;
+  variant: "indigo" | "slate" | "rose";
+};
+
+function getAlertActions(alert: AlertEventRow): ActionButton[] {
+  const cid          = encodeURIComponent(alert.clientAccountId);
+  const optUrl       = `/optimization?clientId=${cid}`;
+  const creativeUrl  = `/creative-lab/generate?clientId=${cid}`;
+  const integUrl     = `/clients/${alert.clientAccountId}/integrations`;
+
+  switch (alert.alertType) {
+    case "campaign_above_goal":
+      return [
+        { label: "Scale Campaign →",    href: optUrl,      variant: "indigo" },
+      ];
+
+    case "roas_drop":
+    case "cpa_spike":
+    case "campaign_below_goal":
+      return [
+        { label: "Lower Spend →",       href: optUrl,      variant: "slate"  },
+        { label: "Adjust Creative →",   href: creativeUrl, variant: "indigo" },
+        { label: "Pause Campaign →",    href: optUrl,      variant: "rose"   },
+      ];
+
+    case "spend_spike":
+      return [
+        { label: "Review Spend →",      href: optUrl,      variant: "slate"  },
+        { label: "Pause Campaign →",    href: optUrl,      variant: "rose"   },
+      ];
+
+    case "spend_drop":
+      return [
+        { label: "Review Campaign →",   href: optUrl,      variant: "slate"  },
+        { label: "Adjust Creative →",   href: creativeUrl, variant: "indigo" },
+      ];
+
+    case "stale_sync":
+    case "no_data":
+    case "integration_failure":
+      return [
+        { label: "Fix Integration →",   href: integUrl,    variant: "indigo" },
+      ];
+
+    default:
+      return [
+        { label: "View in Optimization →", href: optUrl,   variant: "slate"  },
+      ];
+  }
+}
+
+const ACTION_CLS: Record<ActionButton["variant"], string> = {
+  indigo: "border border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60 hover:text-indigo-200",
+  slate:  "border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700",
+  rose:   "border border-rose-800 bg-rose-950/60 text-rose-300 hover:bg-rose-900/50",
+};
+
 // ── Alert card ────────────────────────────────────────────────────────────────
 
 function AlertCard({
@@ -181,9 +243,22 @@ function AlertCard({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Contextual action buttons */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {getAlertActions(alert).map((action) => (
+          <Link
+            key={action.label}
+            href={action.href}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors active:scale-95 ${ACTION_CLS[action.variant]}`}
+          >
+            {action.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* Status actions */}
       {alert.status !== "resolved" && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {alert.status === "open" && (
             <button
               disabled={isPending}
