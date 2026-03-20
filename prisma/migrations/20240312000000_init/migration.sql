@@ -5,8 +5,8 @@ CREATE TABLE "ClientAccount" (
     "platform" TEXT NOT NULL DEFAULT 'facebook',
     "currency" TEXT NOT NULL,
     "timezone" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -17,8 +17,8 @@ CREATE TABLE "Campaign" (
     "objective" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "dailyBudget" REAL NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Campaign_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "ClientAccount" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -30,8 +30,8 @@ CREATE TABLE "CampaignGoal" (
     "roasGoalValue" REAL NOT NULL,
     "cpaGoalType" TEXT NOT NULL,
     "cpaGoalValue" REAL NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "CampaignGoal_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -44,8 +44,8 @@ CREATE TABLE "AdSet" (
     "dailyBudget" REAL NOT NULL,
     "status" TEXT NOT NULL,
     "startDate" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "AdSet_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -57,8 +57,8 @@ CREATE TABLE "Creative" (
     "headline" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "callToAction" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -68,8 +68,8 @@ CREATE TABLE "Ad" (
     "creativeId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "status" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Ad_adSetId_fkey" FOREIGN KEY ("adSetId") REFERENCES "AdSet" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "Ad_creativeId_fkey" FOREIGN KEY ("creativeId") REFERENCES "Creative" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -81,11 +81,11 @@ CREATE TABLE "MetaConnection" (
     "userName" TEXT NOT NULL,
     "userEmail" TEXT NOT NULL,
     "accessToken" TEXT,
-    "connectedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" DATETIME NOT NULL,
+    "connectedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -95,10 +95,10 @@ CREATE TABLE "MetaAdAccountSelection" (
     "adAccountId" TEXT NOT NULL,
     "clientAccountId" TEXT,
     "syncEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "addedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastSyncedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "addedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSyncedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "MetaAdAccountSelection_metaConnectionId_fkey" FOREIGN KEY ("metaConnectionId") REFERENCES "MetaConnection" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -125,8 +125,8 @@ CREATE TABLE "UTMPerformanceRow" (
     "revenue" REAL NOT NULL,
     "cpa" REAL NOT NULL,
     "roas" REAL NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "UTMPerformanceRow_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -138,9 +138,9 @@ CREATE TABLE "CRMConnection" (
     "status" TEXT NOT NULL,
     "storeUrl" TEXT,
     "apiEndpoint" TEXT,
-    "connectedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "connectedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -157,8 +157,8 @@ CREATE TABLE "CRMPerformanceRow" (
     "orders" INTEGER NOT NULL,
     "revenue" REAL NOT NULL,
     "averageOrderValue" REAL NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "CRMPerformanceRow_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -181,8 +181,8 @@ CREATE TABLE "ReconciliationResult" (
     "revenueDeltaPct" REAL,
     "status" TEXT NOT NULL,
     "statusReason" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "ReconciliationResult_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
