@@ -28,6 +28,11 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV: NavEntry[] = [
   {
     kind:  "leaf",
+    href:  "/portfolio",
+    label: "Portfolio",
+  },
+  {
+    kind:  "leaf",
     href:  "/assistant",
     label: "AI Assistant",
   },
