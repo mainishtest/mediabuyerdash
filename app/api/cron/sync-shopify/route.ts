@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   const results = await Promise.allSettled(
-    connections.map((c) => runShopifySync(c.id))
+    connections.map((c: { id: string }) => runShopifySync(c.id))
   );
 
   const summaries = results.map((r, i) =>
