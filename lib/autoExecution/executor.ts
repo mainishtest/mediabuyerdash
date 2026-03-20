@@ -21,6 +21,7 @@ import {
   logAutoExecutionRun,
   loadAutoExecutionHistory,
 }                                            from "./persist";
+import { recordAutomationExecution }         from "../auditLog";
 import type {
   AutoExecutionRunSummary,
   AutoExecutionLogRow,
@@ -112,6 +113,27 @@ export async function runEligibleAutoExecutions(
         errorMessage:    null,
       });
 
+      // Write native audit entry for blocked/skipped execution
+      await recordAutomationExecution({
+        workspaceId,
+        clientAccountId:  action.clientAccountId,
+        clientName:       null,
+        actionId:         action.id,
+        actionType:       action.actionType,
+        scope: {
+          entityType: action.entityType as "campaign" | "client" | "ad_account" | "integration" | "workspace" | "action_type",
+          entityId:   action.entityId,
+          entityName: action.entityName,
+          clientId:   action.clientAccountId,
+        },
+        executionLogId:   log.id,
+        status,
+        durationMs:       null,
+        errorMessage:     null,
+        guardrailResults: eligibility.guardrails,
+        decisionReason:   eligibility.decisionReason,
+      }).catch(() => { /* audit write failure must not block execution */ });
+
       summary.logs.push(log);
       if (status === "guardrail_blocked") summary.guardrailsBlocked++;
       else summary.skipped++;
@@ -157,6 +179,28 @@ export async function runEligibleAutoExecutions(
     }
 
     const log = await logAutoExecutionRun(logInput);
+
+    // Write native audit entry for this execution outcome
+    await recordAutomationExecution({
+      workspaceId,
+      clientAccountId:  action.clientAccountId,
+      clientName:       null,
+      actionId:         action.id,
+      actionType:       action.actionType,
+      scope: {
+        entityType: action.entityType as "campaign" | "client" | "ad_account" | "integration" | "workspace" | "action_type",
+        entityId:   action.entityId,
+        entityName: action.entityName,
+        clientId:   action.clientAccountId,
+      },
+      executionLogId:   log.id,
+      status:           logInput.status as "pending" | "success" | "failed" | "skipped" | "guardrail_blocked",
+      durationMs:       logInput.durationMs ?? null,
+      errorMessage:     logInput.errorMessage ?? null,
+      guardrailResults: eligibility.guardrails,
+      decisionReason:   logInput.decisionReason,
+    }).catch(() => { /* audit write failure must not block execution */ });
+
     summary.logs.push(log);
 
     if (logInput.status === "success") summary.executed++;
