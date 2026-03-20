@@ -43,7 +43,7 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
   const [items,     setItems]     = useState<PublishPrepItem[]>(initialItems);
   const [summary,   setSummary]   = useState<PublishPrepSummary>(initialSummary);
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
-  const [pending,   setPending]   = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [error,     setError]     = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -63,15 +63,15 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
     } catch { /* non-critical */ }
   }, []);
 
-  // Handle action from detail panel
+  // Handle action for a specific item (accepts explicit itemId so mobile stacked view works)
   const handleAction = useCallback(
-    async (action: PrepAction, data?: Record<string, unknown>) => {
-      if (!selectedId || pending) return;
-      setPending(true);
+    async (itemId: string, action: PrepAction, data?: Record<string, unknown>) => {
+      if (!itemId || pendingId) return;
+      setPendingId(itemId);
       setError(null);
 
       try {
-        const res  = await fetch(`/api/creative-lab/publish-prep/${selectedId}`, {
+        const res  = await fetch(`/api/creative-lab/publish-prep/${itemId}`, {
           method:  "PATCH",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ action, ...data }),
@@ -81,15 +81,15 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
         if (!json.ok) {
           setError(json.error ?? "Action failed — try again.");
         } else {
-          await refreshItem(selectedId);
+          await refreshItem(itemId);
         }
       } catch {
         setError("Network error — check your connection.");
       } finally {
-        setPending(false);
+        setPendingId(null);
       }
     },
-    [selectedId, pending, refreshItem],
+    [pendingId, refreshItem],
   );
 
   // Filtered list
@@ -157,7 +157,7 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
                 <button
                   key={opt.value}
                   onClick={() => setStatusFilter(opt.value)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors
+                  className={`rounded-lg px-2.5 py-2 text-xs font-medium transition-colors
                     ${statusFilter === opt.value
                       ? "bg-indigo-600 text-white"
                       : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
@@ -220,8 +220,8 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
             <div className="lg:sticky lg:top-6">
               <PublishPrepDetail
                 item={selectedItem}
-                onAction={handleAction}
-                actionPending={pending}
+                onAction={(action, data) => handleAction(selectedItem.id, action, data)}
+                actionPending={pendingId === selectedItem.id}
               />
             </div>
           ) : (
@@ -237,8 +237,8 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
                 <PublishPrepDetail
                   key={item.id}
                   item={item}
-                  onAction={handleAction}
-                  actionPending={pending}
+                  onAction={(action, data) => handleAction(item.id, action, data)}
+                  actionPending={pendingId === item.id}
                 />
               ))}
             </div>

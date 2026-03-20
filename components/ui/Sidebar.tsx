@@ -167,7 +167,7 @@ function NavGroupItem({
 
       {/* Children */}
       {open && (
-        <ul className="mt-0.5 space-y-0.5 pl-5">
+        <ul className="relative mt-0.5 space-y-0.5 pl-5">
           {/* Left rail */}
           <div className="absolute ml-[-13px] mt-0.5 h-[calc(100%-4px)] w-px bg-slate-800" />
           {group.children.map((child) => (

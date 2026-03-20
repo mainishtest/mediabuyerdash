@@ -94,7 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/50 px-4 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+            className="rounded-lg p-2.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
             aria-label="Open navigation"
           >
             <svg

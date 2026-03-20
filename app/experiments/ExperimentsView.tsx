@@ -40,7 +40,7 @@ export function ExperimentsView({ initialExperiments, initialSummary, clientAcco
   const [experiments, setExperiments] = useState<ExperimentWithResult[]>(initialExperiments);
   const [summary,     setSummary]     = useState<ExperimentListSummary>(initialSummary);
   const [selectedId,  setSelectedId]  = useState<string | null>(initialExperiments[0]?.id ?? null);
-  const [pending,     setPending]     = useState(false);
+  const [pendingId,   setPendingId]   = useState<string | null>(null);
   const [error,       setError]       = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -60,49 +60,56 @@ export function ExperimentsView({ initialExperiments, initialSummary, clientAcco
     } catch { /* non-critical */ }
   }, []);
 
-  // Trigger evaluation
-  const handleEvaluate = useCallback(async () => {
-    if (!selectedId || pending) return;
-    setPending(true);
-    setError(null);
-    try {
-      const res  = await fetch(`/api/experiments/${selectedId}/ingest`, { method: "POST" });
-      const json = await res.json();
-      if (!json.ok) {
-        setError(json.error ?? "Evaluation failed — try again.");
-      } else {
-        await refreshExperiment(selectedId);
+  // Trigger evaluation for a specific experiment (explicit id so mobile stacked view works)
+  const handleEvaluateFor = useCallback(
+    (experimentId: string) => async () => {
+      if (!experimentId || pendingId) return;
+      setPendingId(experimentId);
+      setError(null);
+      try {
+        const res  = await fetch(`/api/experiments/${experimentId}/ingest`, { method: "POST" });
+        const json = await res.json();
+        if (!json.ok) {
+          setError(json.error ?? "Evaluation failed — try again.");
+        } else {
+          await refreshExperiment(experimentId);
+        }
+      } catch {
+        setError("Network error — check your connection.");
+      } finally {
+        setPendingId(null);
       }
-    } catch {
-      setError("Network error — check your connection.");
-    } finally {
-      setPending(false);
-    }
-  }, [selectedId, pending, refreshExperiment]);
+    },
+    [pendingId, refreshExperiment],
+  );
 
-  // Archive experiment
-  const handleArchive = useCallback(async () => {
-    if (!selectedId || pending) return;
-    setPending(true);
-    setError(null);
-    try {
-      const res  = await fetch(`/api/experiments/${selectedId}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: "archive" }),
-      });
-      const json = await res.json();
-      if (!json.ok) {
-        setError(json.error ?? "Archive failed.");
-      } else {
-        await refreshExperiment(selectedId);
+  // Archive experiment for a specific id (with confirmation — destructive action)
+  const handleArchiveFor = useCallback(
+    (experimentId: string) => async () => {
+      if (!experimentId || pendingId) return;
+      if (!window.confirm("Archive this experiment? It will be marked as closed and removed from the active list.")) return;
+      setPendingId(experimentId);
+      setError(null);
+      try {
+        const res  = await fetch(`/api/experiments/${experimentId}`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ action: "archive" }),
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          setError(json.error ?? "Archive failed.");
+        } else {
+          await refreshExperiment(experimentId);
+        }
+      } catch {
+        setError("Network error.");
+      } finally {
+        setPendingId(null);
       }
-    } catch {
-      setError("Network error.");
-    } finally {
-      setPending(false);
-    }
-  }, [selectedId, pending, refreshExperiment]);
+    },
+    [pendingId, refreshExperiment],
+  );
 
   // Filtered list
   const visibleExperiments = useMemo(() => {
@@ -167,7 +174,7 @@ export function ExperimentsView({ initialExperiments, initialSummary, clientAcco
                 <button
                   key={opt.value}
                   onClick={() => setStatusFilter(opt.value)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors
+                  className={`rounded-lg px-2.5 py-2 text-xs font-medium transition-colors
                     ${statusFilter === opt.value
                       ? "bg-indigo-600 text-white"
                       : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
@@ -224,9 +231,9 @@ export function ExperimentsView({ initialExperiments, initialSummary, clientAcco
             <div className="lg:sticky lg:top-6">
               <ExperimentResultDetail
                 experiment={selectedExp}
-                onEvaluate={handleEvaluate}
-                onArchive={handleArchive}
-                actionPending={pending}
+                onEvaluate={handleEvaluateFor(selectedExp.id)}
+                onArchive={handleArchiveFor(selectedExp.id)}
+                actionPending={pendingId === selectedExp.id}
               />
             </div>
           ) : (
@@ -242,9 +249,9 @@ export function ExperimentsView({ initialExperiments, initialSummary, clientAcco
                 <ExperimentResultDetail
                   key={exp.id}
                   experiment={exp}
-                  onEvaluate={handleEvaluate}
-                  onArchive={handleArchive}
-                  actionPending={pending}
+                  onEvaluate={handleEvaluateFor(exp.id)}
+                  onArchive={handleArchiveFor(exp.id)}
+                  actionPending={pendingId === exp.id}
                 />
               ))}
             </div>
