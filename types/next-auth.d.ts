@@ -13,7 +13,6 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
   interface User extends DefaultUser {
     workspaceId?:   string | null;
     workspaceName?: string | null;

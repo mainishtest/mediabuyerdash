@@ -46,7 +46,6 @@ function safeParseJson<T>(json: string | null | undefined, fallback: T): T {
 // Convert a raw AutomationAuditLog DB row → AutomationAuditEntry
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(row: any): AutomationAuditEntry {
   return {
     id:                    row.id,
