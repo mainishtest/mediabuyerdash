@@ -1466,6 +1466,53 @@ model ActionSafetyPolicy {
   @@index([scope, scopeId])
 }
 
+// ── Automation Audit Log ──────────────────────────────────────────────────────
+//
+// Unified audit trail covering every automation lifecycle event:
+// recommended → prepared → approval_requested → approved/rejected/deferred →
+// execution_started → execution_succeeded/failed → rollback state.
+//
+// Flat structure: nested objects (scope, actor, approval, execution, block,
+// rollback) are stored as JSON blobs and parsed in lib/auditLog/persist.ts.
+// Bridge functions in persist.ts also synthesise entries from existing
+// AutoExecutionLog and ProposedAutomationAction rows for backward coverage.
+model AutomationAuditLog {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  clientAccountId String?
+  clientName      String?
+
+  // Event classification
+  eventType       String   // AutomationEventType
+  actionType      String   // pause_campaign | run_sync | budget_increase | etc.
+
+  // Nested objects stored as JSON blobs
+  scopeJson       String   @default("{}")  // AutomationEventScope
+  actorJson       String   @default("{}")  // AutomationActor
+  approvalJson    String?                  // AutomationApprovalRecord | null
+  executionJson   String?                  // AutomationExecutionRecord | null
+  blockJson       String?                  // AutomationBlockRecord | null
+  rollbackJson    String   @default("{}")  // RollbackReadiness
+
+  // Policy decision (flat — avoids an extra JSON parse for common display)
+  policyDecision  String?  // allowed | blocked | approval_required | restricted
+  policyReason    String?  // ActionSafetyReason
+
+  // Related entity links for cross-navigation
+  relatedActionId         String?  // ProposedAutomationAction.id
+  relatedExecutionLogId   String?  // AutoExecutionLog.id
+
+  notes       String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([clientAccountId, occurredAt])
+  @@index([eventType])
+  @@index([actionType])
+  @@index([relatedActionId])
+}
+
 // ── Governance Controls ───────────────────────────────────────────────────────
 
 // Active emergency stop states.
