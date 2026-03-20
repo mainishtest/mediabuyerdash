@@ -11,7 +11,7 @@
 import { ingestExperimentResults }     from "../experiments/ingestor";
 import { upsertExperimentResult, saveExperimentLearnings, loadExperimentById } from "../experiments/db";
 import { summarizeExperimentLearnings } from "../experiments/learnings";
-import type { ExperimentPlan }          from "../../types/experiment";
+import type { ExperimentPlan, ExperimentOutcome } from "../../types/experiment";
 import {
   compareCreativeTestVariants,
   evaluateCreativeTestOutcome,
@@ -239,7 +239,7 @@ export async function ingestCreativeTestResults(
             experimentId: result.experimentId,
             plan,
             detection: {
-              outcome:          evaluation.outcome === "in_progress" ? "insufficient_data" : evaluation.outcome,
+              outcome:          evaluation.outcome as ExperimentOutcome,
               winningVariant:   evaluation.winningVariant,
               confidence:       confidence.score,
               primaryLift:      evaluation.primaryLift,
