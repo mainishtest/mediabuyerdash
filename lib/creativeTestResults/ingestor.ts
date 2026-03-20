@@ -235,30 +235,33 @@ export async function ingestCreativeTestResults(
       ) {
         const experiment = await loadExperimentById(result.experimentId);
         if (experiment) {
-          const learnings = summarizeExperimentLearnings(
-            result.experimentId,
-            result.clientAccountId,
-            {
-              outcome:       evaluation.outcome === "in_progress" ? "insufficient_data" : evaluation.outcome,
-              winningVariant: evaluation.winningVariant,
-              confidence:    confidence.score,
-              primaryLift:   evaluation.primaryLift,
-              outcomeReasons: evaluation.outcomeReasons.map((r) => r.description),
+          const learnings = summarizeExperimentLearnings({
+            experimentId: result.experimentId,
+            plan,
+            detection: {
+              outcome:          evaluation.outcome === "in_progress" ? "insufficient_data" : evaluation.outcome,
+              winningVariant:   evaluation.winningVariant,
+              confidence:       confidence.score,
+              primaryLift:      evaluation.primaryLift,
+              outcomeReasons:   evaluation.outcomeReasons.map((r) => r.description),
               recommendedAction: evaluation.outcome,
-              recommendedNote: recommendedNextStep,
+              recommendedNote:  recommendedNextStep,
             },
-            {
-              primaryMetric: plan.primaryMetric,
-              primaryDelta: { delta: comparison.primaryDelta, lift: comparison.primaryLift },
-              secondaryDeltas: Object.fromEntries(
+            control:    controlSnapshot,
+            challenger: challengerSnapshot,
+            comparison: {
+              primaryMetric:             plan.primaryMetric,
+              primaryDelta:              { delta: comparison.primaryDelta, lift: comparison.primaryLift },
+              secondaryDeltas:           Object.fromEntries(
                 Object.entries(comparison.secondaryDeltas).map(([k, v]) => [k, { delta: v.delta, lift: v.lift }])
               ),
-              guardrailBreaches: comparison.guardrailBreaches,
+              guardrailBreaches:         comparison.guardrailBreaches,
               isStatisticallyMeaningful: comparison.isStatisticallyMeaningful,
-              confidenceNote: comparison.confidenceNote,
+              confidenceNote:            comparison.confidenceNote,
             },
-            { briefIntent: null, draftType: null },
-          );
+            briefIntent: null,
+            draftType:   null,
+          });
           if (learnings.length > 0) {
             await saveExperimentLearnings(learnings);
           }
