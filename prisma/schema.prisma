@@ -49,8 +49,9 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships    WorkspaceMembership[]
-  clientAccounts ClientAccount[]
+  memberships          WorkspaceMembership[]
+  clientAccounts       ClientAccount[]
+  actionSafetyPolicies ActionSafetyPolicy[]
 }
 
 // User ↔ Workspace with role. v1 roles: owner | manager.
@@ -1420,4 +1421,41 @@ model CreativeGenerationJobRecord {
 
   @@index([briefId])
   @@index([status])
+}
+
+// ── Action Safety Policy ──────────────────────────────────────────────────────
+//
+// Governs what level of autonomy the system has for a given scope.
+// Scopes: client | ad_account | campaign
+// Inheritance: campaign > ad_account > client > system default (in evaluate.ts)
+// Blocking is additive: if any scope blocks an action, the action is blocked.
+model ActionSafetyPolicy {
+  id          String  @id @default(cuid())
+  workspaceId String
+  scope       String  // client | ad_account | campaign
+  scopeId     String  // clientAccountId | adAccountId | externalCampaignId
+
+  // Autonomy mode for this scope.
+  // recommend_only | prepare_only | approval_required | guarded_auto_execute | restricted
+  autonomyMode String @default("approval_required")
+
+  // JSON arrays of ActionType strings. Stored as String for Postgres compat.
+  allowedActionTypes String @default("[]")  // explicit allow list
+  blockedActionTypes String @default("[]")  // overrides allow (safe wins)
+  approvalRequired   String @default("[]")  // requires human sign-off
+
+  // JSON array of ActionConstraint objects (thresholds, limits, etc.)
+  constraints String  @default("[]")
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, scope, scopeId])
+  @@index([workspaceId])
+  @@index([scope, scopeId])
 }
