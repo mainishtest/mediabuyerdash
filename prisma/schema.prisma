@@ -661,6 +661,109 @@ model ExperimentLearningRecord {
   @@index([experimentId])
 }
 
+// ── Creative test results ────────────────────────────────────────────────────
+
+// Tracks launched creative tests from the creative-lab perspective.
+// Links to ExperimentRecord (experimentId) for raw evaluation data.
+// Plain-string references used (no FK) to keep migration surface minimal.
+model CreativeTestResultRecord {
+  id               String  @id @default(cuid())
+  clientAccountId  String
+  name             String
+  trackingState    String  @default("pending_launch")
+  outcome          String?   // CreativeTestOutcome — null until first ingestion
+
+  // Source links (plain strings)
+  launchPlanId  String?   // ExperimentLaunchPlanRecord.id
+  experimentId  String?   // ExperimentRecord.id
+  prepItemId    String?   // PublishPrepRecord.id
+  briefId       String?
+
+  // Creative context (denormalised for self-contained display)
+  controlCreativeId         String?
+  controlCreativeName       String?
+  controlAdExternalId       String?
+  challengerVariantTitle    String?
+  challengerAdExternalId    String?
+  clientName                String?
+  campaignName              String?
+  adSetName                 String?
+  externalAdAccountId       String?
+  targetCampaignExternalId  String?
+  targetAdSetExternalId     String?
+
+  // Success criteria (copied from launch plan for self-contained evaluation)
+  primaryMetric            String  @default("roas_7d")
+  successThreshold         Float   @default(0.10)
+  evaluationWindowDays     Int     @default(7)
+  minSpendPerVariant       Float   @default(50.0)
+  minConversionsPerVariant Int     @default(5)
+
+  // Ingested performance snapshots (JSON: CreativeTestMetricSnapshot)
+  controlSnapshotJson    String?
+  challengerSnapshotJson String?
+
+  // Evaluation outputs
+  primaryMetricDelta Float?
+  primaryMetricLift  Float?
+  guardrailBreaches  String?  // JSON: string[]
+  outcomeReasons     String?  // JSON: string[]
+  confidence         Float?
+  winningVariant     String?  // "control" | "challenger" | null
+
+  // Evaluation window
+  windowStartedAt  DateTime?
+  windowEndsAt     DateTime?
+  isWindowComplete Boolean   @default(false)
+
+  // Recommended next action
+  recommendedNextStep String?
+
+  // Review state
+  markedForReview Boolean   @default(false)
+  archivedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lifecycleLinks CreativeLifecycleResultLinkRecord[]
+
+  @@index([clientAccountId])
+  @@index([launchPlanId])
+  @@index([experimentId])
+  @@index([trackingState])
+  @@index([outcome])
+}
+
+// Explicit lifecycle attachment — wires a test result back to a source creative draft.
+// One record per (testResultId, prepItemId) pair.
+model CreativeLifecycleResultLinkRecord {
+  id              String  @id @default(cuid())
+  testResultId    String
+  clientAccountId String
+
+  // Back-links into creative lifecycle
+  prepItemId   String?
+  briefId      String?
+  variantId    String?
+  launchPlanId String?
+  experimentId String?
+
+  // Outcome context snapshot at time of attachment
+  outcome     String?
+  winningRole String?   // "control" | "challenger" | null
+  confidence  Float?
+  primaryLift Float?
+
+  attachedAt DateTime @default(now())
+
+  testResult CreativeTestResultRecord @relation(fields: [testResultId], references: [id], onDelete: Cascade)
+
+  @@index([testResultId])
+  @@index([prepItemId])
+  @@index([clientAccountId])
+}
+
 // ── Experiment launch wiring ─────────────────────────────────────────────────
 
 // Bridges an approved creative draft (PublishPrepRecord) into a structured
