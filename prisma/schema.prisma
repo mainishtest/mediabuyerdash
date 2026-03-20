@@ -661,6 +661,86 @@ model ExperimentLearningRecord {
   @@index([experimentId])
 }
 
+// ── Experiment launch wiring ─────────────────────────────────────────────────
+
+// Bridges an approved creative draft (PublishPrepRecord) into a structured
+// experiment launch plan with control/challenger mapping, success criteria,
+// guardrails, and readiness tracking.
+// Does not hold an ExperimentRecord FK to minimise migration surface.
+// linkedExperimentId is a plain string reference set when plan is launched.
+model ExperimentLaunchPlanRecord {
+  id               String   @id @default(cuid())
+  clientAccountId  String
+  name             String
+  hypothesis       String?
+  objective        String?
+
+  // Source references (plain strings — no FK to keep migration minimal)
+  prepItemId       String?   // PublishPrepRecord.id (challenger source)
+  briefId          String?
+  variantId        String?
+  recommendationId String?
+
+  // Readiness state (CreativeExperimentReadinessState)
+  readinessState   String    @default("draft")
+
+  // Control creative
+  controlLabel              String    @default("Control")
+  controlCreativeId         String?
+  controlCreativeName       String?
+  controlAdExternalId       String?
+  controlAdSetExternalId    String?
+  controlCampaignExternalId String?
+
+  // Challenger (from publish-prep)
+  challengerLabel              String    @default("Challenger")
+  challengerCreativeName       String?
+  challengerAdExternalId       String?
+  challengerAdSetExternalId    String?
+  challengerCampaignExternalId String?
+  challengerBriefIntent        String?
+  challengerBriefDraftType     String?
+  challengerVariantTitle       String?
+  challengerVariantType        String?
+  challengerClientName         String?
+  challengerCampaignName       String?
+
+  // Target mapping
+  targetCampaignId         String?
+  targetCampaignName       String?
+  targetCampaignExternalId String?
+  targetAdSetId            String?
+  targetAdSetName          String?
+  targetAdSetExternalId    String?
+  externalAdAccountId      String?
+  comparisonMode           String    @default("simultaneous")
+
+  // Success criteria
+  primaryMetric            String    @default("roas_7d")
+  secondaryMetricsJson     String?   // JSON: string[]
+  guardrailMetricsJson     String?   // JSON: string[]
+  successThreshold         Float     @default(0.10)
+  minSpendPerVariant       Float     @default(50.0)
+  minConversionsPerVariant Int       @default(5)
+  evaluationWindowDays     Int       @default(7)
+
+  // Notes and approval
+  launchNotes  String?
+  approvedAt   DateTime?
+  approvedBy   String?
+
+  // Link to ExperimentRecord when launched (plain string, no FK)
+  linkedExperimentId String?
+  launchedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientAccountId])
+  @@index([prepItemId])
+  @@index([readinessState])
+}
+
 // ── Publish preparation ───────────────────────────────────────────────────────
 
 // A publish prep record packages one approved creative draft variant into a
