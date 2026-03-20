@@ -190,8 +190,9 @@ function StopCard({
       <button
         disabled={clearing}
         onClick={() => onClear(stop.id)}
-        className="shrink-0 rounded border border-slate-700 px-2 py-1 text-xs text-slate-400
-                   transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
+        className="shrink-0 rounded-lg border border-slate-700 px-3 py-2.5 text-xs text-slate-400
+                   transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50
+                   min-h-[44px]"
       >
         Clear
       </button>
@@ -248,8 +249,9 @@ function OverrideCard({
       <button
         disabled={clearing}
         onClick={() => onClear(override.id)}
-        className="shrink-0 rounded border border-slate-700 px-2 py-1 text-xs text-slate-400
-                   transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
+        className="shrink-0 rounded-lg border border-slate-700 px-3 py-2.5 text-xs text-slate-400
+                   transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50
+                   min-h-[44px]"
       >
         Clear
       </button>
@@ -471,8 +473,8 @@ function AddStopForm({
           </button>
           <button
             onClick={onCancel}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400
-                       transition-colors hover:bg-slate-800"
+            className="rounded-lg border border-slate-700 px-3 py-2.5 text-xs text-slate-400
+                       transition-colors hover:bg-slate-800 min-h-[44px]"
           >
             Cancel
           </button>
@@ -756,7 +758,14 @@ export function GovernanceView({
         {error && (
           <div className="mb-4 rounded-lg border border-rose-800 bg-rose-900/30 px-4 py-3 text-sm text-rose-300">
             {error}
-            <button onClick={() => setError(null)} className="ml-2 text-rose-500 hover:text-rose-300">×</button>
+            <button
+              onClick={() => setError(null)}
+              className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded
+                         text-rose-500 hover:bg-rose-900/40 hover:text-rose-300 transition-colors"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
           </div>
         )}
 

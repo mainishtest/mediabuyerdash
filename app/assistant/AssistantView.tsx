@@ -29,41 +29,65 @@ function FilterBar({
   dateTo: string;
   onApply: (f: { clientId?: string; dateFrom: string; dateTo: string }) => void;
 }) {
-  const [cid, setCid]  = useState(clientId ?? "");
-  const [from, setFrom]= useState(dateFrom);
-  const [to, setTo]    = useState(dateTo);
+  const [cid, setCid]    = useState(clientId ?? "");
+  const [from, setFrom]  = useState(dateFrom);
+  const [to, setTo]      = useState(dateTo);
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-      <span className="text-xs text-slate-500 font-medium uppercase tracking-wide shrink-0">Context:</span>
-      <input
-        value={cid}
-        onChange={(e) => setCid(e.target.value)}
-        placeholder="Client ID (optional)"
-        className="px-2 py-1 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
-                   placeholder-slate-500 focus:outline-none focus:border-emerald-600 w-36"
-      />
-      <input
-        type="date"
-        value={from}
-        onChange={(e) => setFrom(e.target.value)}
-        className="px-2 py-1 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
-                   focus:outline-none focus:border-emerald-600"
-      />
-      <span className="text-slate-600 text-xs">→</span>
-      <input
-        type="date"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        className="px-2 py-1 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
-                   focus:outline-none focus:border-emerald-600"
-      />
-      <button
-        onClick={() => onApply({ clientId: cid || undefined, dateFrom: from, dateTo: to })}
-        className="px-3 py-1 text-xs bg-emerald-800 hover:bg-emerald-700 text-white rounded transition-colors"
-      >
-        Apply
-      </button>
+    <div className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      {/* Mobile: compact toggle row */}
+      <div className="flex items-center justify-between px-4 py-2 sm:hidden">
+        <span className="text-xs text-slate-500 font-medium uppercase tracking-wide">
+          Context filter
+          {(cid || from !== dateFrom || to !== dateTo) && (
+            <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          )}
+        </span>
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="rounded-md px-3 py-1.5 text-xs text-slate-400 transition-colors
+                     hover:bg-slate-800 hover:text-slate-200 active:bg-slate-700"
+        >
+          {expanded ? "Hide" : "Edit"}
+        </button>
+      </div>
+
+      {/* Filter inputs — always visible on sm+, toggle on mobile */}
+      <div className={`flex flex-wrap items-center gap-2 px-4 py-3 ${expanded ? "" : "hidden sm:flex"}`}>
+        <span className="text-xs text-slate-500 font-medium uppercase tracking-wide shrink-0">Context:</span>
+        <input
+          value={cid}
+          onChange={(e) => setCid(e.target.value)}
+          placeholder="Client ID (optional)"
+          className="px-2 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
+                     placeholder-slate-500 focus:outline-none focus:border-emerald-600 w-36"
+        />
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="px-2 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
+                     focus:outline-none focus:border-emerald-600"
+        />
+        <span className="text-slate-600 text-xs">→</span>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="px-2 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200
+                     focus:outline-none focus:border-emerald-600"
+        />
+        <button
+          onClick={() => {
+            onApply({ clientId: cid || undefined, dateFrom: from, dateTo: to });
+            setExpanded(false);
+          }}
+          className="px-3 py-1.5 text-xs bg-emerald-800 hover:bg-emerald-700 text-white rounded transition-colors"
+        >
+          Apply
+        </button>
+      </div>
     </div>
   );
 }
@@ -237,7 +261,7 @@ export function AssistantView({ clientId, dateFrom, dateTo }: AssistantViewProps
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-slate-950">
+    <div className="flex flex-col h-full bg-slate-950">
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <h1 className="text-xl font-semibold text-slate-100">AI Assistant</h1>
@@ -264,8 +288,8 @@ export function AssistantView({ clientId, dateFrom, dateTo }: AssistantViewProps
         </div>
       </div>
 
-      {/* Input */}
-      <div className="sticky bottom-0 max-w-3xl mx-auto w-full">
+      {/* Input — shrink-0 so it stays pinned at the bottom of the flex column */}
+      <div className="shrink-0 max-w-3xl mx-auto w-full">
         {!isEmpty && !loading && messages.length > 0 && (
           <div className="px-4 pb-2">
             <SuggestedPrompts

@@ -5,16 +5,19 @@
 // Steps:
 //   1. Validate briefId
 //   2. Load brief (includes all variants) from DB
-//   3. Score each variant using scoreCreativeDraft()
+//   3. Score each variant using scoreCreative() — includes quality signals and readiness status
 //   4. Rank via buildCreativeDraftReviewSet()
 //   5. Return full review set
 //
 // No DB writes — scores are computed on demand and returned to the client.
 // Scores are deterministic: same brief + variant always produces same score.
+//
+// Phase 8: scoreCreative() replaces the lower-level scoreCreativeDraft() call.
+// Each scorecard now includes qualitySignals and readinessStatus.
 
 import { NextRequest, NextResponse }      from "next/server";
 import { loadCreativeBriefById }          from "../../../../lib/creativeBrief/db";
-import { scoreCreativeDraft }             from "../../../../lib/creativeScoring/scorer";
+import { scoreCreative }                  from "../../../../lib/creativeScoring/utils";
 import { buildCreativeDraftReviewSet }    from "../../../../lib/creativeScoring/ranking";
 
 export async function POST(req: NextRequest) {
@@ -63,8 +66,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Score every variant
-  const scorecards = variants.map((v) => scoreCreativeDraft(v, brief));
+  // Score every variant — scoreCreative() adds quality signals and readiness status
+  const scorecards = variants.map((v) => scoreCreative(v, brief));
 
   // Build ranked review set
   const reviewSet = buildCreativeDraftReviewSet(briefId, scorecards);

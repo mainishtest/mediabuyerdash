@@ -28,6 +28,21 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV: NavEntry[] = [
   {
     kind:  "leaf",
+    href:  "/portfolio",
+    label: "Portfolio",
+  },
+  {
+    kind:  "leaf",
+    href:  "/portfolio/governance",
+    label: "Portfolio Governance",
+  },
+  {
+    kind:  "leaf",
+    href:  "/portfolio/controls",
+    label: "Portfolio Controls",
+  },
+  {
+    kind:  "leaf",
     href:  "/assistant",
     label: "AI Assistant",
   },
@@ -57,10 +72,13 @@ const NAV: NavEntry[] = [
     label: "Creative",
     icon:  "◇",
     children: [
-      { kind: "leaf", href: "/creative-lab",     label: "Creative Lab"     },
-      { kind: "leaf", href: "/creative-fatigue", label: "Creative Fatigue" },
-      { kind: "leaf", href: "/insights/memory",  label: "Learning Memory"  },
-      { kind: "leaf", href: "/insights/trace",   label: "Decision Trace"   },
+      { kind: "leaf", href: "/creative-lab",              label: "Creative Lab"         },
+      { kind: "leaf", href: "/creative-lab/launch",      label: "Experiment Launch"    },
+      { kind: "leaf", href: "/creative-lab/results",     label: "Test Results"         },
+      { kind: "leaf", href: "/creative-lab/outcomes",   label: "Outcome Routing"      },
+      { kind: "leaf", href: "/creative-fatigue",         label: "Creative Fatigue"     },
+      { kind: "leaf", href: "/insights/memory",          label: "Learning Memory"      },
+      { kind: "leaf", href: "/insights/trace",           label: "Decision Trace"       },
     ],
   },
   {
@@ -149,7 +167,7 @@ function NavGroupItem({
 
       {/* Children */}
       {open && (
-        <ul className="mt-0.5 space-y-0.5 pl-5">
+        <ul className="relative mt-0.5 space-y-0.5 pl-5">
           {/* Left rail */}
           <div className="absolute ml-[-13px] mt-0.5 h-[calc(100%-4px)] w-px bg-slate-800" />
           {group.children.map((child) => (

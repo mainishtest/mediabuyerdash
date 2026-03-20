@@ -217,7 +217,7 @@ export function TraceDrawer({ trace, open, onClose }: TraceDrawerProps) {
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 p-1.5 text-slate-500 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
+            className="shrink-0 p-2.5 text-slate-500 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors"
             aria-label="Close trace"
           >
             ✕

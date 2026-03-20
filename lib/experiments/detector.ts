@@ -95,10 +95,13 @@ export function detectWinner(
   // ── 5. Evaluate primary metric ────────────────────────────────────────────
   if (!comparison.isStatisticallyMeaningful) {
     reasons.push(`Primary metric lift (${(lift * 100).toFixed(1)}%) is within the ±${(plan.successThreshold * 100).toFixed(0)}% threshold — no meaningful difference.`);
+    const noWinnerConf = plan.successThreshold > 0
+      ? Math.min(0.5, Math.abs(lift) / plan.successThreshold * 0.5)
+      : 0;
     return {
       outcome:           "no_clear_winner",
       winningVariant:    null,
-      confidence:        Math.min(0.5, Math.abs(lift) / plan.successThreshold * 0.5),
+      confidence:        noWinnerConf,
       primaryLift:       lift,
       outcomeReasons:    reasons,
       recommendedAction: "monitor",
@@ -133,7 +136,9 @@ export function detectWinner(
   const winner: "control" | "challenger" = challWins ? "challenger" : "control";
 
   // Confidence: magnitude-based proxy, capped at 0.95
-  const rawConf = Math.min(0.95, Math.abs(lift) / (plan.successThreshold * 2));
+  const rawConf = plan.successThreshold > 0
+    ? Math.min(0.95, Math.abs(lift) / (plan.successThreshold * 2))
+    : 0;
   const confidence = window.isComplete ? rawConf : rawConf * 0.8;
 
   reasons.push(

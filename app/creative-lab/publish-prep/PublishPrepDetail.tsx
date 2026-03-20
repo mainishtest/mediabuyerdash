@@ -2,30 +2,38 @@
 
 // app/creative-lab/publish-prep/PublishPrepDetail.tsx
 // Full detail panel for a single publish prep item.
-// Sections: status header | source context | target mapping | payload preview |
-//           validation checks | guardrail checks | blockers | action controls.
+//
+// Sections:
+//   status header | blockers summary | source context | target mapping |
+//   readiness bar | ad mockup preview | validation checks | guardrail checks |
+//   launch notes | action controls
+//
+// Actions:
+//   approve for launch | hold | send back | publish now
 //
 // Responsive:
 //   Mobile:  stacked sections, collapsible payload preview, large action buttons
 //   Desktop: used inside the right panel of the split layout
 
-import { useState } from "react";
-import Link         from "next/link";
-import type { PublishPrepItem }  from "../../../types/publishPrep";
+import { useState }             from "react";
+import Link                     from "next/link";
+import type { PublishPrepItem } from "../../../types/publishPrep";
 import {
   PREP_STATUS_LABEL,
   PREP_STATUS_COLOR,
   PREP_STATUS_BG,
   EXEC_MODE_LABEL,
-}                                from "../../../types/publishPrep";
-import { SectionCard, Badge }    from "../../../components/ui";
+}                               from "../../../types/publishPrep";
+import { summarizePublishReadiness } from "../../../lib/publishPrep/validator";
+import { SectionCard, Badge }   from "../../../components/ui";
 
 // ---------------------------------------------------------------------------
-// Collapsible payload preview
+// Ad mockup preview — shows how the ad will appear in Meta Ads Manager.
+// Includes both a visual mockup and collapsible raw payload fields.
 // ---------------------------------------------------------------------------
 
-function PayloadPreview({ item }: { item: PublishPrepItem }) {
-  const [open, setOpen] = useState(false);
+function AdMockupPreview({ item }: { item: PublishPrepItem }) {
+  const [rawOpen, setRawOpen] = useState(false);
   const p = item.payloadPreview;
   const m = p?.metaPayloadShape;
 
@@ -37,61 +45,209 @@ function PayloadPreview({ item }: { item: PublishPrepItem }) {
     );
   }
 
+  const isImage = item.variantType === "image";
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/40">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
-      >
-        <span className="text-xs font-semibold text-slate-300">Meta Payload Preview</span>
-        <span className="text-xs text-slate-600">{open ? "▲ collapse" : "▼ expand"}</span>
-      </button>
-      {open && (
-        <div className="border-t border-slate-800 px-4 pb-4 pt-3 space-y-3">
-          {m.adMessage && (
-            <div>
-              <p className="text-xs text-slate-600">Primary Text (adMessage)</p>
-              <p className="mt-0.5 whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{m.adMessage}</p>
-            </div>
+    <div className="space-y-3">
+      {/* ── Visual ad mockup ── */}
+      <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+
+        {/* Simulated page/sponsor header */}
+        <div className="flex items-center gap-2.5 border-b border-slate-800 px-4 py-3">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-indigo-900/60 flex items-center justify-center">
+            <span className="text-xs font-bold text-indigo-300">
+              {item.clientName?.slice(0, 1).toUpperCase() ?? "A"}
+            </span>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-200">{item.clientName}</p>
+            <p className="text-xs text-slate-600">
+              Sponsored · {EXEC_MODE_LABEL[item.executionMode]}
+            </p>
+          </div>
+          {item.status === "published" && (
+            <span className="ml-auto shrink-0 rounded-md border border-emerald-700/40 bg-emerald-950/30 px-2 py-0.5 text-xs text-emerald-400">
+              Live
+            </span>
           )}
-          {m.adHeadline && (
-            <div>
-              <p className="text-xs text-slate-600">Headline</p>
-              <p className="mt-0.5 text-xs font-medium text-slate-200">{m.adHeadline}</p>
-            </div>
-          )}
-          {m.ctaText && (
-            <div>
-              <p className="text-xs text-slate-600">CTA</p>
-              <p className="mt-0.5 text-xs text-indigo-300">
-                {m.ctaText} <span className="text-slate-600">({m.ctaType})</span>
+        </div>
+
+        {/* Primary text (adMessage) */}
+        {m.adMessage && (
+          <div className="px-4 py-3">
+            <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-300">
+              {m.adMessage}
+            </p>
+          </div>
+        )}
+
+        {/* Image brief placeholder */}
+        {isImage && (
+          <div className="mx-4 mb-3 rounded-lg border border-dashed border-slate-700 bg-slate-800/40 px-4 py-6 text-center">
+            <p className="text-xs font-semibold text-slate-500">IMAGE / CREATIVE ASSET</p>
+            {m.imageNote && (
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                Designer brief: {m.imageNote}
               </p>
-            </div>
+            )}
+          </div>
+        )}
+
+        {/* Destination URL bar */}
+        {m.destinationUrl && (
+          <div className="border-t border-slate-800 bg-slate-800/30 px-4 py-2">
+            <p className="truncate text-xs text-slate-600">{m.destinationUrl}</p>
+          </div>
+        )}
+
+        {/* Headline + CTA row */}
+        <div className="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3">
+          <div className="min-w-0">
+            {m.adHeadline && (
+              <p className="truncate text-xs font-semibold text-slate-200">{m.adHeadline}</p>
+            )}
+            {m.adDescription && m.adDescription !== m.adMessage && (
+              <p className="mt-0.5 truncate text-xs text-slate-500">{m.adDescription}</p>
+            )}
+          </div>
+          {(m.ctaText || m.ctaType) && (
+            <span className="shrink-0 rounded-lg border border-indigo-600/50 bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300">
+              {m.ctaText ?? m.ctaType}
+            </span>
           )}
-          {m.destinationUrl && (
-            <div>
-              <p className="text-xs text-slate-600">Destination URL</p>
-              <p className="mt-0.5 break-all text-xs text-sky-400">{m.destinationUrl}</p>
-            </div>
-          )}
-          {m.imageNote && (
-            <div>
-              <p className="text-xs text-slate-600">Image Concept (for designer)</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{m.imageNote}</p>
-            </div>
-          )}
-          {(m.campaignId || m.adSetId) && (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
-              <p className="text-xs text-slate-600">Target IDs</p>
-              {m.campaignId && <p className="mt-0.5 font-mono text-xs text-slate-500">campaign: {m.campaignId}</p>}
-              {m.adSetId    && <p className="font-mono text-xs text-slate-500">ad_set: {m.adSetId}</p>}
-            </div>
-          )}
-          <p className="text-xs italic text-slate-700">
-            This payload preview is for human review. Actual Meta ad creation requires manual entry in Meta Ads Manager or a future automated step.
-          </p>
+        </div>
+      </div>
+
+      {/* Target entity IDs */}
+      {(m.campaignId || m.adSetId) && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+          <p className="mb-2 text-xs font-semibold text-slate-600">Target IDs</p>
+          <div className="space-y-1">
+            {m.campaignId && (
+              <div className="flex items-center gap-2">
+                <span className="w-20 shrink-0 text-xs text-slate-600">Campaign</span>
+                <span className="font-mono text-xs text-slate-500 break-all">{m.campaignId}</span>
+              </div>
+            )}
+            {m.adSetId && (
+              <div className="flex items-center gap-2">
+                <span className="w-20 shrink-0 text-xs text-slate-600">Ad Set</span>
+                <span className="font-mono text-xs text-slate-500 break-all">{m.adSetId}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Collapsible raw API payload fields */}
+      <div className="rounded-xl border border-slate-800">
+        <button
+          onClick={() => setRawOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+        >
+          <span className="text-xs text-slate-600">Raw API payload fields</span>
+          <span className="text-xs text-slate-700">{rawOpen ? "▲" : "▼"}</span>
+        </button>
+        {rawOpen && (
+          <div className="border-t border-slate-800 px-4 pb-4 pt-3 space-y-2">
+            {[
+              { key: "adMessage",      label: "Primary Text" },
+              { key: "adHeadline",     label: "Headline" },
+              { key: "adDescription",  label: "Description" },
+              { key: "ctaText",        label: "CTA Text" },
+              { key: "ctaType",        label: "CTA Type" },
+              { key: "destinationUrl", label: "Destination URL" },
+              { key: "imageNote",      label: "Image Note" },
+            ].map(({ key, label }) => {
+              const val = m[key as keyof typeof m];
+              if (!val) return null;
+              return (
+                <div key={key}>
+                  <p className="text-xs text-slate-600">{label}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap break-all text-xs text-slate-400">
+                    {val as string}
+                  </p>
+                </div>
+              );
+            })}
+            <p className="mt-2 text-xs italic text-slate-700">
+              For manual entry in Meta Ads Manager.
+              Use guarded_publish execution mode to trigger automated API creation.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Readiness summary bar
+// ---------------------------------------------------------------------------
+
+function ReadinessSummaryBar({ item }: { item: PublishPrepItem }) {
+  const readiness = summarizePublishReadiness(
+    item.validation,
+    item.guardrails,
+    item.approvedForLaunch,
+  );
+
+  const levelColor: Record<string, string> = {
+    not_ready:          "text-rose-400",
+    partially_ready:    "text-amber-400",
+    ready_for_approval: "text-sky-400",
+    ready_to_publish:   "text-emerald-400",
+  };
+  const barColor: Record<string, string> = {
+    not_ready:          "bg-rose-600",
+    partially_ready:    "bg-amber-500",
+    ready_for_approval: "bg-sky-500",
+    ready_to_publish:   "bg-emerald-500",
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-xs font-semibold ${levelColor[readiness.level] ?? "text-slate-400"}`}>
+          {readiness.summary}
+        </p>
+        <span className="shrink-0 text-xs text-slate-600 tabular-nums">
+          {readiness.checksPassedPct}%
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1.5 w-full rounded-full bg-slate-800">
+        <div
+          className={`h-full rounded-full transition-all ${barColor[readiness.level] ?? "bg-slate-600"}`}
+          style={{ width: `${readiness.checksPassedPct}%` }}
+        />
+      </div>
+
+      {/* Counts */}
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+        {readiness.blockerCount > 0 && (
+          <span className="text-xs text-rose-400">
+            {readiness.blockerCount} blocker{readiness.blockerCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {readiness.warningCount > 0 && (
+          <span className="text-xs text-amber-400">
+            {readiness.warningCount} warning{readiness.warningCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {readiness.guardrailFailCount > 0 && (
+          <span className="text-xs text-violet-400">
+            {readiness.guardrailFailCount} guardrail{readiness.guardrailFailCount !== 1 ? "s" : ""} failing
+          </span>
+        )}
+        {readiness.blockerCount === 0 && readiness.warningCount === 0 && readiness.guardrailFailCount === 0 && (
+          <span className="text-xs text-emerald-500">All checks passing</span>
+        )}
+      </div>
+
+      {/* Next step */}
+      <p className="text-xs text-slate-600">{readiness.nextStep}</p>
     </div>
   );
 }
@@ -147,14 +303,18 @@ function GuardrailPanel({ item }: { item: PublishPrepItem }) {
     <div className="space-y-2">
       {gs.map((g) => (
         <div key={g.key} className="flex items-start gap-2.5">
-          <span className={`mt-0.5 shrink-0 text-sm ${g.passed ? "text-emerald-500" : g.required ? "text-rose-500" : "text-amber-400"}`}>
+          <span className={`mt-0.5 shrink-0 text-sm ${
+            g.passed ? "text-emerald-500" : g.required ? "text-rose-500" : "text-amber-400"
+          }`}>
             {g.passed ? "✓" : g.required ? "✕" : "⚠"}
           </span>
           <div>
             <div className="flex items-center gap-1.5">
               <p className="text-xs font-medium text-slate-300">{g.label}</p>
               {g.required && !g.passed && (
-                <span className="rounded bg-rose-900/40 px-1.5 py-0.5 text-xs text-rose-400">blocking</span>
+                <span className="rounded bg-rose-900/40 px-1.5 py-0.5 text-xs text-rose-400">
+                  blocking
+                </span>
               )}
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">{g.message}</p>
@@ -231,10 +391,10 @@ function TargetMappingSection({
       {!editing ? (
         <div className="space-y-2">
           {[
-            { label: "Campaign",  value: item.targetMapping.targetCampaignName ?? item.targetMapping.targetCampaignExternalId },
-            { label: "Ad Set",    value: item.targetMapping.targetAdSetName    ?? item.targetMapping.targetAdSetExternalId },
-            { label: "URL",       value: item.targetMapping.destinationUrl },
-            { label: "CTA Type",  value: item.targetMapping.ctaType },
+            { label: "Campaign", value: item.targetMapping.targetCampaignName ?? item.targetMapping.targetCampaignExternalId },
+            { label: "Ad Set",   value: item.targetMapping.targetAdSetName    ?? item.targetMapping.targetAdSetExternalId },
+            { label: "URL",      value: item.targetMapping.destinationUrl },
+            { label: "CTA Type", value: item.targetMapping.ctaType },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-baseline gap-2">
               <span className="w-20 shrink-0 text-xs text-slate-600">{label}</span>
@@ -296,7 +456,7 @@ function TargetMappingSection({
 // Props + action types
 // ---------------------------------------------------------------------------
 
-type PrepAction = "approve" | "reject" | "publish" | "set_target" | "set_notes";
+type PrepAction = "approve" | "reject" | "hold" | "publish" | "set_target" | "set_notes";
 
 type Props = {
   item:            PublishPrepItem;
@@ -314,6 +474,7 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
   const isPublishable = item.status === "ready_to_publish";
   const isPublished   = item.status === "published";
   const isBlocked     = item.status === "blocked";
+  const isHeld        = item.status === "held";
   const isApproved    = item.approvedForLaunch;
 
   const statusColor = PREP_STATUS_COLOR[item.status];
@@ -333,11 +494,18 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
               {EXEC_MODE_LABEL[item.executionMode]} · {item.variantType} variant
             </p>
           </div>
-          {isApproved && (
-            <span className="shrink-0 rounded-md border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-300">
-              Approved
-            </span>
-          )}
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            {isApproved && (
+              <span className="rounded-md border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-300">
+                Approved
+              </span>
+            )}
+            {isHeld && (
+              <span className="rounded-md border border-violet-700/50 bg-violet-950/30 px-2 py-1 text-xs text-violet-300">
+                On Hold
+              </span>
+            )}
+          </div>
         </div>
         {item.approvedAt && (
           <p className="mt-2 text-xs text-slate-600">
@@ -357,15 +525,18 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
       {/* ── Blockers ── */}
       <BlockersSummary item={item} />
 
+      {/* ── Readiness summary bar ── */}
+      <ReadinessSummaryBar item={item} />
+
       {/* ── Source context ── */}
       <SectionCard title="Source Context">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {[
-            { label: "Client",    value: item.clientName },
-            { label: "Campaign",  value: item.campaignName ?? "—" },
-            { label: "Creative",  value: item.creativeName ?? "—" },
-            { label: "Intent",    value: item.briefIntent.replace(/_/g, " ") },
-            { label: "Type",      value: item.briefDraftType.replace(/_/g, " ") },
+            { label: "Client",   value: item.clientName },
+            { label: "Campaign", value: item.campaignName ?? "—" },
+            { label: "Creative", value: item.creativeName ?? "—" },
+            { label: "Intent",   value: item.briefIntent.replace(/_/g, " ") },
+            { label: "Type",     value: item.briefDraftType.replace(/_/g, " ") },
           ].map(({ label, value }) => (
             <div key={label}>
               <p className="text-xs text-slate-600">{label}</p>
@@ -412,9 +583,9 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
         )}
       </SectionCard>
 
-      {/* ── Payload preview ── */}
-      <SectionCard title="Payload Preview" description="What will be submitted to Meta Ads Manager.">
-        <PayloadPreview item={item} />
+      {/* ── Ad mockup preview ── */}
+      <SectionCard title="Ad Preview" description="How this creative will appear in Meta Ads Manager.">
+        <AdMockupPreview item={item} />
       </SectionCard>
 
       {/* ── Validation ── */}
@@ -448,8 +619,9 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
       {!isPublished && (
         <SectionCard title="Launch Actions">
           <div className="space-y-2">
-            {/* Primary actions */}
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Primary row: approve / send back / hold */}
+            <div className="grid grid-cols-3 gap-2">
               {!isApproved ? (
                 <button
                   onClick={() => onAction("approve")}
@@ -458,7 +630,7 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
                     text-xs font-medium text-emerald-300 hover:bg-emerald-950/50
                     active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Approve for Launch
+                  Approve
                 </button>
               ) : (
                 <button
@@ -471,6 +643,20 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
                   Send Back
                 </button>
               )}
+
+              {/* Hold — pause without rejecting */}
+              <button
+                onClick={() => onAction("hold")}
+                disabled={isHeld || isPublished || actionPending}
+                title="Pause this item without rejecting it. Can be resumed later."
+                className="rounded-xl border border-violet-700/40 bg-violet-950/20 px-3 py-3.5
+                  text-xs font-medium text-violet-300 hover:bg-violet-950/40
+                  active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isHeld ? "Held" : "Hold"}
+              </button>
+
+              {/* Publish now */}
               <button
                 onClick={() => onAction("publish")}
                 disabled={!isPublishable || actionPending}
@@ -481,9 +667,28 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
                 {actionPending ? "Working…" : "Publish Now"}
               </button>
             </div>
+
+            {/* Hold explanation */}
+            {isHeld && (
+              <div className="rounded-xl border border-violet-700/30 bg-violet-950/10 px-3 py-2.5">
+                <p className="text-xs text-violet-300">
+                  This item is on hold. Re-approve to resume the launch workflow.
+                </p>
+                <button
+                  onClick={() => onAction("approve")}
+                  disabled={isBlocked || actionPending}
+                  className="mt-2 text-xs text-violet-400 hover:text-violet-200 underline
+                    disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+                >
+                  Resume — Approve for Launch
+                </button>
+              </div>
+            )}
+
             <p className="text-xs text-slate-700">
-              &ldquo;Publish Now&rdquo; is available once all validation checks and guardrails pass and the item is approved.
-              No Meta campaign mutations are made without explicit action here.
+              &ldquo;Publish Now&rdquo; is available once all checks and guardrails pass and the item is
+              approved. Hold pauses the item without resetting its validation state.
+              No Meta campaign mutations happen without explicit action here.
             </p>
           </div>
         </SectionCard>
@@ -493,7 +698,9 @@ export function PublishPrepDetail({ item, onAction, actionPending = false }: Pro
         <div className="rounded-xl border border-emerald-700/40 bg-emerald-950/20 p-4 text-center">
           <p className="text-sm font-medium text-emerald-300">Published</p>
           <p className="mt-1 text-xs text-slate-500">
-            This item has been marked as published. Use the payload preview to create the ad in Meta Ads Manager if not yet done.
+            This item has been marked as published. Use the ad preview above to complete
+            manual entry in Meta Ads Manager if not yet done. Automated creation is triggered
+            via guarded_publish execution mode.
           </p>
         </div>
       )}

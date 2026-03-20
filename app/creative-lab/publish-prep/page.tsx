@@ -27,7 +27,7 @@ export default async function PublishPrepPage({ searchParams }: Props) {
   const [items, summary] = await Promise.all([
     loadPublishPrepItems({ clientAccountId, limit: 50 }).catch(() => []),
     buildPublishPrepSummary(clientAccountId).catch(() => ({
-      total: 0, draft: 0, blocked: 0, readyForApproval: 0,
+      total: 0, draft: 0, blocked: 0, held: 0, readyForApproval: 0,
       approvedForLaunch: 0, readyToPublish: 0, published: 0, publishFailed: 0,
     })),
   ]);
