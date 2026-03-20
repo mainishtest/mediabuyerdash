@@ -144,6 +144,21 @@ export function buildLearningInsightSummary(entries: LearningMemoryEntry[]): str
   return parts.join("; ") + ".";
 }
 
+// ── Category grouping (pure) ──────────────────────────────────────────────────
+
+export function groupByCategory(
+  entries: LearningMemoryEntry[]
+): Array<{ category: LearningCategory; entries: LearningMemoryEntry[] }> {
+  const groups: Record<string, LearningMemoryEntry[]> = {};
+  for (const e of entries) {
+    if (!groups[e.category]) groups[e.category] = [];
+    groups[e.category].push(e);
+  }
+  return Object.entries(groups)
+    .sort(([, a], [, b]) => b.length - a.length)
+    .map(([category, es]) => ({ category: category as LearningCategory, entries: es }));
+}
+
 /**
  * Filters entries relevant to creative brief generation for a given context.
  * Used by the brief builder to enrich prompt context with memory.

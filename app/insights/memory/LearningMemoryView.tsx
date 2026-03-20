@@ -13,8 +13,8 @@ import {
   CATEGORY_LABEL,
   SOURCE_LABEL,
   extractLearningPatterns,
+  groupByCategory,
 } from "../../../lib/learningMemory/patterns";
-import { groupByCategory } from "../../../lib/learningMemory/aggregator";
 import { SummaryBar }       from "./sections/SummaryBar";
 import { FlatLearningsList, GroupedLearningsList } from "./sections/LearningsList";
 import { PatternsSummary }  from "./sections/PatternsSummary";
