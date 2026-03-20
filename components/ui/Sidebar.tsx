@@ -38,6 +38,11 @@ const NAV: NavEntry[] = [
   },
   {
     kind:  "leaf",
+    href:  "/portfolio/controls",
+    label: "Portfolio Controls",
+  },
+  {
+    kind:  "leaf",
     href:  "/assistant",
     label: "AI Assistant",
   },
