@@ -42,7 +42,12 @@ export async function generateCopyVariationsAction(entry: CreativeLabEntry) {
     requestedCount:   3
   };
 
-  const response = await provider.generateCopyVariations(request);
+  let response: Awaited<ReturnType<typeof provider.generateCopyVariations>>;
+  try {
+    response = await provider.generateCopyVariations(request);
+  } catch (err) {
+    throw new Error(`Copy generation failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const job = await prisma.aIGenerationJob.create({
     data: {
@@ -90,7 +95,12 @@ export async function generateImageVariationsAction(entry: CreativeLabEntry) {
     requestedCount:    3
   };
 
-  const response = await provider.generateImageVariations(request);
+  let response: Awaited<ReturnType<typeof provider.generateImageVariations>>;
+  try {
+    response = await provider.generateImageVariations(request);
+  } catch (err) {
+    throw new Error(`Image generation failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const job = await prisma.aIGenerationJob.create({
     data: {
@@ -156,7 +166,11 @@ export async function runRealPipelineAction(
   requestType: "copy_generation" | "image_variation_generation",
   provider: "openai_text" | "anthropic_text" | "image_provider_placeholder"
 ): Promise<MockGenerationPipelineResult> {
-  return runRealGenerationPipeline({ entry, requestType, provider });
+  try {
+    return await runRealGenerationPipeline({ entry, requestType, provider });
+  } catch (err) {
+    throw new Error(`Pipeline failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ── Generation persistence & audit trail ─────────────────────────────────────

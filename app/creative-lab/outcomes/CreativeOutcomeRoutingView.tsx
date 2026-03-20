@@ -97,7 +97,7 @@ export function CreativeOutcomeRoutingView({
           body:    JSON.stringify({ testResultId }),
         });
         const data = await res.json();
-        if (data.route) {
+        if (res.ok && data.route) {
           setRoutes((prev) => {
             const exists = prev.find((r) => r.id === data.route.id);
             return exists
@@ -130,7 +130,7 @@ export function CreativeOutcomeRoutingView({
           body:    JSON.stringify({ readinessState, actionNote: note }),
         });
         const data = await res.json();
-        if (data.route) {
+        if (res.ok && data.route) {
           setRoutes((prev) => prev.map((r) => r.id === id ? data.route : r));
           await refreshSummary();
         } else {

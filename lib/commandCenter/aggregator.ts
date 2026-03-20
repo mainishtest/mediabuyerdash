@@ -147,7 +147,7 @@ export async function buildCommandCenterPayload(params: {
   });
 
   const experiments: CommandCenterExperimentItem[] = rawExperiments.map((e) => {
-    const result      = e.results[0] ?? null;
+    const result      = (e.results ?? [])[0] ?? null;
     const daysRunning = Math.floor((now.getTime() - new Date(e.startedAt).getTime()) / 864e5);
     return {
       id:                e.id,

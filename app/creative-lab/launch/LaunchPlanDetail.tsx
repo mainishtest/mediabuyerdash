@@ -105,6 +105,12 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
   const [criteriaOpen,  setCriteriaOpen]  = useState(false);
   const [guardrailsOpen, setGuardrailsOpen] = useState(false);
 
+  // Stub notice for flows not yet implemented in this UI.
+  const notImplemented = (label: string) => () => {
+    // eslint-disable-next-line no-console
+    console.warn(`[LaunchPlanDetail] "${label}" flow not yet implemented.`);
+  };
+
   const { readiness, successCriteria, guardrails, control, challenger, mapping } = plan;
 
   const primaryMetricLabel = PRIMARY_METRIC_OPTIONS.find((m) => m.key === successCriteria.primaryMetric)?.label
@@ -113,13 +119,7 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
   const challengerName = challenger.variantTitle ?? challenger.label;
   const controlName    = control.creativeName    ?? control.label;
 
-  const handleAssignControl = () => {
-    // In a real flow this would open a modal; for now we call with placeholder
-    onUpdate(plan.id, {
-      controlCreativeId:   "placeholder",
-      controlCreativeName: "Selected Control Creative",
-    });
-  };
+  const handleAssignControl = notImplemented("Select Control Creative");
 
   const handleApprove = () => {
     onUpdate(plan.id, { approve: true });
@@ -355,7 +355,7 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
                 variant="secondary"
                 size="sm"
                 disabled={pending || isLaunched}
-                onClick={() => {/* Edit criteria modal */}}
+                onClick={notImplemented("Edit Success Criteria")}
               >
                 Edit Success Criteria
               </ActionButton>
@@ -395,7 +395,7 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
                 variant="secondary"
                 size="sm"
                 disabled={pending || isLaunched}
-                onClick={() => {/* Edit guardrails modal */}}
+                onClick={notImplemented("Edit Guardrails")}
               >
                 Edit Guardrails
               </ActionButton>
@@ -430,7 +430,7 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
                 variant="secondary"
                 size="md"
                 disabled={pending}
-                onClick={() => {/* Open send-for-approval flow */}}
+                onClick={notImplemented("Send for Approval")}
               >
                 Send for Approval
               </ActionButton>

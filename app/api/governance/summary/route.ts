@@ -19,6 +19,11 @@ export async function GET() {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
-  const summary = await summarizeGovernanceControls(workspaceId);
-  return NextResponse.json({ summary });
+  try {
+    const summary = await summarizeGovernanceControls(workspaceId);
+    return NextResponse.json({ summary });
+  } catch (err) {
+    console.error("[governance/summary/GET]", err);
+    return NextResponse.json({ error: "Failed to load governance summary" }, { status: 500 });
+  }
 }

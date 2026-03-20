@@ -33,6 +33,7 @@ export default async function DashboardPage() {
           })
         : Promise.resolve(0),
 
+      // MetaSyncLog is connection-scoped, not workspace-scoped — shows global last sync time
       prisma.metaSyncLog.findFirst({
         where: { completedAt: { not: null } },
         orderBy: { completedAt: "desc" },

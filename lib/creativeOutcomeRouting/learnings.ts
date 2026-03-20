@@ -30,7 +30,7 @@ export function extractCreativeIterationLearning(
 
   const lift       = result.comparison?.primaryLift ?? null;
   const metric     = result.primaryMetric;
-  const reasons    = result.outcomeReasons.map((r) => r.description);
+  const reasons    = (result.outcomeReasons ?? []).map((r) => r.description);
   const challenger = result.challengerVariantTitle ?? "Challenger";
   const control    = result.controlCreativeName ?? "Control";
   const confScore  = result.confidence?.score ?? 0;

@@ -74,13 +74,19 @@ type LaunchPlanRecord = {
 // Map DB record → domain type
 // ---------------------------------------------------------------------------
 
+function safeParseStringArray(json: string | null, fallback: string[]): string[] {
+  if (!json) return fallback;
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as string[]) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function mapRecord(r: LaunchPlanRecord): CreativeExperimentLaunchPlan {
-  const secondaryMetrics: string[] = r.secondaryMetricsJson
-    ? (JSON.parse(r.secondaryMetricsJson) as string[])
-    : ["cpa_7d", "ctr"];
-  const guardrailMetrics: string[] = r.guardrailMetricsJson
-    ? (JSON.parse(r.guardrailMetricsJson) as string[])
-    : ["cpm"];
+  const secondaryMetrics: string[] = safeParseStringArray(r.secondaryMetricsJson, ["cpa_7d", "ctr"]);
+  const guardrailMetrics: string[] = safeParseStringArray(r.guardrailMetricsJson, ["cpm"]);
 
   const { control, challenger } = assignCreativeExperimentRoles({
     controlCreativeId:         r.controlCreativeId,
