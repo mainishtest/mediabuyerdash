@@ -41,7 +41,7 @@ export default async function LaunchWiringPage({ searchParams }: Props) {
         <PageHeader
           title="Experiment Launch Wiring"
           description="Wire approved creative drafts into structured test plans with control/challenger mapping, success criteria, and guardrails."
-          badge={<Badge variant="default">Creative Lab</Badge>}
+          badge={<Badge variant="neutral">Creative Lab</Badge>}
           actions={
             <Link
               href="/creative-lab/publish-prep"

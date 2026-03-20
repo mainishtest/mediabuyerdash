@@ -120,7 +120,7 @@ export function LaunchWiringView({
       <PageHeader
         title="Experiment Launch Wiring"
         description="Wire approved creative drafts into structured test plans with control/challenger mapping, success criteria, and guardrails."
-        badge={<Badge variant="default">Creative Lab</Badge>}
+        badge={<Badge variant="neutral">Creative Lab</Badge>}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link

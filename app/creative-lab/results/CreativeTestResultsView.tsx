@@ -144,7 +144,7 @@ export function CreativeTestResultsView({
       <PageHeader
         title="Test Results"
         description="Ingest performance data, compare control vs challenger, and track creative test outcomes."
-        badge={<Badge variant="default">Creative Lab</Badge>}
+        badge={<Badge variant="neutral">Creative Lab</Badge>}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link

@@ -42,7 +42,7 @@ export default async function CreativeTestResultsPage({ searchParams }: Props) {
         <PageHeader
           title="Test Results"
           description="Ingest performance data, compare control vs challenger, and track creative test outcomes."
-          badge={<Badge variant="default">Creative Lab</Badge>}
+          badge={<Badge variant="neutral">Creative Lab</Badge>}
           actions={
             <Link
               href="/creative-lab/launch"
