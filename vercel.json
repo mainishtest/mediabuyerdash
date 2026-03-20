@@ -3,5 +3,9 @@
     "app/**": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/sync-meta",    "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/sync-shopify", "schedule": "*/5 * * * *" }
+  ]
 }
