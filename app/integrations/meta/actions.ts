@@ -44,13 +44,39 @@ export async function disconnectMetaAction(connectionId: string) {
 
 // ── Refresh accessible accounts ───────────────────────────────────────────────
 
-export async function refreshAccountsAction(connectionId: string) {
-  const conn = await getMetaConnection();
-  if (!conn || conn.id !== connectionId) return;
+export async function refreshAccountsAction(
+  connectionId: string
+): Promise<{ error?: string }> {
+  try {
+    const conn = await getMetaConnection();
+    if (!conn || conn.id !== connectionId) {
+      return { error: "Connection not found. Please reconnect your Meta account." };
+    }
 
-  const accounts = await fetchAccessibleAdAccounts(conn.accessToken);
-  await syncAccessibleAdAccounts(connectionId, accounts);
-  revalidatePath(PAGE);
+    // Guard: token already known to be expired
+    if (conn.tokenExpiresAt && conn.tokenExpiresAt < new Date()) {
+      return {
+        error:
+          "Your Meta access token has expired. Please disconnect and reconnect your account.",
+      };
+    }
+
+    const accounts = await fetchAccessibleAdAccounts(conn.accessToken);
+    await syncAccessibleAdAccounts(connectionId, accounts);
+    revalidatePath(PAGE);
+    return {};
+  } catch (err) {
+    console.error("[refreshAccountsAction]", err);
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    // Detect common Meta API error shapes
+    if (msg.includes("190") || msg.toLowerCase().includes("access token")) {
+      return {
+        error:
+          "Meta rejected the access token. It may have expired or been revoked. Please reconnect.",
+      };
+    }
+    return { error: `Failed to refresh accounts: ${msg}` };
+  }
 }
 
 // ── Save selection ────────────────────────────────────────────────────────────

@@ -55,8 +55,54 @@ function fmtCurrency(n: number) {
   return `$${fmt(n)}`;
 }
 
+// Desktop table header / cell styles
 const TH = "pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-widest text-slate-500";
 const TD = "py-3 pr-4 text-sm text-slate-300";
+
+// ── Mobile card components ────────────────────────────────────────────────────
+
+function CampaignCard({ c }: { c: CampaignRow }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate text-sm font-medium text-white">{c.name}</p>
+        <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+      </div>
+      <p className="mt-1 font-mono text-xs text-slate-500">{c.externalCampaignId}</p>
+      {c.objective !== "—" && (
+        <p className="mt-0.5 text-xs text-slate-400">{c.objective}</p>
+      )}
+    </div>
+  );
+}
+
+function AdSetCard({ a }: { a: AdSetRow }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate text-sm font-medium text-white">{a.name}</p>
+        <Badge variant={statusVariant(a.status)}>{a.status}</Badge>
+      </div>
+      <p className="mt-1 font-mono text-xs text-slate-500">
+        Campaign: {a.externalCampaignId}
+      </p>
+    </div>
+  );
+}
+
+function AdCard({ a }: { a: AdRow }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate text-sm font-medium text-white">{a.name}</p>
+        <Badge variant={statusVariant(a.status)}>{a.status}</Badge>
+      </div>
+      <p className="mt-1 font-mono text-xs text-slate-500">
+        Ad Set: {a.externalAdSetId}
+      </p>
+    </div>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -100,7 +146,7 @@ export function MetaSyncView({
     : lastSyncLog;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+    <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Meta Sync"
         description="Read-only sync of campaigns, ad sets, ads, creatives, and insights from your selected Meta ad accounts."
@@ -129,8 +175,8 @@ export function MetaSyncView({
 
       {isConnected && (
         <>
-          {/* Stat strip */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {/* ── Stat strip ── */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 sm:gap-4">
             {[
               { label: "Campaigns",    value: counts?.campaigns ?? 0 },
               { label: "Ad Sets",      value: counts?.adSets    ?? 0 },
@@ -142,7 +188,7 @@ export function MetaSyncView({
             ))}
           </div>
 
-          {/* Sync control */}
+          {/* ── Sync control ── */}
           <SectionCard
             title="Sync Control"
             description={`${selectedAccounts.length} ad account${selectedAccounts.length !== 1 ? "s" : ""} selected. Syncs campaigns, ad sets, ads, creatives, and last 7 days of insights.`}
@@ -178,7 +224,7 @@ export function MetaSyncView({
             )}
           </SectionCard>
 
-          {/* Last sync log */}
+          {/* ── Last sync result ── */}
           {latestLog && (
             <SectionCard title="Last Sync Result">
               <div className="space-y-4">
@@ -192,7 +238,7 @@ export function MetaSyncView({
                       : "In progress"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-center">
+                <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-3 lg:grid-cols-6">
                   {[
                     { label: "Accounts",  v: latestLog.accountsProcessed },
                     { label: "Campaigns", v: latestLog.campaignsSynced   },
@@ -218,7 +264,7 @@ export function MetaSyncView({
             </SectionCard>
           )}
 
-          {/* Synced data tables */}
+          {/* ── Empty state ── */}
           {!hasSyncedData && !isPending && (
             <SectionCard>
               <EmptyState
@@ -229,9 +275,21 @@ export function MetaSyncView({
             </SectionCard>
           )}
 
+          {/* ── Campaigns ── */}
           {topCampaigns.length > 0 && (
-            <SectionCard title={`Campaigns (${counts?.campaigns ?? topCampaigns.length})`} flush>
-              <div className="overflow-x-auto p-5">
+            <SectionCard
+              title={`Campaigns (${counts?.campaigns ?? topCampaigns.length})`}
+              flush
+            >
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 p-4 md:hidden">
+                {topCampaigns.map((c) => (
+                  <CampaignCard key={c.externalCampaignId} c={c} />
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto p-5 md:block">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-800">
@@ -242,7 +300,7 @@ export function MetaSyncView({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {topCampaigns.map((c) => (
-                      <tr key={c.externalCampaignId} className="hover:bg-slate-800/20 transition-colors">
+                      <tr key={c.externalCampaignId} className="transition-colors hover:bg-slate-800/20">
                         <td className={`${TD} font-medium text-white`}>{c.name}</td>
                         <td className={`${TD} font-mono text-xs text-slate-500`}>{c.externalCampaignId}</td>
                         <td className={TD}><Badge variant={statusVariant(c.status)}>{c.status}</Badge></td>
@@ -255,9 +313,21 @@ export function MetaSyncView({
             </SectionCard>
           )}
 
+          {/* ── Ad Sets ── */}
           {topAdSets.length > 0 && (
-            <SectionCard title={`Ad Sets (${counts?.adSets ?? topAdSets.length})`} flush>
-              <div className="overflow-x-auto p-5">
+            <SectionCard
+              title={`Ad Sets (${counts?.adSets ?? topAdSets.length})`}
+              flush
+            >
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 p-4 md:hidden">
+                {topAdSets.map((a) => (
+                  <AdSetCard key={a.externalAdSetId} a={a} />
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto p-5 md:block">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-800">
@@ -268,7 +338,7 @@ export function MetaSyncView({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {topAdSets.map((a) => (
-                      <tr key={a.externalAdSetId} className="hover:bg-slate-800/20 transition-colors">
+                      <tr key={a.externalAdSetId} className="transition-colors hover:bg-slate-800/20">
                         <td className={`${TD} font-medium text-white`}>{a.name}</td>
                         <td className={`${TD} font-mono text-xs text-slate-500`}>{a.externalCampaignId}</td>
                         <td className={TD}><Badge variant={statusVariant(a.status)}>{a.status}</Badge></td>
@@ -280,9 +350,21 @@ export function MetaSyncView({
             </SectionCard>
           )}
 
+          {/* ── Ads ── */}
           {topAds.length > 0 && (
-            <SectionCard title={`Ads (${counts?.ads ?? topAds.length})`} flush>
-              <div className="overflow-x-auto p-5">
+            <SectionCard
+              title={`Ads (${counts?.ads ?? topAds.length})`}
+              flush
+            >
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 p-4 md:hidden">
+                {topAds.map((a) => (
+                  <AdCard key={a.externalAdId} a={a} />
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto p-5 md:block">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-800">
@@ -293,7 +375,7 @@ export function MetaSyncView({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {topAds.map((a) => (
-                      <tr key={a.externalAdId} className="hover:bg-slate-800/20 transition-colors">
+                      <tr key={a.externalAdId} className="transition-colors hover:bg-slate-800/20">
                         <td className={`${TD} font-medium text-white`}>{a.name}</td>
                         <td className={`${TD} font-mono text-xs text-slate-500`}>{a.externalAdSetId}</td>
                         <td className={TD}><Badge variant={statusVariant(a.status)}>{a.status}</Badge></td>
@@ -305,6 +387,7 @@ export function MetaSyncView({
             </SectionCard>
           )}
 
+          {/* ── Insights — always table with horizontal scroll (numerical data) ── */}
           {topInsights.length > 0 && (
             <SectionCard
               title={`Top Insights by Spend (${counts?.insights ?? 0} total rows)`}
@@ -322,10 +405,10 @@ export function MetaSyncView({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {topInsights.map((r, i) => (
-                      <tr key={i} className="hover:bg-slate-800/20 transition-colors">
+                      <tr key={i} className="transition-colors hover:bg-slate-800/20">
                         <td className={`${TD} font-mono text-xs text-slate-500`}>{r.externalAdId || "—"}</td>
                         <td className={TD}>{r.dateStart}</td>
-                        <td className={`${TD} text-emerald-400 font-medium`}>{fmtCurrency(r.spend)}</td>
+                        <td className={`${TD} font-medium text-emerald-400`}>{fmtCurrency(r.spend)}</td>
                         <td className={TD}>{r.impressions.toLocaleString()}</td>
                         <td className={TD}>{r.clicks.toLocaleString()}</td>
                         <td className={TD}>{r.ctr != null ? `${fmt(r.ctr, 2)}%` : "—"}</td>

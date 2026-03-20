@@ -7,12 +7,14 @@ import { Badge }        from "../../../components/ui/Badge";
 import { ActionButton } from "../../../components/ui/ActionButton";
 import { EmptyState }   from "../../../components/ui/EmptyState";
 import {
-  startMetaOAuthAction,
   disconnectMetaAction,
   refreshAccountsAction,
   saveSelectedAccountsAction,
 } from "./actions";
-import { getAdAccountStatusLabel, getAdAccountStatusVariant } from "../../../lib/meta/accounts";
+import {
+  getAdAccountStatusLabel,
+  getAdAccountStatusVariant,
+} from "../../../lib/meta/accounts";
 
 // ── Prop types (plain serialisable objects from the server component) ─────────
 
@@ -68,10 +70,13 @@ export function MetaIntegrationView({
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSelectedIds)
   );
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [isPending, startTransition]  = useTransition();
+  const [saveMessage,    setSaveMessage]    = useState<string | null>(null);
+  const [refreshError,   setRefreshError]   = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [isPending,      startTransition]   = useTransition();
+  const [isRefreshing,   startRefresh]      = useTransition();
 
-  const isConnected = connection !== null;
+  const isConnected     = connection !== null;
   const selectedCount   = selected.size;
   const accessibleCount = accessibleAccounts.length;
 
@@ -97,12 +102,23 @@ export function MetaIntegrationView({
     ? disconnectMetaAction.bind(null, connection.id)
     : null;
 
-  const refreshAction = connection
-    ? refreshAccountsAction.bind(null, connection.id)
-    : null;
+  function handleRefresh() {
+    if (!connection) return;
+    setRefreshError(null);
+    setRefreshMessage(null);
+    startRefresh(async () => {
+      const result = await refreshAccountsAction(connection.id);
+      if (result.error) {
+        setRefreshError(result.error);
+      } else {
+        setRefreshMessage("Accounts refreshed.");
+      }
+    });
+  }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-6 py-8">
+    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+
       {/* Page header */}
       <PageHeader
         title="Meta Integration"
@@ -138,21 +154,22 @@ export function MetaIntegrationView({
         >
           <div className="space-y-3 text-sm text-slate-400">
             <p>Add the following environment variables to continue:</p>
-            <div className="space-y-1 rounded-lg bg-slate-800/60 p-4 font-mono text-xs text-slate-300">
+            <div className="space-y-1 rounded-lg bg-slate-800/60 p-4 font-mono text-xs text-slate-300 overflow-x-auto">
               <p>META_APP_ID=your_app_id</p>
               <p>META_APP_SECRET=your_app_secret</p>
               <p>META_REDIRECT_URI=https://your-domain.com/api/auth/meta/callback</p>
             </div>
             <p className="text-slate-500">
-              See <code className="text-slate-400">docs/meta-integration-setup.md</code> for
-              step-by-step instructions.
+              See{" "}
+              <code className="text-slate-400">docs/meta-integration-setup.md</code>{" "}
+              for step-by-step instructions.
             </p>
           </div>
         </SectionCard>
       )}
 
-      {/* Integration summary strip */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Summary stats strip */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
           {
             label: "Status",
@@ -160,25 +177,25 @@ export function MetaIntegrationView({
             accent: isConnected,
           },
           {
-            label: "Accessible Accounts",
+            label: "Accessible",
             value: isConnected ? String(accessibleCount) : "—",
             accent: false,
           },
           {
-            label: "Selected Accounts",
+            label: "Selected",
             value: isConnected ? String(selectedCount) : "—",
             accent: false,
           },
         ].map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+            className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
               {stat.label}
             </p>
             <p
-              className={`mt-1.5 text-xl font-semibold capitalize ${
+              className={`mt-1 text-lg font-semibold capitalize sm:mt-1.5 sm:text-xl ${
                 stat.accent ? "text-emerald-400" : "text-white"
               }`}
             >
@@ -197,19 +214,27 @@ export function MetaIntegrationView({
             : "Link a Meta (Facebook) account with ads_read and business_management permissions."
         }
         actions={
-          isConnected && refreshAction ? (
-            <form action={refreshAction}>
-              <ActionButton type="submit" size="sm" variant="ghost">
-                Refresh Accounts
+          isConnected ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {refreshMessage && (
+                <span className="text-xs text-emerald-400">{refreshMessage}</span>
+              )}
+              <ActionButton
+                size="sm"
+                variant="ghost"
+                disabled={isRefreshing}
+                onClick={handleRefresh}
+              >
+                {isRefreshing ? "Refreshing…" : "Refresh Accounts"}
               </ActionButton>
-            </form>
+            </div>
           ) : undefined
         }
       >
         {isConnected ? (
           <div className="space-y-4">
             {/* Identity row */}
-            <div className="flex flex-wrap items-center gap-4 rounded-lg bg-slate-800/40 px-4 py-3">
+            <div className="flex flex-wrap items-start gap-4 rounded-lg bg-slate-800/40 px-4 py-3 sm:items-center">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">
                   {connection!.userDisplayName}
@@ -234,6 +259,13 @@ export function MetaIntegrationView({
                 </div>
               )}
             </div>
+
+            {/* Refresh error */}
+            {refreshError && (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-300">
+                {refreshError}
+              </div>
+            )}
 
             {/* Disconnect */}
             {disconnectAction && (
@@ -263,13 +295,19 @@ export function MetaIntegrationView({
             </ul>
 
             {configured ? (
-              <form action={startMetaOAuthAction}>
-                <ActionButton type="submit" variant="primary">
-                  Connect Meta Account
-                </ActionButton>
-              </form>
+              /* Use a direct link to the GET start route — avoids server action
+                 allowedOrigins restrictions in Codespaces / proxied environments */
+              <a
+                href="/api/auth/meta/start"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-transparent
+                  bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition-colors
+                  hover:bg-emerald-500 active:bg-emerald-700
+                  sm:w-auto sm:justify-start sm:py-2.5"
+              >
+                Connect Meta Account
+              </a>
             ) : (
-              <ActionButton variant="primary" disabled>
+              <ActionButton variant="primary" disabled className="w-full sm:w-auto">
                 Connect Meta Account (credentials missing)
               </ActionButton>
             )}
@@ -283,7 +321,7 @@ export function MetaIntegrationView({
           title="Ad Account Selection"
           description="Choose which ad accounts to include in the dashboard. Only selected accounts will be used for reporting and optimization."
           actions={
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {saveMessage && (
                 <span className="text-xs text-emerald-400">{saveMessage}</span>
               )}
@@ -305,62 +343,119 @@ export function MetaIntegrationView({
               icon="□"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800">
-                    {["", "Account", "ID", "Currency", "Timezone", "Status"].map(
-                      (h) => (
+            <>
+              {/* ── Mobile: card list (hidden on sm+) ── */}
+              <div className="space-y-2 sm:hidden">
+                {accessibleAccounts.map((acct) => (
+                  <button
+                    key={acct.id}
+                    type="button"
+                    onClick={() => toggleAccount(acct.id)}
+                    className={`w-full rounded-lg border px-4 py-3 text-left transition-colors
+                      ${
+                        selected.has(acct.id)
+                          ? "border-emerald-700/60 bg-emerald-950/30"
+                          : "border-slate-800 bg-slate-900/40 hover:bg-slate-800/40"
+                      }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox indicator */}
+                      <div
+                        className={`mt-0.5 h-4 w-4 flex-shrink-0 rounded border transition-colors ${
+                          selected.has(acct.id)
+                            ? "border-emerald-500 bg-emerald-500"
+                            : "border-slate-600 bg-slate-800"
+                        }`}
+                      >
+                        {selected.has(acct.id) && (
+                          <svg viewBox="0 0 12 12" fill="none" className="h-4 w-4 text-white">
+                            <path
+                              d="M2 6l3 3 5-5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+
+                      {/* Account info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-sm font-medium text-white">
+                            {acct.accountName}
+                          </p>
+                          <Badge variant={getAdAccountStatusVariant(acct.accountStatus)}>
+                            {getAdAccountStatusLabel(acct.accountStatus)}
+                          </Badge>
+                        </div>
+                        <p className="mt-0.5 font-mono text-xs text-slate-500">
+                          {acct.externalAdAccountId}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {acct.currency} &middot; {acct.timezoneName}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Desktop: table (hidden below sm) ── */}
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800">
+                      {["", "Account", "ID", "Currency", "Timezone", "Status"].map((h) => (
                         <th
                           key={h}
                           className="pb-3 pr-4 text-left text-xs font-semibold uppercase tracking-widest text-slate-500"
                         >
                           {h}
                         </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {accessibleAccounts.map((acct) => (
-                    <tr
-                      key={acct.id}
-                      onClick={() => toggleAccount(acct.id)}
-                      className="cursor-pointer transition-colors hover:bg-slate-800/30"
-                    >
-                      <td className="py-3 pr-4 w-8">
-                        <input
-                          type="checkbox"
-                          readOnly
-                          checked={selected.has(acct.id)}
-                          className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500"
-                          aria-label={`Select ${acct.accountName}`}
-                        />
-                      </td>
-                      <td className="py-3 pr-4 font-medium text-white">
-                        {acct.accountName}
-                      </td>
-                      <td className="py-3 pr-4 font-mono text-xs text-slate-500">
-                        {acct.externalAdAccountId}
-                      </td>
-                      <td className="py-3 pr-4 text-slate-300">
-                        {acct.currency}
-                      </td>
-                      <td className="py-3 pr-4 text-slate-400 text-xs">
-                        {acct.timezoneName}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Badge
-                          variant={getAdAccountStatusVariant(acct.accountStatus)}
-                        >
-                          {getAdAccountStatusLabel(acct.accountStatus)}
-                        </Badge>
-                      </td>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {accessibleAccounts.map((acct) => (
+                      <tr
+                        key={acct.id}
+                        onClick={() => toggleAccount(acct.id)}
+                        className="cursor-pointer transition-colors hover:bg-slate-800/30"
+                      >
+                        <td className="w-8 py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            readOnly
+                            checked={selected.has(acct.id)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500"
+                            aria-label={`Select ${acct.accountName}`}
+                          />
+                        </td>
+                        <td className="py-3 pr-4 font-medium text-white">
+                          {acct.accountName}
+                        </td>
+                        <td className="py-3 pr-4 font-mono text-xs text-slate-500">
+                          {acct.externalAdAccountId}
+                        </td>
+                        <td className="py-3 pr-4 text-slate-300">
+                          {acct.currency}
+                        </td>
+                        <td className="py-3 pr-4 text-xs text-slate-400">
+                          {acct.timezoneName}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge variant={getAdAccountStatusVariant(acct.accountStatus)}>
+                            {getAdAccountStatusLabel(acct.accountStatus)}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </SectionCard>
       )}

@@ -3,6 +3,7 @@ import type { RawShopifyOrder, RawShopifyLineItem } from "./api";
 // ── Mapped (Prisma-ready) types ────────────────────────────────────────────────
 
 export interface MappedOrder {
+  workspaceId:         string | null;
   shopifyConnectionId: string;
   clientAccountId:     string | null;
   externalOrderId:     string;
@@ -43,9 +44,11 @@ function money(bag: { shopMoney: { amount: string } }): number {
 export function mapOrder(
   raw: RawShopifyOrder,
   shopifyConnectionId: string,
-  clientAccountId: string | null = null
+  clientAccountId: string | null = null,
+  workspaceId: string | null = null
 ): MappedOrder {
   return {
+    workspaceId,
     shopifyConnectionId,
     clientAccountId,
     externalOrderId: raw.id,
@@ -58,13 +61,13 @@ export function mapOrder(
     totalDiscount:   money(raw.totalDiscountsSet),
     customerId:      raw.customer?.id          ?? null,
     customerEmail:   raw.customer?.email       ?? null,
-    utmSource:       raw.utmParameters?.source   ?? null,
-    utmMedium:       raw.utmParameters?.medium   ?? null,
-    utmCampaign:     raw.utmParameters?.campaign ?? null,
-    utmContent:      raw.utmParameters?.content  ?? null,
-    utmTerm:         raw.utmParameters?.term      ?? null,
-    landingPage:     raw.landingSite   ?? null,
-    referringSite:   raw.referringSite ?? null,
+    utmSource:       raw.customerJourneySummary?.firstVisit?.utmParameters?.source   ?? null,
+    utmMedium:       raw.customerJourneySummary?.firstVisit?.utmParameters?.medium   ?? null,
+    utmCampaign:     raw.customerJourneySummary?.firstVisit?.utmParameters?.campaign ?? null,
+    utmContent:      raw.customerJourneySummary?.firstVisit?.utmParameters?.content  ?? null,
+    utmTerm:         raw.customerJourneySummary?.firstVisit?.utmParameters?.term     ?? null,
+    landingPage:     raw.customerJourneySummary?.firstVisit?.landingPage  ?? null,
+    referringSite:   raw.customerJourneySummary?.firstVisit?.referrerUrl  ?? null,
   };
 }
 
@@ -74,9 +77,9 @@ export function mapLineItemsForOrder(
 ): MappedLineItem[] {
   return raw.lineItems.edges.map(({ node }: { node: RawShopifyLineItem }) => ({
     shopifyOrderId,
-    productId: node.product?.id      ?? null,
-    variantId: node.variant?.id      ?? null,
-    sku:       node.variant?.sku     ?? null,
+    productId: null,
+    variantId: null,
+    sku:       null,
     title:     node.title,
     quantity:  node.quantity,
     price:     parseFloat(node.originalUnitPriceSet.shopMoney.amount) || 0,

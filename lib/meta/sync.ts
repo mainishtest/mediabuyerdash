@@ -31,6 +31,7 @@ export interface SyncSummary {
 async function syncAccount(
   externalAdAccountId: string,
   accessToken: string,
+  workspaceId: string | null,
   counts: {
     campaignsSynced:   number;
     adSetsSynced:      number;
@@ -42,25 +43,27 @@ async function syncAccount(
   // Campaigns
   const rawCampaigns = await fetchCampaigns(externalAdAccountId, accessToken);
   const mappedCampaigns = rawCampaigns.map((c) =>
-    mapCampaign(c, externalAdAccountId)
+    mapCampaign(c, externalAdAccountId, workspaceId)
   );
   counts.campaignsSynced += await upsertCampaigns(mappedCampaigns);
 
   // Ad sets
   const rawAdSets = await fetchAdSets(externalAdAccountId, accessToken);
-  const mappedAdSets = rawAdSets.map((a) => mapAdSet(a, externalAdAccountId));
+  const mappedAdSets = rawAdSets.map((a) =>
+    mapAdSet(a, externalAdAccountId, workspaceId)
+  );
   counts.adSetsSynced += await upsertAdSets(mappedAdSets);
 
   // Ads (with embedded creative data)
   const rawAds = await fetchAds(externalAdAccountId, accessToken);
-  const mappedAds = rawAds.map((a) => mapAd(a, externalAdAccountId));
+  const mappedAds = rawAds.map((a) => mapAd(a, externalAdAccountId, workspaceId));
   counts.adsSynced += await upsertAds(mappedAds);
 
   // Creatives extracted from ad responses
   const rawCreatives = rawAds
     .filter((a) => a.creative?.id)
     .map((a) => a.creative!);
-  const mappedCreatives = rawCreatives.map(mapCreative);
+  const mappedCreatives = rawCreatives.map((c) => mapCreative(c, workspaceId));
   counts.creativesSynced += await upsertCreatives(mappedCreatives);
 
   // Insights — last 7 days at ad level
@@ -70,7 +73,7 @@ async function syncAccount(
     7
   );
   const mappedInsights = rawInsights.map((r) =>
-    mapInsight(r, externalAdAccountId)
+    mapInsight(r, externalAdAccountId, workspaceId)
   );
   counts.insightRowsSynced += await replaceInsights(
     externalAdAccountId,
@@ -80,9 +83,83 @@ async function syncAccount(
   );
 }
 
-// ── Main orchestrator ─────────────────────────────────────────────────────────
+// ── Client-scoped orchestrator (exported for use by clientSync module) ────────
 
-export async function runMetaSync(): Promise<SyncSummary> {
+/**
+ * Sync a specific set of ad accounts using a known connection.
+ * Used by the client-scoped sync orchestrator to sync only the accounts
+ * mapped to a given client.
+ */
+export async function runMetaSyncForAccounts(
+  adAccounts: Array<{ externalAdAccountId: string; accessToken: string }>,
+  connectionId: string,
+  workspaceId: string | null = null
+): Promise<SyncSummary> {
+  const startedAt = new Date();
+
+  if (adAccounts.length === 0) {
+    return {
+      status:            "no_accounts",
+      accountsProcessed: 0,
+      campaignsSynced:   0,
+      adSetsSynced:      0,
+      adsSynced:         0,
+      creativesSynced:   0,
+      insightRowsSynced: 0,
+      errors:            ["No ad accounts provided for sync"],
+      startedAt:         startedAt.toISOString(),
+      completedAt:       new Date().toISOString(),
+    };
+  }
+
+  const syncLog = await createSyncLog(connectionId);
+
+  const counts = {
+    campaignsSynced:   0,
+    adSetsSynced:      0,
+    adsSynced:         0,
+    creativesSynced:   0,
+    insightRowsSynced: 0,
+  };
+  const errors: string[] = [];
+
+  for (const account of adAccounts) {
+    try {
+      await syncAccount(
+        account.externalAdAccountId,
+        account.accessToken,
+        workspaceId,
+        counts
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${account.externalAdAccountId}: ${msg}`);
+      console.error("[Meta sync]", account.externalAdAccountId, err);
+    }
+  }
+
+  await completeSyncLog(
+    syncLog.id,
+    { accountsProcessed: adAccounts.length, ...counts },
+    errors
+  );
+
+  const completedAt = new Date();
+  return {
+    status:            errors.length === 0 ? "completed" : "partial",
+    accountsProcessed: adAccounts.length,
+    ...counts,
+    errors,
+    startedAt:   startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+  };
+}
+
+// ── Workspace-wide orchestrator ───────────────────────────────────────────────
+
+export async function runMetaSync(
+  workspaceId: string | null = null
+): Promise<SyncSummary> {
   const startedAt = new Date();
 
   const connection = await getConnectionForSync();
@@ -102,7 +179,10 @@ export async function runMetaSync(): Promise<SyncSummary> {
     };
   }
 
-  const selected = connection.selectedAccounts.map((s) => s.accessibleAdAccount);
+  const selected = connection.selectedAccounts.map((s) => ({
+    externalAdAccountId: s.accessibleAdAccount.externalAdAccountId,
+    accessToken:         connection.accessToken,
+  }));
 
   if (selected.length === 0) {
     return {
@@ -119,36 +199,5 @@ export async function runMetaSync(): Promise<SyncSummary> {
     };
   }
 
-  const syncLog = await createSyncLog(connection.id);
-
-  const counts = {
-    campaignsSynced:   0,
-    adSetsSynced:      0,
-    adsSynced:         0,
-    creativesSynced:   0,
-    insightRowsSynced: 0,
-  };
-  const errors: string[] = [];
-
-  for (const account of selected) {
-    try {
-      await syncAccount(account.externalAdAccountId, connection.accessToken, counts);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`${account.externalAdAccountId}: ${msg}`);
-      console.error("[Meta sync]", account.externalAdAccountId, err);
-    }
-  }
-
-  await completeSyncLog(syncLog.id, { accountsProcessed: selected.length, ...counts }, errors);
-
-  const completedAt = new Date();
-  return {
-    status:            errors.length === 0 ? "completed" : "partial",
-    accountsProcessed: selected.length,
-    ...counts,
-    errors,
-    startedAt:  startedAt.toISOString(),
-    completedAt: completedAt.toISOString(),
-  };
+  return runMetaSyncForAccounts(selected, connection.id, workspaceId);
 }

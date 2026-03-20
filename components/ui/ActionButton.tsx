@@ -11,9 +11,9 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
 };
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-5 py-2.5 text-sm",
+  sm: "min-h-[36px] px-3 py-1.5 text-xs",
+  md: "min-h-[44px] px-4 py-2.5 text-sm",
+  lg: "min-h-[44px] px-5 py-3 text-sm",
 };
 
 export function ActionButton({

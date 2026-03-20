@@ -16,8 +16,8 @@ export async function completeSyncLog(
 ) {
   const total = counts.ordersSynced;
   const status =
-    errors.length === 0              ? "completed"
-    : total > 0                      ? "partial"
+    errors.length === 0 ? "completed"
+    : total > 0         ? "partial"
     : "failed";
 
   return prisma.shopifySyncLog.update({
@@ -39,6 +39,16 @@ export async function getLatestSyncLog(shopifyConnectionId: string) {
   });
 }
 
+/** Returns the most recent orderCreatedAt for this connection, or null if no orders exist. */
+export async function getLatestOrderDate(shopifyConnectionId: string): Promise<Date | null> {
+  const latest = await prisma.shopifyOrder.findFirst({
+    where:   { shopifyConnectionId },
+    orderBy: { orderCreatedAt: "desc" },
+    select:  { orderCreatedAt: true },
+  });
+  return latest?.orderCreatedAt ?? null;
+}
+
 // ── Order + line-item writes ───────────────────────────────────────────────────
 
 export async function upsertOrder(order: MappedOrder) {
@@ -51,22 +61,23 @@ export async function upsertOrder(order: MappedOrder) {
     },
     create: order,
     update: {
-      orderNumber:    order.orderNumber,
-      orderCreatedAt: order.orderCreatedAt,
+      workspaceId:     order.workspaceId,
+      orderNumber:     order.orderNumber,
+      orderCreatedAt:  order.orderCreatedAt,
       clientAccountId: order.clientAccountId,
-      totalPrice:     order.totalPrice,
-      subtotalPrice:  order.subtotalPrice,
-      totalTax:       order.totalTax,
-      totalDiscount:  order.totalDiscount,
-      customerId:     order.customerId,
-      customerEmail:  order.customerEmail,
-      utmSource:      order.utmSource,
-      utmMedium:      order.utmMedium,
-      utmCampaign:    order.utmCampaign,
-      utmContent:     order.utmContent,
-      utmTerm:        order.utmTerm,
-      landingPage:    order.landingPage,
-      referringSite:  order.referringSite,
+      totalPrice:      order.totalPrice,
+      subtotalPrice:   order.subtotalPrice,
+      totalTax:        order.totalTax,
+      totalDiscount:   order.totalDiscount,
+      customerId:      order.customerId,
+      customerEmail:   order.customerEmail,
+      utmSource:       order.utmSource,
+      utmMedium:       order.utmMedium,
+      utmCampaign:     order.utmCampaign,
+      utmContent:      order.utmContent,
+      utmTerm:         order.utmTerm,
+      landingPage:     order.landingPage,
+      referringSite:   order.referringSite,
     },
   });
 }
@@ -83,6 +94,7 @@ export async function replaceLineItems(
 
 // ── Summary data for the UI ────────────────────────────────────────────────────
 
+/** Summary scoped to a connection (used by global integrations page). */
 export async function getOrderSummary(shopifyConnectionId: string) {
   const [orderCount, lineItemCount, recentOrders, recentLineItems] =
     await Promise.all([
@@ -97,11 +109,40 @@ export async function getOrderSummary(shopifyConnectionId: string) {
       }),
       prisma.shopifyOrderLineItem.findMany({
         where:   { order: { shopifyConnectionId } },
-        orderBy: { createdAt:  "desc" },
+        orderBy: { createdAt: "desc" },
         take:    20,
         include: { order: { select: { orderNumber: true } } },
       }),
     ]);
 
   return { orderCount, lineItemCount, recentOrders, recentLineItems };
+}
+
+/** Summary scoped to a client account (used by client-scoped pages). */
+export async function getClientOrderSummary(clientAccountId: string) {
+  const [orderCount, lineItemCount, recentOrders, facebookRevenueAgg] = await Promise.all([
+    prisma.shopifyOrder.count({ where: { clientAccountId } }),
+    prisma.shopifyOrderLineItem.count({
+      where: { order: { clientAccountId } },
+    }),
+    prisma.shopifyOrder.findMany({
+      where:   { clientAccountId },
+      orderBy: { orderCreatedAt: "desc" },
+      take:    20,
+      include: {
+        lineItems: { select: { id: true } },
+      },
+    }),
+    prisma.shopifyOrder.aggregate({
+      where: {
+        clientAccountId,
+        utmSource: { equals: "facebook", mode: "insensitive" },
+      },
+      _sum: { totalPrice: true },
+    }),
+  ]);
+
+  const facebookRevenue = facebookRevenueAgg._sum.totalPrice ?? 0;
+
+  return { orderCount, lineItemCount, recentOrders, facebookRevenue };
 }

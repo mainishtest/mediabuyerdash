@@ -2,10 +2,66 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { Sidebar } from "./Sidebar";
+
+// ---------------------------------------------------------------------------
+// Workspace header (desktop) — shows workspace name + user + sign out
+// ---------------------------------------------------------------------------
+
+function WorkspaceHeader() {
+  const { data: session, status } = useSession();
+  const pathname = usePathname();
+
+  // Don't render on auth pages (they are fixed overlays — keeps DOM clean).
+  if (pathname === "/login" || pathname === "/register") return null;
+  if (status === "loading") return (
+    <div className="hidden h-12 shrink-0 items-center border-b border-slate-800 bg-slate-900/30 px-6 lg:flex" />
+  );
+  if (!session) return null;
+
+  const workspaceName = session.user.workspaceName ?? "Workspace";
+  const userName      = session.user.name || session.user.email || "";
+
+  return (
+    <div className="hidden h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/30 px-6 lg:flex">
+      {/* Workspace */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-700 text-xs font-bold text-white">
+          W
+        </div>
+        <span className="text-sm font-medium text-slate-300">{workspaceName}</span>
+      </div>
+
+      {/* User + sign out */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-slate-500">{userName}</span>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-400
+            transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AppShell
+// ---------------------------------------------------------------------------
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Portal pages render with no chrome — clients access them via shareable link.
+  const isPortal = pathname?.startsWith("/portal/");
+  if (isPortal) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950">
@@ -31,6 +87,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main column */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Workspace header (desktop) */}
+        <WorkspaceHeader />
+
         {/* Mobile top bar */}
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/50 px-4 lg:hidden">
           <button

@@ -2,16 +2,16 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "../../../lib/db";
-import { campaigns, adSets, ads } from "../../../lib/sampleData";
-import { hourlyMetrics } from "../../../lib/sampleMetrics";
-import { adSetPerformance, adPerformance } from "../../../lib/data/index";
-import {
-  getCampaignsByAccountId,
-  getAdSetsByCampaignId,
-  getAdsByAdSetId
-} from "../../../lib/selectors";
-import { aggregateByCampaign } from "../../../lib/aggregations";
-import { ClientDetailView } from "./ClientDetailView";
+import { ClientDetailView }              from "./ClientDetailView";
+import { getClientIntegrationStatus }   from "../../../lib/clientIntegrations";
+import { getClientReadiness }           from "../../../lib/clientSync/readiness";
+import { getClientSyncStatusSummary }   from "../../../lib/clientSync/db";
+import { getClientMetaData }            from "../../../lib/meta/clientMetaService";
+import { getMetaImportStatus }         from "../../../lib/meta/metaImportStatus";
+import { getClientMetaValidation }     from "../../../lib/meta/clientMetaValidation";
+import { loadCampaignPerformance }      from "../../../lib/reconciliation/persist";
+import { getServerSession }             from "next-auth";
+import { authOptions }                  from "../../../lib/auth";
 
 type PageProps = {
   params: { clientId: string };
@@ -36,12 +36,16 @@ export default async function ClientDetailPage({ params }: PageProps) {
   // Map Prisma model to the shape ClientDetailView expects
   const account = dbAccount
     ? {
-        id: dbAccount.id,
-        name: dbAccount.name,
-        platform: dbAccount.platform as "facebook",
-        currency: dbAccount.currency,
-        timezone: dbAccount.timezone,
-        createdAt: dbAccount.createdAt.toISOString().slice(0, 10)
+        id:        dbAccount.id,
+        name:      dbAccount.name,
+        brandName: dbAccount.brandName ?? null,
+        status:    dbAccount.status ?? "active",
+        notes:     dbAccount.notes ?? null,
+        platform:  dbAccount.platform as "facebook",
+        currency:  dbAccount.currency,
+        timezone:  dbAccount.timezone,
+        createdAt: dbAccount.createdAt.toISOString().slice(0, 10),
+        clientPortalPasswordHash: dbAccount.clientPortalPasswordHash ?? null,
       }
     : null;
 
@@ -50,37 +54,43 @@ export default async function ClientDetailPage({ params }: PageProps) {
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-lg text-slate-300">Client account not found.</p>
         <Link
-          href="/"
+          href="/clients"
           className="mt-4 text-sm text-slate-400 hover:text-slate-200"
         >
-          ← Back to Dashboard
+          ← Back to Clients
         </Link>
       </div>
     );
   }
 
-  const clientCampaigns = getCampaignsByAccountId(campaigns, clientId);
-  const clientAdSets    = clientCampaigns.flatMap((c) =>
-    getAdSetsByCampaignId(adSets, c.id)
-  );
-  const clientAds       = clientAdSets.flatMap((as) =>
-    getAdsByAdSetId(ads, as.id)
-  );
+  // Fetch session for workspaceId scoping
+  const session = await getServerSession(authOptions);
+  const workspaceId = session?.user?.workspaceId ?? null;
 
-  const campaignSummaries = aggregateByCampaign(
-    hourlyMetrics.filter((m) => m.accountId === clientId)
-  );
+  // Fetch integration mapping status (Meta ad accounts + Shopify connections)
+  const [integrations, readiness, syncStatus, clientMetaData, metaImportStatus, metaValidation, reconciledCampaigns] = await Promise.all([
+    getClientIntegrationStatus(clientId),
+    getClientReadiness(clientId),
+    getClientSyncStatusSummary(clientId),
+    getClientMetaData(clientId, workspaceId),
+    getMetaImportStatus(clientId, workspaceId),
+    getClientMetaValidation(clientId, workspaceId),
+    loadCampaignPerformance(clientId),
+  ]);
 
-  // Filter performance summaries to only entities belonging to this client.
-  const clientAdSetIds = new Set(clientAdSets.map((as) => as.id));
-  const clientAdIds    = new Set(clientAds.map((ad) => ad.id));
+  // Legacy mock campaign/adset/ad data has been removed.
+  // These props are kept for backwards-compat with ClientDetailView but are
+  // empty — the view falls back to the real DB-backed sections for all data.
+  const clientCampaigns        = [] as import("../../../types/media").Campaign[];
+  const clientAdSets           = [] as import("../../../types/media").AdSet[];
+  const clientAds              = [] as import("../../../types/media").Ad[];
+  const campaignSummaries      = [] as import("../../../lib/aggregations").CampaignSummary[];
+  const clientAdSetPerformance = [] as import("../../../lib/data/adSetPerformance").AdSetPerformanceSummary[];
+  const clientAdPerformance    = [] as import("../../../lib/data/adPerformance").AdPerformanceSummary[];
 
-  const clientAdSetPerformance = adSetPerformance.filter((s) =>
-    clientAdSetIds.has(s.adSetId)
-  );
-  const clientAdPerformance = adPerformance.filter((s) =>
-    clientAdIds.has(s.adId)
-  );
+  // Derive date range from the reconciled rows (all share the same dateFrom/dateTo).
+  const reconciledDateFrom = reconciledCampaigns[0]?.dateFrom ?? null;
+  const reconciledDateTo   = reconciledCampaigns[0]?.dateTo   ?? null;
 
   return (
     <ClientDetailView
@@ -91,6 +101,15 @@ export default async function ClientDetailPage({ params }: PageProps) {
       campaignSummaries={campaignSummaries}
       adSetSummaries={clientAdSetPerformance}
       adSummaries={clientAdPerformance}
+      integrations={integrations}
+      readiness={readiness}
+      syncStatus={syncStatus}
+      clientMetaData={clientMetaData}
+      metaImportStatus={metaImportStatus}
+      metaValidation={metaValidation}
+      reconciledCampaigns={reconciledCampaigns}
+      reconciledDateFrom={reconciledDateFrom}
+      reconciledDateTo={reconciledDateTo}
     />
   );
 }
