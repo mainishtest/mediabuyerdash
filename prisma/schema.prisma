@@ -764,6 +764,65 @@ model CreativeLifecycleResultLinkRecord {
   @@index([clientAccountId])
 }
 
+// ── Creative outcome routing ──────────────────────────────────────────────────
+
+// One record per CreativeTestResultRecord — built by buildCreativeOutcomeRoute()
+// after ingestion. Stores the routing decision, extracted learning, and action state.
+// Uses (prisma as any) in lib/ because the model is added via SQL migration.
+model CreativeOutcomeRouteRecord {
+  id               String  @id @default(cuid())
+  clientAccountId  String
+  testResultId     String  @unique   // 1:1 with CreativeTestResultRecord
+
+  routeType       String              // CreativeOutcomeRouteType
+  readinessState  String @default("pending_action")  // CreativeOutcomeReadinessState
+
+  // Source context (denormalised)
+  outcome         String?
+  confidenceLevel String?
+  confidenceScore Float?
+  primaryLift     Float?
+  winningVariant  String?
+
+  // Creative context
+  challengerVariantTitle String?
+  controlCreativeName    String?
+  campaignName           String?
+  primaryMetric          String?
+
+  // Route decision (JSON blobs)
+  reasonsJson  String  @default("[]")    // JSON: CreativeOutcomeReason[]
+  evidenceJson String  @default("{}")    // JSON: Record<string, unknown>
+  learningJson String?                   // JSON: CreativeIterationLearning | null
+
+  // Next action
+  nextActionLabel String
+  nextActionHint  String
+  linkedWorkflow  String?
+  learningSummary String?
+
+  // Action state
+  actionedAt DateTime?
+  actionedBy String?
+  actionNote String?
+  archivedAt DateTime?
+
+  // Back-links
+  launchPlanId String?
+  experimentId String?
+  briefId      String?
+  variantId    String?
+  prepItemId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientAccountId])
+  @@index([readinessState])
+  @@index([routeType])
+  @@index([testResultId])
+}
+
 // ── Experiment launch wiring ─────────────────────────────────────────────────
 
 // Bridges an approved creative draft (PublishPrepRecord) into a structured
