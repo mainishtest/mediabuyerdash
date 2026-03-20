@@ -23,7 +23,15 @@ export default async function PortfolioControlsPage({ searchParams }: PageProps)
   const payload = await buildPortfolioControlsPayload({
     workspaceId: session.user?.workspaceId ?? null,
     clientId:    searchParams.clientId,
-  });
+  }).catch(() => null);
+
+  if (!payload) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Portfolio controls data could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
 
   return <ControlsView payload={payload} />;
 }

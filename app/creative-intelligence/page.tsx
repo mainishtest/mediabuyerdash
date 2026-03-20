@@ -15,10 +15,10 @@ export default async function CreativeIntelligencePage() {
   const [dbCopy, dbImage] = await Promise.all([
     prisma.generatedCopyVariation.findMany({
       include: { run: { select: { clientAccountId: true, campaignId: true } } },
-    }),
+    }).catch(() => []),
     prisma.generatedImageVariation.findMany({
       include: { run: { select: { clientAccountId: true, campaignId: true } } },
-    }),
+    }).catch(() => []),
   ]);
 
   const usingRealData = dbCopy.length > 0 || dbImage.length > 0;

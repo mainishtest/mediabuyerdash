@@ -33,7 +33,15 @@ export default async function ExecutiveReportPage({ searchParams }: PageProps) {
     dateFrom:            searchParams.from    ?? thirtyDaysAgo,
     dateTo:              searchParams.to      ?? today,
     compareWithPrevious: searchParams.compare === "1",
-  });
+  }).catch(() => null);
+
+  if (!summary) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Executive report could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
 
   return <ExecutiveReportView summary={summary} />;
 }

@@ -20,12 +20,12 @@ export default async function AuditHistoryPage() {
   const workspaceId = session?.user?.workspaceId ?? null;
 
   const [entries, clients] = await Promise.all([
-    loadCombinedAuditHistory({ workspaceId, limit: 120 }),
+    loadCombinedAuditHistory({ workspaceId, limit: 120 }).catch(() => []),
     prisma.clientAccount.findMany({
       where:   workspaceId ? { workspaceId } : {},
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
-    }),
+    }).catch(() => []),
   ]);
 
   const summary = summarizeAutomationHistory(entries);

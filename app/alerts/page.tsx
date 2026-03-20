@@ -29,7 +29,7 @@ export default async function AlertsPage() {
   }
 
   // Load all alerts for display
-  const alerts  = await loadAlerts(workspaceId);
+  const alerts  = await loadAlerts(workspaceId).catch(() => []);
   const summary = buildAlertSummary(alerts);
 
   // Load client list for the filter dropdown
@@ -38,7 +38,7 @@ export default async function AlertsPage() {
     where:   clientWhere,
     select:  { id: true, name: true },
     orderBy: { name: "asc" },
-  });
+  }).catch(() => []);
 
   return (
     <AlertsView

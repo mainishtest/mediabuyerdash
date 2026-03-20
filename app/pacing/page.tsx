@@ -13,7 +13,7 @@ export default async function PacingPage() {
   const session     = await getServerSession(authOptions);
   const workspaceId = session?.user?.workspaceId ?? null;
 
-  const summaries = await buildAllClientsPacingSummaries(workspaceId);
+  const summaries = await buildAllClientsPacingSummaries(workspaceId).catch(() => []);
 
   return <PacingView summaries={summaries} />;
 }

@@ -30,7 +30,15 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
     clientId:    searchParams.clientId,
     dateFrom:    searchParams.from ?? thirtyDays,
     dateTo:      searchParams.to   ?? today,
-  });
+  }).catch(() => null);
+
+  if (!payload) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Portfolio data could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
 
   return <PortfolioView payload={payload} />;
 }

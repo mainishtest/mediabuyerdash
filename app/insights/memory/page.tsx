@@ -38,12 +38,12 @@ export default async function LearningMemoryPage({ searchParams }: PageProps) {
       category:    searchParams.category   as never ?? undefined,
       confidence:  searchParams.confidence as never ?? undefined,
       limit:       300,
-    }),
+    }).catch(() => []),
     prisma.clientAccount.findMany({
       where:   { status: "active" },
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
-    }),
+    }).catch(() => []),
   ]);
 
   const summary = buildLearningSummary(entries, clients);

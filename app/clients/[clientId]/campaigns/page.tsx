@@ -33,9 +33,9 @@ export default async function CampaignPerformancePage({ params }: PageProps) {
   if (!account) notFound();
 
   const [snapshots, sparklines, clientDaily] = await Promise.all([
-    buildCampaignPerformanceSnapshots(clientId),
-    getCampaignSparklines(clientId, 30),
-    getClientDailyMetrics(clientId, 30),
+    buildCampaignPerformanceSnapshots(clientId).catch(() => []),
+    getCampaignSparklines(clientId, 30).catch(() => ({})),
+    getClientDailyMetrics(clientId, 30).catch(() => []),
   ]);
 
   return (

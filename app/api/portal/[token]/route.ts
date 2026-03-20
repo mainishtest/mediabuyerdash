@@ -42,8 +42,11 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const url           = new URL(req.url);
   const today         = new Date().toISOString().slice(0, 10);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const from          = url.searchParams.get("from") ?? thirtyDaysAgo;
-  const to            = url.searchParams.get("to")   ?? today;
+  const ISO_DATE_RE   = /^\d{4}-\d{2}-\d{2}$/;
+  const rawFrom       = url.searchParams.get("from") ?? thirtyDaysAgo;
+  const rawTo         = url.searchParams.get("to")   ?? today;
+  const from          = ISO_DATE_RE.test(rawFrom) ? rawFrom : thirtyDaysAgo;
+  const to            = ISO_DATE_RE.test(rawTo)   ? rawTo   : today;
   const clientId      = account.id;
 
   // ── 1. Try UTM performance rows (reconciled data) ─────────────────────────
@@ -83,7 +86,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     });
 
     const adAccountIds = selectedAccounts
-      .map((s) => s.accessibleAdAccount.externalAdAccountId)
+      .map((s) => s.accessibleAdAccount?.externalAdAccountId)
       .filter(Boolean);
 
     if (adAccountIds.length > 0) {

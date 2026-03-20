@@ -12,6 +12,9 @@ type Params = { params: { actionId: string } };
 
 export async function POST(req: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     let reason: string | undefined;

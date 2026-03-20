@@ -69,13 +69,27 @@ export default async function ClientDetailPage({ params }: PageProps) {
 
   // Fetch integration mapping status (Meta ad accounts + Shopify connections)
   const [integrations, readiness, syncStatus, clientMetaData, metaImportStatus, metaValidation, reconciledCampaigns] = await Promise.all([
-    getClientIntegrationStatus(clientId),
-    getClientReadiness(clientId),
-    getClientSyncStatusSummary(clientId),
-    getClientMetaData(clientId, workspaceId),
-    getMetaImportStatus(clientId, workspaceId),
-    getClientMetaValidation(clientId, workspaceId),
-    loadCampaignPerformance(clientId),
+    getClientIntegrationStatus(clientId).catch(() => ({
+      metaState:                  "not_connected" as const,
+      shopifyState:               "not_connected" as const,
+      readyForSync:               false,
+      mappedMetaAccounts:         [],
+      mappedShopifyConnection:    null,
+      availableMetaAccounts:      [],
+      availableShopifyConnections: [],
+    })),
+    getClientReadiness(clientId).catch(() => ({
+      metaMapped: false, shopifyMapped: false, shopifySynced: false,
+      shopifyOrderCount: 0, eligibleForMetaSync: false, eligibleForShopifySync: false,
+      eligibleForFullSync: false, metaAccountCount: 0, shopifyDomain: null, blockers: [],
+    })),
+    getClientSyncStatusSummary(clientId).catch(() => ({
+      lastSyncRun: null, lastMetaSync: null, lastShopifySync: null, hasEverSynced: false,
+    })),
+    getClientMetaData(clientId, workspaceId).catch(() => null),
+    getMetaImportStatus(clientId, workspaceId).catch(() => null),
+    getClientMetaValidation(clientId, workspaceId).catch(() => null),
+    loadCampaignPerformance(clientId).catch(() => []),
   ]);
 
   // Legacy mock campaign/adset/ad data has been removed.

@@ -408,27 +408,37 @@ export function AutomationView({
 
   function handleApprove(id: string) {
     startTransition(async () => {
-      await fetch(`/api/automation/${id}/approve`, { method: "POST" });
-      setActions((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, status: "approved", approvedAt: new Date().toISOString() }
-            : a
-        )
-      );
+      try {
+        const res = await fetch(`/api/automation/${id}/approve`, { method: "POST" });
+        if (!res.ok) return;
+        setActions((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? { ...a, status: "approved", approvedAt: new Date().toISOString() }
+              : a
+          )
+        );
+      } catch {
+        // network error — leave state unchanged
+      }
     });
   }
 
   function handleReject(id: string) {
     startTransition(async () => {
-      await fetch(`/api/automation/${id}/reject`, { method: "POST" });
-      setActions((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, status: "rejected", rejectedAt: new Date().toISOString() }
-            : a
-        )
-      );
+      try {
+        const res = await fetch(`/api/automation/${id}/reject`, { method: "POST" });
+        if (!res.ok) return;
+        setActions((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? { ...a, status: "rejected", rejectedAt: new Date().toISOString() }
+              : a
+          )
+        );
+      } catch {
+        // network error — leave state unchanged
+      }
     });
   }
 

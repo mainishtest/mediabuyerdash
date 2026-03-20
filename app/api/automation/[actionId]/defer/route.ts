@@ -34,8 +34,11 @@ export async function POST(
     return NextResponse.json({ error: "reason is required" }, { status: 400 });
   }
 
-  const deferUntil =
-    typeof body.deferUntil === "string" ? new Date(body.deferUntil) : undefined;
+  let deferUntil: Date | undefined;
+  if (typeof body.deferUntil === "string") {
+    const parsed = new Date(body.deferUntil);
+    deferUntil = isNaN(parsed.getTime()) ? undefined : parsed;
+  }
 
   // Load action before deferring so we can build the audit scope
   const action = await prisma.proposedAutomationAction.findUnique({

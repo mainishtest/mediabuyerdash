@@ -22,19 +22,24 @@ export default async function AutomationPage() {
   // Run all rule evaluation (including pacing rules) server-side on every
   // page load. Results are persisted so Operations can show top proposed
   // actions without re-running evaluation.
-  const drafts = await buildProposedAutomationActions(workspaceId);
-  await upsertProposedActions(drafts);
+  try {
+    const drafts = await buildProposedAutomationActions(workspaceId);
+    await upsertProposedActions(drafts);
+  } catch (err) {
+    console.error("[automation/page] rule evaluation error:", err);
+    // Continue — show existing persisted actions even if evaluation fails
+  }
 
   // Load persisted actions + summary + client list for filter dropdown.
   const clientWhere = workspaceId ? { workspaceId } : {};
   const [actions, summary, clients] = await Promise.all([
-    loadProposedActions(workspaceId),
-    buildAutomationSummary(workspaceId),
+    loadProposedActions(workspaceId).catch(() => []),
+    buildAutomationSummary(workspaceId).catch(() => ({ proposedCount: 0, highPriorityCount: 0, approvedCount: 0, rejectedCount: 0, totalCount: 0 })),
     prisma.clientAccount.findMany({
       where:  clientWhere,
       select: { id: true, name: true },
       orderBy: { name: "asc" },
-    }),
+    }).catch(() => []),
   ]);
 
   return (

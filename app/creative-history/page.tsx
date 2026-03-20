@@ -19,29 +19,30 @@ export default async function CreativeHistoryPage({
   const provider = typeof searchParams.provider === "string" ? searchParams.provider : undefined;
   const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
 
-  const runs = await prisma.generationRun.findMany({
-    where: {
-      ...(clientAccountId ? { clientAccountId } : {}),
-      ...(requestType ? { requestType } : {}),
-      ...(provider ? { provider } : {}),
-      ...(status ? { status } : {})
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      promptSnapshot: true,
-      providerRequest: true,
-      providerResponse: true,
-      copyVariations: true,
-      imageVariations: true,
-      approvalDecisions: true,
-      selectedVariants: true
-    }
-  });
-
-  const clientAccounts = await prisma.clientAccount.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: "asc" }
-  });
+  const [runs, clientAccounts] = await Promise.all([
+    prisma.generationRun.findMany({
+      where: {
+        ...(clientAccountId ? { clientAccountId } : {}),
+        ...(requestType ? { requestType } : {}),
+        ...(provider ? { provider } : {}),
+        ...(status ? { status } : {})
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        promptSnapshot: true,
+        providerRequest: true,
+        providerResponse: true,
+        copyVariations: true,
+        imageVariations: true,
+        approvalDecisions: true,
+        selectedVariants: true
+      }
+    }).catch(() => []),
+    prisma.clientAccount.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    }).catch(() => []),
+  ]);
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-8">

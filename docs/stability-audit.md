@@ -1,8 +1,10 @@
 # Application Stability Audit Report
 
-**Date:** 2026-03-20
+**Date:** 2026-03-20 (Updated: 2026-03-20)
 **Branch:** `claude/cursor-to-claude-transition-5xKoY`
 **Auditor:** Automated stability review (Claude Code)
+
+> **Update (Round 2):** A second full pass extended the audit to all server pages, API mutation routes, and client-side optimistic update handlers. See "Round 2 Findings" section below.
 
 ---
 
@@ -193,7 +195,7 @@ A full-application stability and breakage audit was performed across all routes,
 
 ---
 
-## Files Changed in This Audit
+## Files Changed in This Audit (Round 1)
 
 | File | Change Type | Priority |
 |------|-------------|----------|
@@ -208,3 +210,121 @@ A full-application stability and breakage audit was performed across all routes,
 | `app/creative-lab/launch/LaunchPlanDetail.tsx` | notImplemented stubs | P3 |
 | `app/creative-lab/outcomes/CreativeOutcomeRoutingView.tsx` | res.ok check | P3 |
 | `app/dashboard/page.tsx` | Comment only (attempted fix reverted) | N/A |
+
+---
+
+## Round 2 Findings and Fixes
+
+### P1 — Production Crash / Complete Breakage
+
+#### [FIXED] Database tables missing in production
+- **File:** `prisma/migrations/create_all_tables_postgres.sql` (new)
+- **Root cause:** Project migrated SQLite→PostgreSQL but init migration used SQLite syntax and was never applied. Prisma P2021 errors (`TableDoesNotExist`) on every DB query in production.
+- **Fix:** Generated complete idempotent PostgreSQL migration via `prisma migrate diff --from-empty --to-schema`. **User must run this in the Neon SQL Editor (production branch).**
+
+#### [FIXED] Prisma 7 config — `datasource.url` missing
+- **File:** `prisma.config.ts`
+- **Root cause:** Prisma 7 removed `url` from `datasource` block in `schema.prisma`. All CLI commands (`prisma db push`, `prisma migrate`) failed with config errors.
+- **Fix:** Added `datasource: { url: process.env.DATABASE_URL }` to `prisma.config.ts` with dotenv loading.
+
+#### [FIXED] Client portal completely inaccessible to external clients
+- **File:** `middleware.ts`
+- **Root cause:** `/portal/**` and `/api/portal/**` were not excluded from the `withAuth` middleware. Every unauthenticated client visiting their portal was redirected to `/login`.
+- **Fix:** Added `portal|api/portal` to the middleware exclusion regex.
+
+#### [FIXED] Portal API — optional chaining crash on nullable relation
+- **File:** `app/api/portal/[token]/route.ts:86`
+- **Root cause:** `s.accessibleAdAccount.externalAdAccountId` threw `TypeError: Cannot read properties of null` when `accessibleAdAccount` was null.
+- **Fix:** Changed to `s.accessibleAdAccount?.externalAdAccountId` with `.filter(Boolean)`.
+
+#### [FIXED] Portal API — Invalid Date from unvalidated query params
+- **File:** `app/api/portal/[token]/route.ts`
+- **Root cause:** Raw `from`/`to` query params passed directly to `new Date()` without validation, producing Invalid Date passed to DB queries.
+- **Fix:** Added ISO date regex validation; falls back to computed 30-day defaults if invalid.
+
+#### [FIXED] Alert and automation mutation APIs — no authentication check
+- **Files:** `app/api/alerts/[alertId]/resolve/route.ts`, `app/api/alerts/[alertId]/acknowledge/route.ts`, `app/api/automation/[actionId]/approve/route.ts`, `app/api/automation/[actionId]/reject/route.ts`
+- **Root cause:** Session was fetched but never validated — any unauthenticated request could mutate alert/action state.
+- **Fix:** Added `getServerSession` check returning HTTP 401 if no valid session.
+
+### P2 — Page Crash / UX Breakage
+
+#### [FIXED] Automation defer API — Invalid Date persisted to DB
+- **File:** `app/api/automation/[actionId]/defer/route.ts`
+- **Root cause:** `new Date(body.deferUntil)` with unvalidated string produced Invalid Date stored in the `deferredUntil` DB column.
+- **Fix:** Validates `deferUntil` with `isNaN(parsed.getTime())`; skips if invalid.
+
+#### [FIXED] Optimistic UI updates mutate state on failed requests
+- **Files:** `app/alerts/AlertsView.tsx`, `app/automation/AutomationView.tsx`, `app/creative-lab/briefs/BriefsView.tsx`
+- **Root cause:** State updated before checking `res.ok`, leaving UI permanently out of sync with server after any network/API error.
+- **Fix:** All handlers now check `res.ok` in try/catch; state only updates on success. `BriefsView` also snapshots state before mutation and restores on failure (rollback pattern).
+
+#### [FIXED] Unguarded parallel DB fetches crash entire server pages
+Pages with unguarded `await aggregator()` or `await prisma.xxx()` calls crashed the entire page render on any DB error instead of showing a graceful empty state.
+
+**Files fixed with `.catch()` fallbacks and/or null guard + error UI:**
+- `app/command-center/page.tsx`
+- `app/portfolio/page.tsx`
+- `app/reports/executive/page.tsx`
+- `app/portfolio/governance/page.tsx`
+- `app/portfolio/controls/page.tsx`
+- `app/creative-fatigue/page.tsx`
+- `app/automation/governance/page.tsx`
+- `app/automation/history/page.tsx`
+- `app/creative-history/page.tsx`
+- `app/creative-intelligence/page.tsx`
+- `app/reconciliation/page.tsx`
+- `app/optimization/page.tsx`
+- `app/clients/[clientId]/page.tsx`
+- `app/clients/[clientId]/campaigns/page.tsx`
+- `app/pacing/page.tsx`
+- `app/alerts/page.tsx`
+- `app/operations/page.tsx`
+- `app/insights/memory/page.tsx`
+
+### P3 — Silent Failure / Degraded UX (Remaining)
+
+| Issue | File | Risk | Action |
+|-------|------|------|--------|
+| `status.charAt(0)` null crash | `app/clients/ClientsView.tsx` | Low | Add optional chaining guard |
+| `copyJobs[0]` / `imageJobs[0]` undefined | `app/creative-lab/CreativeLabView.tsx` | Low | Check array length before indexing |
+| Campaign goals optimistic update not persisted | `app/clients/[clientId]/campaigns/` | Medium | Verify server action wiring |
+| Portal date picker race condition | `app/portal/[token]/page.tsx` | Low | Debounce or add loading guard |
+| `automation/policies/page.tsx` no error fallback | `app/automation/policies/page.tsx` | Low | Add `.catch()` — low risk as workspace redirect guards it |
+
+---
+
+## Files Changed in Round 2
+
+| File | Change Type | Priority |
+|------|-------------|----------|
+| `prisma/migrations/create_all_tables_postgres.sql` | New idempotent PG migration | P1 |
+| `prisma.config.ts` | Add datasource.url + dotenv | P1 |
+| `middleware.ts` | Exclude portal routes from auth | P1 |
+| `app/api/portal/[token]/route.ts` | Optional chaining + date validation | P1 |
+| `app/api/alerts/[alertId]/resolve/route.ts` | Auth check | P1 |
+| `app/api/alerts/[alertId]/acknowledge/route.ts` | Auth check | P1 |
+| `app/api/automation/[actionId]/approve/route.ts` | Auth check | P1 |
+| `app/api/automation/[actionId]/reject/route.ts` | Auth check | P1 |
+| `app/api/automation/[actionId]/defer/route.ts` | Invalid Date guard | P2 |
+| `app/alerts/AlertsView.tsx` | res.ok check + try/catch | P2 |
+| `app/automation/AutomationView.tsx` | res.ok check | P2 |
+| `app/creative-lab/briefs/BriefsView.tsx` | Rollback on failed optimistic update | P2 |
+| `app/command-center/page.tsx` | .catch() + null guard | P2 |
+| `app/portfolio/page.tsx` | .catch() + null guard | P2 |
+| `app/reports/executive/page.tsx` | .catch() + null guard | P2 |
+| `app/portfolio/governance/page.tsx` | .catch() + null guard | P2 |
+| `app/portfolio/controls/page.tsx` | .catch() + null guard | P2 |
+| `app/creative-fatigue/page.tsx` | .catch() + null guard | P2 |
+| `app/automation/governance/page.tsx` | Promise.all + .catch() on all queries | P2 |
+| `app/automation/history/page.tsx` | .catch(() => []) | P2 |
+| `app/creative-history/page.tsx` | Promise.all + .catch(() => []) | P2 |
+| `app/creative-intelligence/page.tsx` | .catch(() => []) | P2 |
+| `app/reconciliation/page.tsx` | .catch() on all 3 queries | P2 |
+| `app/optimization/page.tsx` | .catch() on all data loads | P2 |
+| `app/clients/[clientId]/page.tsx` | .catch() on all 7 fetches | P2 |
+| `app/clients/[clientId]/campaigns/page.tsx` | .catch() on all 3 fetches | P2 |
+| `app/pacing/page.tsx` | .catch(() => []) | P2 |
+| `app/alerts/page.tsx` | .catch(() => []) | P2 |
+| `app/operations/page.tsx` | .catch() on all 4 fetches | P2 |
+| `app/insights/memory/page.tsx` | .catch(() => []) | P2 |

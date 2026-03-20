@@ -17,11 +17,19 @@ export default async function OperationsPage() {
   const workspaceId = session?.user?.workspaceId ?? null;
 
   const [snapshot, topAlerts, topProposedActions, topPacingRisks] = await Promise.all([
-    buildOperationsSnapshot(workspaceId),
-    loadTopOpenAlerts(workspaceId, 5),
-    loadTopProposedActions(workspaceId, 5),
-    loadTopPacingRisks(workspaceId, 5),
+    buildOperationsSnapshot(workspaceId).catch(() => null),
+    loadTopOpenAlerts(workspaceId, 5).catch(() => []),
+    loadTopProposedActions(workspaceId, 5).catch(() => []),
+    loadTopPacingRisks(workspaceId, 5).catch(() => []),
   ]);
+
+  if (!snapshot) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Operations data could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
 
   return (
     <OperationsView

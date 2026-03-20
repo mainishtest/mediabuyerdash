@@ -25,7 +25,16 @@ export default async function CreativeFatiguePage() {
   const workspaceId = session?.user?.workspaceId ?? null;
 
   // Reuse existing data loading pipeline — no duplication
-  const data      = await loadCreativePerformanceData(workspaceId);
+  const data = await loadCreativePerformanceData(workspaceId).catch(() => null);
+
+  if (!data) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Creative fatigue data could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
+
   const snapshots = buildCreativePerformanceSnapshots(data);
   const summaries = buildCreativeFatigueReport(snapshots);
   const counts    = getOverallHealthCounts(summaries);

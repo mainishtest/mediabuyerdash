@@ -55,7 +55,7 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
   const clients = await prisma.clientAccount.findMany({
     select:  { id: true, name: true },
     orderBy: { name: "asc" },
-  });
+  }).catch(() => []);
 
   if (!clientId) {
     return (
@@ -82,25 +82,25 @@ export default async function OptimizationPage({ searchParams }: PageProps) {
 
   // Load all data in parallel.
   const [campaigns, rawRows] = await Promise.all([
-    loadCampaignsWithGoals(clientId),
-    loadRawPerformanceInputs(clientId, dateFrom, dateTo),
+    loadCampaignsWithGoals(clientId).catch(() => []),
+    loadRawPerformanceInputs(clientId, dateFrom, dateTo).catch(() => []),
   ]);
 
   const campaignIds = campaigns.map((c) => c.id);
   const [adSets, ads] = await Promise.all([
-    loadAdSetsForCampaigns(campaignIds),
+    loadAdSetsForCampaigns(campaignIds).catch(() => []),
     (async () => {
       const adSetIds = (await prisma.metaSyncedAdSet.findMany({
         where:  { externalCampaignId: { in: campaignIds } },
         select: { externalAdSetId: true },
-      })).map((as) => as.externalAdSetId);
-      return loadAdsForAdSets(adSetIds);
+      }).catch(() => [])).map((as) => as.externalAdSetId);
+      return loadAdsForAdSets(adSetIds).catch(() => []);
     })(),
   ]);
 
   // Load ad creative data (image, copy, CTA) for the detail panel.
   const adIds      = ads.map((a) => a.id);
-  const adCreatives = await loadAdCreatives(adIds);
+  const adCreatives = await loadAdCreatives(adIds).catch(() => ({}));
 
   // Fan out campaign-level rows to per-ad-set rows when ReconciliationMatch
   // rows don't carry metaAdSetId (the common case). Each campaign row is split

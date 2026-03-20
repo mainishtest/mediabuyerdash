@@ -62,9 +62,9 @@ type Props = {
   integrations:         ClientIntegrationStatus;
   readiness:            ClientReadiness;
   syncStatus:           ClientSyncStatusSummary;
-  clientMetaData:       ClientMetaData;
-  metaImportStatus:     MetaImportStatus;
-  metaValidation:       ClientMetaValidation;
+  clientMetaData:       ClientMetaData | null;
+  metaImportStatus:     MetaImportStatus | null;
+  metaValidation:       ClientMetaValidation | null;
   reconciledCampaigns:  ReconciledCampaignPerformance[];
   reconciledDateFrom:   string | null;
   reconciledDateTo:     string | null;
@@ -430,24 +430,30 @@ export function ClientDetailView({
       />
 
       {/* Meta Data Verification — always-visible user-facing status section */}
-      <MetaVerificationSection
-        clientId={account.id}
-        validation={metaValidation}
-      />
+      {metaValidation && (
+        <MetaVerificationSection
+          clientId={account.id}
+          validation={metaValidation}
+        />
+      )}
 
       {/* Meta Import Pipeline Debug — collapsible developer diagnostic panel */}
-      <div id="debug">
-        <MetaImportDebugPanel
-          clientId={account.id}
-          status={metaImportStatus}
-        />
-      </div>
+      {metaImportStatus && (
+        <div id="debug">
+          <MetaImportDebugPanel
+            clientId={account.id}
+            status={metaImportStatus}
+          />
+        </div>
+      )}
 
       {/* Live Meta Campaigns — synced campaign data for mapped accounts */}
-      <LiveMetaCampaignsSection
-        clientId={account.id}
-        data={clientMetaData}
-      />
+      {clientMetaData && (
+        <LiveMetaCampaignsSection
+          clientId={account.id}
+          data={clientMetaData}
+        />
+      )}
 
       {/* Source-of-Truth Performance — CRM-verified ROAS/CPA from reconciliation */}
       <SourceOfTruthSection

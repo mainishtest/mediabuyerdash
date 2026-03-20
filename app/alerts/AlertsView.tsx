@@ -314,19 +314,29 @@ export function AlertsView({ alerts: initialAlerts, summary: initialSummary, cli
 
   function handleAcknowledge(id: string) {
     startTransition(async () => {
-      await fetch(`/api/alerts/${id}/acknowledge`, { method: "POST" });
-      setAlerts((prev) => prev.map((a) =>
-        a.id === id ? { ...a, status: "acknowledged" as const, acknowledgedAt: new Date().toISOString() } : a
-      ));
+      try {
+        const res = await fetch(`/api/alerts/${id}/acknowledge`, { method: "POST" });
+        if (!res.ok) return;
+        setAlerts((prev) => prev.map((a) =>
+          a.id === id ? { ...a, status: "acknowledged" as const, acknowledgedAt: new Date().toISOString() } : a
+        ));
+      } catch {
+        // network error — leave state unchanged
+      }
     });
   }
 
   function handleResolve(id: string) {
     startTransition(async () => {
-      await fetch(`/api/alerts/${id}/resolve`, { method: "POST" });
-      setAlerts((prev) => prev.map((a) =>
-        a.id === id ? { ...a, status: "resolved" as const, resolvedAt: new Date().toISOString() } : a
-      ));
+      try {
+        const res = await fetch(`/api/alerts/${id}/resolve`, { method: "POST" });
+        if (!res.ok) return;
+        setAlerts((prev) => prev.map((a) =>
+          a.id === id ? { ...a, status: "resolved" as const, resolvedAt: new Date().toISOString() } : a
+        ));
+      } catch {
+        // network error — leave state unchanged
+      }
     });
   }
 

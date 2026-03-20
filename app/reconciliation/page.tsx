@@ -42,7 +42,7 @@ export default async function ReconciliationPage({ searchParams }: PageProps) {
   const clients = await prisma.clientAccount.findMany({
     select:  { id: true, name: true },
     orderBy: { name: "asc" },
-  });
+  }).catch(() => []);
 
   if (!clientId) {
     return (
@@ -59,8 +59,8 @@ export default async function ReconciliationPage({ searchParams }: PageProps) {
 
   // Load persisted reconciliation results, filtered by date when provided.
   const [dbRows, dbSummary] = await Promise.all([
-    loadLatestReconciliationMatches(clientId, dateFrom, dateTo),
-    loadLatestReconciliationSummary(clientId),
+    loadLatestReconciliationMatches(clientId, dateFrom, dateTo).catch(() => []),
+    loadLatestReconciliationSummary(clientId).catch(() => null),
   ]);
 
   // Map DB ReconciliationMatch rows to in-memory ReconciliationMatchRow type.

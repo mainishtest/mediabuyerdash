@@ -111,25 +111,32 @@ export function BriefsView({ clients, initialBriefs, selectedClientId }: Props) 
 
   const handleStatusChange = useCallback(
     async (briefId: string, status: CreativeBriefStatus, notes?: string) => {
-      // Optimistic
-      setBriefs((prev) =>
-        prev.map((b) => b.id === briefId ? { ...b, status, updatedAt: new Date().toISOString() } : b),
+      // Snapshot for rollback
+      const prev = briefs;
+      setBriefs((bs) =>
+        bs.map((b) => b.id === briefId ? { ...b, status, updatedAt: new Date().toISOString() } : b),
       );
-
-      await fetch(`/api/creative-lab/briefs/${encodeURIComponent(briefId)}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: "status", status, notes }),
-      }).catch((err) => console.error("[briefs status]", err));
+      try {
+        const res = await fetch(`/api/creative-lab/briefs/${encodeURIComponent(briefId)}`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ action: "status", status, notes }),
+        });
+        if (!res.ok) setBriefs(prev); // rollback on failure
+      } catch (err) {
+        console.error("[briefs status]", err);
+        setBriefs(prev);
+      }
     },
-    [],
+    [briefs],
   );
 
   const handleVariantReview = useCallback(
     async (briefId: string, variantId: string, decision: CreativeReviewDecision) => {
-      // Optimistic
-      setBriefs((prev) =>
-        prev.map((b) => {
+      // Snapshot for rollback
+      const prev = briefs;
+      setBriefs((bs) =>
+        bs.map((b) => {
           if (b.id !== briefId) return b;
           return {
             ...b,
@@ -144,14 +151,19 @@ export function BriefsView({ clients, initialBriefs, selectedClientId }: Props) 
           };
         }),
       );
-
-      await fetch(`/api/creative-lab/briefs/${encodeURIComponent(briefId)}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: "variant", variantId, reviewDecision: decision }),
-      }).catch((err) => console.error("[briefs variant]", err));
+      try {
+        const res = await fetch(`/api/creative-lab/briefs/${encodeURIComponent(briefId)}`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ action: "variant", variantId, reviewDecision: decision }),
+        });
+        if (!res.ok) setBriefs(prev); // rollback on failure
+      } catch (err) {
+        console.error("[briefs variant]", err);
+        setBriefs(prev);
+      }
     },
-    [],
+    [briefs],
   );
 
   // -------------------------------------------------------------------------

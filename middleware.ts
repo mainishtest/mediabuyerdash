@@ -13,6 +13,8 @@ export default withAuth({
 
 export const config = {
   matcher: [
-    "/((?!login|register|forgot-password|reset-password|privacy|terms|api/auth|_next/static|_next/image|favicon\\.ico).*)",
+    // Exclude: auth pages, portal (client-facing, token-gated), public pages,
+    // Next.js internals, and static assets.
+    "/((?!login|register|forgot-password|reset-password|privacy|terms|portal|api/auth|api/portal|_next/static|_next/image|favicon\\.ico).*)",
   ],
 };

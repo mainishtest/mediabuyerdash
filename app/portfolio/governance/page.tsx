@@ -32,7 +32,15 @@ export default async function PortfolioGovernancePage({ searchParams }: PageProp
     clientId:    searchParams.clientId,
     dateFrom:    searchParams.from ?? thirtyDays,
     dateTo:      searchParams.to   ?? today,
-  });
+  }).catch(() => null);
+
+  if (!portfolioPayload) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 text-sm">
+        Portfolio governance data could not be loaded. Please try refreshing.
+      </div>
+    );
+  }
 
   // Build governance layer on top of portfolio data
   const governancePayload = summarizePortfolioGovernance(portfolioPayload);
