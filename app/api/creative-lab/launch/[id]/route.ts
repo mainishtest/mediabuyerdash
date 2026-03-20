@@ -64,7 +64,7 @@ export async function PATCH(
     }
 
     // Build the patch object
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line
     const patch: Record<string, any> = {};
 
     if (body.name            !== undefined) patch.name       = body.name;

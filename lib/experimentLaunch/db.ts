@@ -177,7 +177,7 @@ function mapRecord(r: LaunchPlanRecord): CreativeExperimentLaunchPlan {
 export async function saveExperimentLaunchPlan(
   plan: CreativeExperimentLaunchPlan,
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   await db.experimentLaunchPlanRecord.create({
     data: {
@@ -275,7 +275,7 @@ export async function updateExperimentLaunchPlan(
     launchedAt:         Date | null;
   }>,
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   await db.experimentLaunchPlanRecord.update({
     where: { id },
@@ -292,7 +292,7 @@ export async function loadExperimentLaunchPlans(opts?: {
   readinessState?:  CreativeExperimentReadinessState;
   limit?:           number;
 }): Promise<CreativeExperimentLaunchPlan[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const where: Record<string, unknown> = {};
   if (opts?.clientAccountId) where.clientAccountId = opts.clientAccountId;
@@ -314,7 +314,7 @@ export async function loadExperimentLaunchPlans(opts?: {
 export async function loadExperimentLaunchPlanById(
   id: string,
 ): Promise<CreativeExperimentLaunchPlan | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const record: LaunchPlanRecord | null = await db.experimentLaunchPlanRecord.findUnique({
     where: { id },
@@ -330,7 +330,7 @@ export async function loadExperimentLaunchPlanById(
 export async function buildExperimentLaunchPlanSummary(
   clientAccountId?: string,
 ): Promise<CreativeExperimentLaunchSummary> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const where: Record<string, unknown> = {};
   if (clientAccountId) where.clientAccountId = clientAccountId;

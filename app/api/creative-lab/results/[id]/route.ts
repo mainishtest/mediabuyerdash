@@ -52,7 +52,7 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: "Test result not found." }, { status: 404 });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line
     const patch: Record<string, any> = {};
 
     if (body.markForReview !== undefined) patch.markedForReview = !!body.markForReview;

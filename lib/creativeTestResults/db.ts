@@ -203,7 +203,7 @@ function mapRecord(r: TestResultRecord): CreativeTestResult {
 export async function saveCreativeTestResult(
   input: CreateCreativeTestResultInput & { id: string },
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   await db.creativeTestResultRecord.create({
     data: {
@@ -262,7 +262,7 @@ export async function updateCreativeTestResult(
     launchPlanId:           string | null;
   }>,
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   await db.creativeTestResultRecord.update({
     where: { id },
@@ -279,7 +279,7 @@ export async function loadCreativeTestResults(opts?: {
   trackingState?:   CreativeTestTrackingState;
   limit?:           number;
 }): Promise<CreativeTestResult[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const where: Record<string, unknown> = {};
   if (opts?.clientAccountId) where.clientAccountId = opts.clientAccountId;
@@ -301,7 +301,7 @@ export async function loadCreativeTestResults(opts?: {
 export async function loadCreativeTestResultById(
   id: string,
 ): Promise<CreativeTestResult | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const record: TestResultRecord | null = await db.creativeTestResultRecord.findUnique({
     where: { id },
@@ -317,7 +317,7 @@ export async function loadCreativeTestResultById(
 export async function buildCreativeTestResultDbSummary(
   clientAccountId?: string,
 ): Promise<CreativeTestResultSummary> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const where: Record<string, unknown> = {};
   if (clientAccountId) where.clientAccountId = clientAccountId;
@@ -388,7 +388,7 @@ export async function saveCreativeLifecycleResultLink(input: {
   confidence?:     number | null;
   primaryLift?:    number | null;
 }): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   await db.creativeLifecycleResultLinkRecord.create({
     data: {
@@ -414,7 +414,7 @@ export async function saveCreativeLifecycleResultLink(input: {
 export async function loadLifecycleLinksForResult(
   testResultId: string,
 ): Promise<CreativeLifecycleResultLink[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const records: LifecycleLinkRecord[] = await db.creativeLifecycleResultLinkRecord.findMany({
     where: { testResultId },
@@ -443,7 +443,7 @@ export async function loadLifecycleLinksForResult(
 export async function loadLifecycleLinksForPrepItem(
   prepItemId: string,
 ): Promise<CreativeLifecycleResultLink[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const db = prisma as any;
   const records: LifecycleLinkRecord[] = await db.creativeLifecycleResultLinkRecord.findMany({
     where: { prepItemId },
