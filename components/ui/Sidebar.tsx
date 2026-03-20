@@ -81,6 +81,7 @@ const NAV: NavEntry[] = [
       { kind: "leaf", href: "/automation",               label: "Automation"     },
       { kind: "leaf", href: "/automation/auto-execution", label: "Auto-Execution" },
       { kind: "leaf", href: "/automation/policies",       label: "Policies"       },
+      { kind: "leaf", href: "/automation/governance",     label: "Governance"     },
     ],
   },
   {

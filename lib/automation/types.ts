@@ -17,7 +17,9 @@ export type AutomationActionStatus =
   | "approved"
   | "rejected"
   | "executed"
-  | "expired";
+  | "expired"
+  | "deferred"   // operator deferred — resurfaces in governance queue
+  | "escalated"; // operator escalated — requires elevated review
 
 export type AutomationPriority = "low" | "medium" | "high";
 
@@ -60,6 +62,10 @@ export type ProposedAutomationActionRow = {
   approvedAt:       string | null;
   rejectedAt:       string | null;
   rejectionReason:  string | null;
+  // Governance fields (set by defer/escalate operations)
+  deferredUntil:    string | null;
+  escalatedAt:      string | null;
+  escalationNote:   string | null;
 };
 
 // Counts for summary cards.

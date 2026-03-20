@@ -48,11 +48,13 @@ const PRIORITY_BADGE: Record<AutomationPriority, string> = {
 };
 
 const STATUS_BADGE: Record<AutomationActionStatus, string> = {
-  proposed: "bg-blue-500/20 text-blue-400",
-  approved: "bg-emerald-500/20 text-emerald-400",
-  rejected: "bg-slate-700 text-slate-400",
-  executed: "bg-purple-500/20 text-purple-400",
-  expired:  "bg-slate-800 text-slate-500",
+  proposed:  "bg-blue-500/20 text-blue-400",
+  approved:  "bg-emerald-500/20 text-emerald-400",
+  rejected:  "bg-slate-700 text-slate-400",
+  executed:  "bg-purple-500/20 text-purple-400",
+  expired:   "bg-slate-800 text-slate-500",
+  deferred:  "bg-amber-900/40 text-amber-300",
+  escalated: "bg-rose-900/40 text-rose-300",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

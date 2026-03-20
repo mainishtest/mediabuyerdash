@@ -17,6 +17,7 @@ type ActionRow = {
   entityName:      string;
 };
 import { countTodayExecutions, getLastExecutionForEntity } from "./persist";
+import { isStopActiveForExecution }                        from "../governance/emergencyStop";
 
 // ---------------------------------------------------------------------------
 // Eligible action types for v1 auto-execution
@@ -33,10 +34,10 @@ const PAUSE_COOLDOWN_HOURS = 24;
 // ---------------------------------------------------------------------------
 
 export interface EligibilityResult {
-  eligible:      boolean;
-  decision:      AutoExecutionDecision;
+  eligible:       boolean;
+  decision:       AutoExecutionDecision;
   decisionReason: string;
-  guardrails:    GuardrailResult[];
+  guardrails:     GuardrailResult[];
 }
 
 /**
@@ -44,19 +45,49 @@ export interface EligibilityResult {
  * Returns an EligibilityResult with all guardrail outcomes and a final decision.
  *
  * Guardrails (evaluated in order):
+ *  0. governance_stop       — no active emergency stop covers this action/scope
  *  1. action_type_eligible  — only run_sync and pause_campaign are auto-eligible
  *  2. client_enabled        — auto-execution is enabled for this client
  *  3. action_type_allowed   — the specific action type is permitted in settings
- *  4. daily_cap             — today's execution count is below maxDailyExecutions
- *  5. cooldown              — entity has not been acted on recently
- *  6. action_approved       — the proposed action has "approved" status (not just proposed)
- *  7. not_already_executed  — action has not already been executed
+ *  4. action_approved       — the proposed action has "approved" status
+ *  5. not_already_executed  — action has not already been executed
+ *  6. daily_cap             — today's execution count is below maxDailyExecutions
+ *  7. cooldown              — entity has not been acted on recently
  */
 export async function evaluateAutoExecutionEligibility(
   action:   ActionRow,
   settings: AutoExecutionSettingsRow
 ): Promise<EligibilityResult> {
   const guardrails: GuardrailResult[] = [];
+
+  // 0. Governance emergency stop — checked first; short-circuits all further evaluation
+  const workspaceId = settings.workspaceId;
+  if (workspaceId) {
+    const stopCheck = await isStopActiveForExecution({
+      workspaceId,
+      clientId:   action.clientAccountId,
+      actionType: action.actionType,
+      entityId:   action.entityId,
+    });
+
+    guardrails.push({
+      name:   "governance_stop",
+      passed: !stopCheck.stopped,
+      reason: stopCheck.stopped
+        ? stopCheck.reason
+        : "No active emergency stop for this action.",
+    });
+
+    if (stopCheck.stopped) {
+      return block(guardrails, stopCheck.reason);
+    }
+  } else {
+    guardrails.push({
+      name:   "governance_stop",
+      passed: true,
+      reason: "Workspace ID not set — skipping governance stop check.",
+    });
+  }
 
   // 1. Action type eligible
   const typeEligible = AUTO_ELIGIBLE_TYPES.has(action.actionType);

@@ -87,6 +87,9 @@ function mapRow(r: {
   approvedAt: Date | null;
   rejectedAt: Date | null;
   rejectionReason: string | null;
+  deferredUntil?: Date | null;
+  escalatedAt?: Date | null;
+  escalationNote?: string | null;
 }): ProposedAutomationActionRow {
   let supportingData: Record<string, string | number> = {};
   try { supportingData = JSON.parse(r.supportingData); } catch { /* noop */ }
@@ -106,10 +109,13 @@ function mapRow(r: {
     supportingData,
     deduplicationKey: r.deduplicationKey,
     proposedAt:       r.proposedAt.toISOString(),
-    expiresAt:        r.expiresAt?.toISOString() ?? null,
-    approvedAt:       r.approvedAt?.toISOString() ?? null,
-    rejectedAt:       r.rejectedAt?.toISOString() ?? null,
+    expiresAt:        r.expiresAt?.toISOString()    ?? null,
+    approvedAt:       r.approvedAt?.toISOString()   ?? null,
+    rejectedAt:       r.rejectedAt?.toISOString()   ?? null,
     rejectionReason:  r.rejectionReason,
+    deferredUntil:    r.deferredUntil?.toISOString() ?? null,
+    escalatedAt:      r.escalatedAt?.toISOString()   ?? null,
+    escalationNote:   r.escalationNote               ?? null,
   };
 }
 
