@@ -3,6 +3,12 @@
 // app/creative-lab/review/ReviewView.tsx
 // Main client orchestrator for the creative draft scoring and review page.
 //
+// Phase 8 additions:
+//   - Low-confidence warning banner (when no CRM data + no source copy)
+//   - Experiment planning integration link in summary bar
+//   - High-potential variant count in stat cards
+//   - clientAccountId passed to DraftScorecardPanel for experiment link
+//
 // Responsive layout:
 //   Mobile:  stacked — stat cards → score button → ranking list → selected scorecard below
 //   Desktop: left col-4 (brief summary + ranking list) | right col-8 (scorecard + actions)
@@ -26,6 +32,8 @@ import type {
 import {
   READINESS_LABEL,
   READINESS_COLOR,
+  READINESS_STATUS_LABEL,
+  READINESS_STATUS_COLOR,
 }                                         from "../../../types/creativeScoring";
 import {
   PageHeader,
@@ -126,7 +134,11 @@ export function ReviewView({ brief }: Props) {
   const [reviewSet,  setReviewSet]  = useState<CreativeDraftReviewSet | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const variantCount = brief.draftSet.variants.length;
+  const variantCount  = brief.draftSet.variants.length;
+  // Low-confidence: no CRM ROAS/CPA and no source copy — scoring is structural only
+  const isLowConfidence = brief.input.campaignRoas === null
+    && brief.input.campaignCpa === null
+    && !brief.input.adCopy?.trim();
 
   // ── Score all variants ─────────────────────────────────────────────────────
 
@@ -220,13 +232,31 @@ export function ReviewView({ brief }: Props) {
         }
       />
 
+      {/* ── Low-confidence warning ── */}
+      {isLowConfidence && (
+        <div className="rounded-xl border border-amber-700/40 bg-amber-950/20 px-4 py-3 flex items-start gap-2">
+          <span className="shrink-0 text-amber-400 text-xs font-bold mt-0.5">◐</span>
+          <div>
+            <p className="text-xs font-semibold text-amber-300">Low confidence brief</p>
+            <p className="text-xs text-amber-400/80 mt-0.5">
+              No CRM ROAS/CPA and no source ad copy available. Scoring reflects creative structure
+              only — performance alignment cannot be assessed. Add CRM data to improve scoring accuracy.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Stat cards ── */}
       {summary ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Variants Scored"     value={summary.totalVariants}       sub="all variants" />
-          <StatCard label="Ready for Prep"      value={summary.readyForPublishPrep} sub="publish ready" />
-          <StatCard label="Conditionally Ready" value={summary.conditionallyReady}  sub="needs check" />
-          <StatCard label="Average Score"       value={summary.averageScore}        sub="/ 100" />
+          <StatCard label="Variants Scored"  value={summary.totalVariants}       sub="all variants" />
+          <StatCard label="Ready for Approval" value={summary.readyForPublishPrep} sub="approval threshold met" />
+          {/* Phase 8: High Potential replaces Conditionally Ready label */}
+          <StatCard label="High Potential"   value={
+            reviewSet?.rankings.filter((r) => r.scorecard.readinessStatus === "high_potential").length
+            ?? summary.conditionallyReady
+          } sub="priority for review" />
+          <StatCard label="Average Score"    value={summary.averageScore}        sub="/ 100" />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -283,26 +313,36 @@ export function ReviewView({ brief }: Props) {
         </SectionCard>
       )}
 
-      {/* ── Rescore button (after scoring) ── */}
+      {/* ── Rescore + experiment bar (after scoring) ── */}
       {reviewSet && (
-        <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
           <div>
             <p className="text-xs font-semibold text-slate-300">
               Scored {reviewSet.summary.totalVariants} variants — avg {reviewSet.summary.averageScore}/100
             </p>
             <p className="text-xs text-slate-600">
-              {reviewSet.summary.readyForPublishPrep} ready for publish prep ·{" "}
+              {reviewSet.summary.readyForPublishPrep} ready for approval ·{" "}
+              {reviewSet.rankings.filter((r) => r.scorecard.readinessStatus === "high_potential").length} high potential ·{" "}
               {reviewSet.summary.highRisk} high risk
             </p>
           </div>
-          <button
-            onClick={handleScore}
-            disabled={scoring}
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs
-              font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-40"
-          >
-            {scoring ? "Rescoring…" : "Rescore"}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/experiments?clientId=${encodeURIComponent(brief.clientAccountId)}`}
+              className="rounded-lg border border-sky-800/50 bg-sky-950/20 px-3 py-1.5 text-xs
+                font-medium text-sky-400 hover:bg-sky-950/40 transition-colors"
+            >
+              → Experiment Planning
+            </Link>
+            <button
+              onClick={handleScore}
+              disabled={scoring}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs
+                font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+            >
+              {scoring ? "Rescoring…" : "Rescore"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -340,23 +380,23 @@ export function ReviewView({ brief }: Props) {
                 onSelect={setSelectedId}
               />
 
-              {/* Readiness summary */}
+              {/* Phase 8: Readiness status summary (new labels) */}
               <div className="mt-4 space-y-1.5 border-t border-slate-800/60 pt-3">
-                {[
-                  { key: "ready_for_publish_prep" as const, count: reviewSet.summary.readyForPublishPrep },
-                  { key: "conditionally_ready"    as const, count: reviewSet.summary.conditionallyReady },
-                  { key: "review_required"        as const, count: reviewSet.summary.reviewRequired },
-                  { key: "not_ready"              as const, count: reviewSet.summary.notReady },
-                ]
-                  .filter((row) => row.count > 0)
-                  .map((row) => (
-                    <div key={row.key} className="flex items-center justify-between">
-                      <span className={`text-xs font-medium ${READINESS_COLOR[row.key]}`}>
-                        {READINESS_LABEL[row.key]}
-                      </span>
-                      <span className="text-xs text-slate-600">{row.count}</span>
-                    </div>
-                  ))
+                {(["ready_for_approval", "high_potential", "needs_review", "draft"] as const)
+                  .map((status) => {
+                    const count = reviewSet.rankings.filter(
+                      (r) => (r.scorecard.readinessStatus ?? "draft") === status
+                    ).length;
+                    if (count === 0) return null;
+                    return (
+                      <div key={status} className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${READINESS_STATUS_COLOR[status]}`}>
+                          {READINESS_STATUS_LABEL[status]}
+                        </span>
+                        <span className="text-xs text-slate-600">{count}</span>
+                      </div>
+                    );
+                  })
                 }
               </div>
             </SectionCard>
@@ -371,6 +411,7 @@ export function ReviewView({ brief }: Props) {
                   scorecard={selectedRanking.scorecard}
                   variant={selectedVariant}
                   briefId={brief.id}
+                  clientAccountId={brief.clientAccountId}
                   onAction={handleAction}
                   isTop={selectedRanking.rank === 1}
                 />
@@ -394,6 +435,7 @@ export function ReviewView({ brief }: Props) {
                       scorecard={r.scorecard}
                       variant={v}
                       briefId={brief.id}
+                      clientAccountId={brief.clientAccountId}
                       onAction={handleAction}
                       isTop={r.rank === 1}
                     />
@@ -412,6 +454,13 @@ export function ReviewView({ brief }: Props) {
         <Link href={`/creative-lab/generation?briefId=${encodeURIComponent(brief.id)}`}
           className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
           Generate Drafts →
+        </Link>
+        <Link href="/creative-lab/publish-prep"  className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          Publish Prep →
+        </Link>
+        <Link href={`/experiments?clientId=${encodeURIComponent(brief.clientAccountId)}`}
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          Experiments →
         </Link>
       </div>
     </div>
