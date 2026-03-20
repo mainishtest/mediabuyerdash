@@ -231,7 +231,14 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
         description="Review creative opportunities, track refresh work, and prepare actions from performance signals."
         badge={<Badge variant="purple">Workflow Queue</Badge>}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/creative-lab/creative-engine${filters.clientId ? `?clientId=${encodeURIComponent(filters.clientId)}` : ""}`}
+              className="rounded-lg border border-indigo-700/50 bg-indigo-950/30 px-4 py-2 text-sm
+                font-medium text-indigo-300 transition-colors hover:bg-indigo-950/50"
+            >
+              ◈ Creative Engine →
+            </Link>
             <Link
               href="/creative-lab/briefs"
               className="rounded-lg border border-violet-700/50 bg-violet-950/30 px-4 py-2 text-sm
@@ -241,8 +248,8 @@ export function CreativeLabWorkflowView({ clients, initialItems, selectedClientI
             </Link>
             <Link
               href="/creative-lab/generate"
-              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm
-                font-medium text-slate-200 transition-colors hover:bg-slate-700"
+              className="hidden rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm
+                font-medium text-slate-200 transition-colors hover:bg-slate-700 sm:block"
             >
               AI Generator →
             </Link>

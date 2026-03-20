@@ -6,6 +6,17 @@
 //   - Generation is separate from brief assembly (lib/creativeBrief/).
 //   - Generation engine (lib/creativeGeneration/) is separate from the UI.
 //   - CRM is the source of truth for ROAS/CPA throughout.
+//
+// Phase 8 additions (performance-driven context engine):
+//   - CreativeGenerationRequest  — rich request with trigger context
+//   - CreativeGenerationContext  — multi-source context object
+//   - PlatformConstraint         — Meta format limits
+//   - CreativeAngle              — strategic message positioning
+//   - CreativeHook               — scroll-stopping opening line
+//   - CreativeCopyBlock          — structured copy block
+//   - CreativeConcept            — full concept (hook + copy + image brief)
+//   - CreativeVariant            — rich variant with workflow status
+//   - CreativeGenerationRunSummary — aggregate run summary
 
 import type { CreativeBrief, CreativeDraftVariant } from "./creativeBrief";
 
@@ -171,4 +182,194 @@ export const GENERATION_MODE_INFO: Record<CreativeGenerationMode, CreativeGenera
     outputCount: 6,
     assetTypes:  ["primary_text", "image_brief"],
   },
+};
+
+// ─── Phase 8: Performance-Driven Creative Generation Engine ──────────────────
+
+// ---------------------------------------------------------------------------
+// Rich generation request — includes trigger context and source signals
+// ---------------------------------------------------------------------------
+
+export type CreativeGenerationRequest = {
+  clientAccountId: string;
+  campaignId:      string | null;
+  creativeId:      string | null;
+  mode:            CreativeGenerationMode;
+  triggerType:     "fatigue" | "underperformance" | "opportunity" | "manual";
+  triggerContext:  string | null;
+  constraints:     CreativeGenerationConstraint[];
+  regenerate:      boolean;
+};
+
+// ---------------------------------------------------------------------------
+// Platform constraint — Meta ad format limits
+// ---------------------------------------------------------------------------
+
+export type PlatformConstraint = {
+  field:    string;      // "primary_text" | "headline" | "description" | "call_to_action"
+  maxChars: number | null;
+  maxWords: number | null;
+  note:     string;
+};
+
+// ---------------------------------------------------------------------------
+// Message angle — strategic positioning direction
+// ---------------------------------------------------------------------------
+
+export type CreativeAngle = {
+  id:               string;
+  name:             string;
+  type:             "identity" | "outcome" | "problem_first" | "social_proof" | "fear_of_loss" | "authority" | "curiosity";
+  rationale:        string;         // why this angle was selected
+  performanceSignal: string;        // which performance signal drove the angle choice
+};
+
+// ---------------------------------------------------------------------------
+// Creative hook — scroll-stopping opening line
+// ---------------------------------------------------------------------------
+
+export type CreativeHook = {
+  id:        string;
+  text:      string;
+  type:      "question" | "bold_claim" | "curiosity_gap" | "outcome_led" | "problem_first" | "social_proof";
+  angle:     string;      // angle name this hook belongs to
+  wordCount: number;
+  charCount: number;
+};
+
+// ---------------------------------------------------------------------------
+// Creative copy block — full structured copy (hook + body + CTA)
+// ---------------------------------------------------------------------------
+
+export type CreativeCopyBlock = {
+  id:            string;
+  hook:          CreativeHook;
+  body:          string;
+  callToAction:  string;
+  angle:         CreativeAngle;
+  wordCount:     number;
+  platformReady: boolean;   // within Meta primary_text limits
+};
+
+// ---------------------------------------------------------------------------
+// Creative concept — a complete output unit (angle + copy + optional image)
+// ---------------------------------------------------------------------------
+
+export type CreativeConcept = {
+  id:                   string;
+  title:                string;
+  angle:                CreativeAngle;
+  copyBlock:            CreativeCopyBlock;
+  imageBrief?: {
+    conceptSummary:      string;
+    visualChanges:       string;
+    goal:                string;
+    directResponseAngle: string;
+  };
+  performanceRationale: string;   // why this concept addresses the performance signal
+  triggerLink:          string;   // e.g. "CTR 0.42% — hook weakness detected"
+  estimatedScore:       number;   // 0–100 estimated output quality
+  isVariantOf?:         string;   // parent concept ID if this is a derived variant
+};
+
+// ---------------------------------------------------------------------------
+// Creative variant — richer variant with workflow status tracking
+// ---------------------------------------------------------------------------
+
+export type CreativeVariant = {
+  id:          string;
+  conceptId:   string;
+  variantType: "copy" | "image" | "full_concept";
+  title:       string;
+
+  // Copy fields
+  hook?:         string;
+  body?:         string;
+  callToAction?: string;
+
+  // Image brief fields
+  conceptSummary?:      string;
+  visualChanges?:       string;
+  goal?:                string;
+  directResponseAngle?: string;
+
+  // Metadata
+  angle?:               string;
+  performanceRationale?: string;
+
+  // Workflow status
+  status:          "generated" | "saved_draft" | "sent_to_scoring" | "sent_to_approval" | "edited";
+  reviewDecision?: "approve" | "reject" | "request_revision" | null;
+  reviewNote?:     string | null;
+  editedCopy?:     string | null;
+  generatedAt:     string;   // ISO string
+};
+
+// ---------------------------------------------------------------------------
+// Generation context — multi-source context built before generation
+// ---------------------------------------------------------------------------
+
+export type CreativeGenerationContext = {
+  // Identity
+  clientAccountId: string;
+  clientName:      string;
+  campaignId:      string | null;
+  campaignName:    string | null;
+  creativeId:      string | null;
+  creativeName:    string | null;
+
+  // Performance signals (CRM-verified where applicable)
+  currentCtr:       number;
+  currentFrequency: number | null;
+  currentRoas:      number | null;   // CRM-verified — 7-day attribution
+  currentCpa:       number | null;   // CRM-verified — 7-day attribution
+  currentSpend:     number;
+  evaluationStatus: string;          // "fatigued" | "weak" | "strong" | "moderate"
+  fatigueStatus:    string | null;
+
+  // Goal context
+  roasGoal:        number | null;
+  cpaGoal:         number | null;
+  primaryGoalType: string | null;
+
+  // Learning memory (from learningMemory module)
+  winningPatterns:    string[];   // winning_hook, winning_angle, winning_offer_framing
+  losingPatterns:     string[];   // poor_performer_pattern, fatigue_pattern
+  audienceInsights:   string[];   // audience_message_fit
+  experimentInsights: string[];   // experiment_pattern
+
+  // Current creative content (being refreshed)
+  currentCopy:     string | null;
+  currentHeadline: string | null;
+  currentCta:      string | null;
+  hasThumbnail:    boolean;
+
+  // Platform constraints
+  platformConstraints: PlatformConstraint[];
+
+  // Trigger information
+  triggerType:      "fatigue" | "underperformance" | "opportunity" | "manual";
+  triggerRationale: string;
+
+  // Data quality
+  builtAt:     string;    // ISO string
+  dataQuality: "sparse" | "moderate" | "rich";
+};
+
+// ---------------------------------------------------------------------------
+// Generation run summary — aggregate stats for the UI run history panel
+// ---------------------------------------------------------------------------
+
+export type CreativeGenerationRunSummary = {
+  contextClientId:   string;
+  contextClientName: string;
+  triggerType:       string;
+  triggerRationale:  string;
+  conceptsGenerated: number;
+  variantsGenerated: number;
+  modesUsed:         CreativeGenerationMode[];
+  dataQuality:       string;
+  provider:          string;
+  generatedAt:       string;   // ISO string
+  warnings:          string[];
 };
