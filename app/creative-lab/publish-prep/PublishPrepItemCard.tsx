@@ -21,6 +21,7 @@ function statusVariant(status: PublishPrepItem["status"]): BadgeVariant {
     case "blocked":             return "danger";
     case "publish_failed":      return "danger";
     case "validating":          return "info";
+    case "held":                return "neutral";
     default:                    return "neutral";
   }
 }

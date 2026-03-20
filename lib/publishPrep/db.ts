@@ -183,6 +183,7 @@ export async function buildPublishPrepSummary(
     total,
     draft:             counts["draft"]               ?? 0,
     blocked:           counts["blocked"]             ?? 0,
+    held:              counts["held"]                ?? 0,
     readyForApproval:  counts["ready_for_approval"]  ?? 0,
     approvedForLaunch: counts["approved_for_launch"] ?? 0,
     readyToPublish:    counts["ready_to_publish"]    ?? 0,

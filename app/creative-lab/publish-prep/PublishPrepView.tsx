@@ -31,7 +31,7 @@ import {
 import { PublishPrepItemCard }            from "./PublishPrepItemCard";
 import { PublishPrepDetail }              from "./PublishPrepDetail";
 
-type PrepAction = "approve" | "reject" | "publish" | "set_target" | "set_notes";
+type PrepAction = "approve" | "reject" | "hold" | "publish" | "set_target" | "set_notes";
 
 type Props = {
   initialItems:   PublishPrepItem[];
@@ -102,8 +102,9 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
     { value: "all",               label: "All" },
     { value: "blocked",           label: "Blocked" },
     { value: "ready_for_approval",label: "Ready for Approval" },
-    { value: "approved_for_launch","label": "Approved" },
+    { value: "approved_for_launch", label: "Approved" },
     { value: "ready_to_publish",  label: "Ready to Publish" },
+    { value: "held",              label: "Held" },
     { value: "published",         label: "Published" },
     { value: "publish_failed",    label: "Failed" },
   ];

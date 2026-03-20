@@ -2,7 +2,12 @@
 // Public API for the guarded publish preparation and Meta launch workflow.
 
 export { buildPublishPrepItem, buildPublishPayloadPreview }   from "./builder";
-export { validateCreativeDraftForPublish, validateTargetMapping, summarizePublishBlockers } from "./validator";
+export {
+  validateCreativeDraftForPublish,
+  validateTargetMapping,
+  summarizePublishBlockers,
+  summarizePublishReadiness,
+}                                                             from "./validator";
 export { evaluatePublishGuardrails, canProceedToLaunch, deriveStatusFromResults } from "./guardrails";
 export {
   savePublishPrepItem,
@@ -17,16 +22,23 @@ export {
 export type {
   PublishPrepItem,
   PublishPrepStatus,
+  PublishStatus,
   LaunchExecutionMode,
   PublishPrepError,
   PublishValidationCheck,
   PublishValidationResult,
   PublishGuardrailResult,
+  PublishGuardrail,
   PublishTargetMapping,
+  PublishMapping,
   PublishPayloadPreview,
+  PublishPayload,
+  PublishPreparationRequest,
   MetaCreativePayloadShape,
   LaunchApprovalRequirement,
   PublishPrepSummary,
+  PublishReadinessSummary,
+  PublishReadinessLevel,
 } from "../../types/publishPrep";
 
 export {

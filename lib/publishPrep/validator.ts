@@ -10,6 +10,9 @@ import type {
   PublishValidationCheck,
   PublishPrepError,
   PublishTargetMapping,
+  PublishGuardrailResult,
+  PublishReadinessSummary,
+  PublishReadinessLevel,
 }                              from "../../types/publishPrep";
 import type {
   CreativeDraftVariant,
@@ -244,4 +247,71 @@ export function summarizePublishBlockers(
     if (!g.passed && g.required) out.push(`Guardrail: ${g.message}`);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Public API: summarizePublishReadiness
+// Produces a structured, actionable summary of the overall publish readiness.
+// Used to drive the readiness section in the UI and in prep item API responses.
+// ---------------------------------------------------------------------------
+
+export function summarizePublishReadiness(
+  validation:        PublishValidationResult | null,
+  guardrails:        PublishGuardrailResult[],
+  approvedForLaunch: boolean,
+): PublishReadinessSummary {
+  const blockerCount       = validation?.blockers.length ?? 0;
+  const warningCount       = validation?.warnings.length ?? 0;
+  const allChecks          = validation?.checks ?? [];
+  const passedChecks       = allChecks.filter((c) => c.passed).length;
+  const checksPassedPct    = allChecks.length > 0
+    ? Math.round((passedChecks / allChecks.length) * 100)
+    : 0;
+
+  const failedRequired     = guardrails.filter((g) => g.required && !g.passed);
+  // exclude the human_approval guardrail from the "guardrails ok" count —
+  // approval is tracked separately so the readiness level is more meaningful
+  const failedNonApproval  = failedRequired.filter((g) => g.key !== "human_approval_required");
+  const guardrailsOk       = failedNonApproval.length === 0;
+  const guardrailFailCount = failedRequired.length;
+
+  let level: PublishReadinessLevel;
+  let summary: string;
+  let nextStep: string;
+
+  if (!validation) {
+    level    = "not_ready";
+    summary  = "Validation has not been run yet.";
+    nextStep = "Submit this prep item to trigger validation.";
+  } else if (blockerCount > 0) {
+    level    = "not_ready";
+    summary  = `Blocked by ${blockerCount} validation error${blockerCount !== 1 ? "s" : ""}.`;
+    nextStep = "Resolve all blocking validation errors before proceeding.";
+  } else if (!guardrailsOk) {
+    level    = "partially_ready";
+    summary  = `Validation passed — ${failedNonApproval.length} required guardrail${failedNonApproval.length !== 1 ? "s" : ""} not yet satisfied.`;
+    nextStep = `Address the failing guardrail${failedNonApproval.length !== 1 ? "s" : ""}: ${failedNonApproval.map((g) => g.label).join(", ")}.`;
+  } else if (!approvedForLaunch) {
+    level    = "ready_for_approval";
+    summary  = warningCount > 0
+      ? `All checks passed with ${warningCount} warning${warningCount !== 1 ? "s" : ""} — awaiting human approval.`
+      : "All checks passed — awaiting human approval.";
+    nextStep = "A reviewer must approve this item before the launch action can proceed.";
+  } else {
+    level    = "ready_to_publish";
+    summary  = "Approved and ready to publish.";
+    nextStep = "Click Publish Now to trigger the launch action.";
+  }
+
+  return {
+    level,
+    summary,
+    checksPassedPct,
+    guardrailsOk,
+    approvalGranted:    approvedForLaunch,
+    blockerCount,
+    warningCount,
+    guardrailFailCount,
+    nextStep,
+  };
 }
