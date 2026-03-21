@@ -110,7 +110,16 @@ const NAV: NavEntry[] = [
     children: [
       { kind: "leaf", href: "/clients",      label: "Clients"      },
       { kind: "leaf", href: "/accounts/new",  label: "Onboarding"   },
-      { kind: "leaf", href: "/integrations", label: "Integrations" },
+    ],
+  },
+  {
+    kind:  "group",
+    label: "Integrations",
+    icon:  "⬡",
+    children: [
+      { kind: "leaf", href: "/integrations",          label: "Overview"   },
+      { kind: "leaf", href: "/integrations/meta",     label: "Facebook"   },
+      { kind: "leaf", href: "/integrations/shopify",  label: "Shopify"    },
     ],
   },
 ];
