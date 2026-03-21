@@ -477,8 +477,14 @@ export function ImageVariationView({ creatives, recentHistory }: Props) {
         </SectionCard>
       )}
 
-      {/* ── Return link ──────────────────────────────────────────────── */}
-      <div className="flex justify-end">
+      {/* ── Navigation links ────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/creative-lab/image-variations/review"
+          className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+        >
+          Open Review Queue →
+        </Link>
         <Link
           href="/creative-lab"
           className="text-xs text-slate-500 hover:text-slate-300 transition-colors"

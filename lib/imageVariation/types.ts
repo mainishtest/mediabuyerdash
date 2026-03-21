@@ -183,6 +183,13 @@ export type ImageVariationCandidate = {
 
   // Status
   status:               "generated" | "saved" | "sent_to_review";
+
+  // Review fields (populated after "sent_to_review")
+  reviewState?:         "needs_review" | "approved" | "rejected" | "revision_requested" | "archived";
+  reviewerNote?:        string | null;
+  revisionIntent?:      string | null;
+  reviewedAt?:          string | null;    // ISO string
+  reviewedBy?:          string | null;
 };
 
 // ---------------------------------------------------------------------------

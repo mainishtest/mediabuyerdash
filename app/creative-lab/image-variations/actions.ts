@@ -215,3 +215,74 @@ export async function loadImageVariationHistoryAction(opts?: {
 export async function loadImageVariationRequestAction(requestId: string) {
   return getImageVariationRequestById(requestId);
 }
+
+// ---------------------------------------------------------------------------
+// Review workflow actions
+// ---------------------------------------------------------------------------
+
+import {
+  buildImageVariationReviewQueue,
+  buildImageVariationComparisonSet,
+  approveImageVariationCandidate,
+  rejectImageVariationCandidate,
+  requestImageVariationRevision,
+  archiveImageVariationCandidate,
+  summarizeImageVariationReview,
+} from "../../../lib/imageVariation/review";
+import type { ImageVariationRevisionIntent } from "../../../lib/imageVariation/reviewTypes";
+
+export async function loadReviewQueueAction() {
+  return buildImageVariationReviewQueue();
+}
+
+export async function loadComparisonSetAction(requestId: string) {
+  return buildImageVariationComparisonSet(requestId);
+}
+
+export async function approveCandidateAction(
+  requestId:   string,
+  candidateId: string,
+  note?:       string,
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await approveImageVariationCandidate(requestId, candidateId, note);
+  revalidatePath("/creative-lab/image-variations/review");
+  return result;
+}
+
+export async function rejectCandidateAction(
+  requestId:   string,
+  candidateId: string,
+  note?:       string,
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await rejectImageVariationCandidate(requestId, candidateId, note);
+  revalidatePath("/creative-lab/image-variations/review");
+  return result;
+}
+
+export async function requestRevisionAction(
+  requestId:      string,
+  candidateId:    string,
+  revisionIntent: ImageVariationRevisionIntent,
+  note?:          string,
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await requestImageVariationRevision(requestId, candidateId, revisionIntent, note);
+  revalidatePath("/creative-lab/image-variations/review");
+  return result;
+}
+
+export async function archiveCandidateAction(
+  requestId:   string,
+  candidateId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await archiveImageVariationCandidate(requestId, candidateId);
+  revalidatePath("/creative-lab/image-variations/review");
+  return result;
+}
+
+export async function loadReviewSummaryAction(requestId: string) {
+  const record = await prisma.imageVariationRequest.findUnique({ where: { id: requestId } });
+  if (!record) return null;
+  let candidates: ImageVariationCandidate[] = [];
+  try { candidates = JSON.parse(record.candidatesJson); } catch { return null; }
+  return summarizeImageVariationReview(requestId, candidates);
+}

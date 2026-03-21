@@ -38,3 +38,29 @@ export {
   getImageVariationRequestById,
 } from "./engine";
 export type { ImageVariationEngineResult } from "./engine";
+
+// Review types
+export type {
+  ImageVariationReviewState,
+  ImageVariationRevisionIntent,
+  ImageVariationApprovalDecision,
+  ImageVariationReviewerNote,
+  ImageVariationReviewItem,
+  ImageVariationComparisonSet,
+  ImageVariationReviewQueue,
+  ImageVariationReviewReason,
+  ImageVariationApprovalSummary,
+} from "./reviewTypes";
+
+export { IMAGE_VARIATION_REVISION_INTENTS } from "./reviewTypes";
+
+// Review workflow
+export {
+  buildImageVariationReviewQueue,
+  buildImageVariationComparisonSet,
+  approveImageVariationCandidate,
+  rejectImageVariationCandidate,
+  requestImageVariationRevision,
+  archiveImageVariationCandidate,
+  summarizeImageVariationReview,
+} from "./review";
