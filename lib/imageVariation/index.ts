@@ -111,3 +111,31 @@ export {
   loadImageVariationExperimentLaunchPlans,
   loadImageVariationExperimentLaunchPlanById,
 } from "./experimentLaunch";
+
+// Results ingestion types
+export type {
+  ImageVariationTestResult,
+  ImageVariationTestOutcome,
+  ImageVariationMetricSnapshot,
+  ImageVariationTestComparison,
+  ImageVariationEvaluationWindow,
+  ImageVariationOutcomeConfidence,
+  ImageVariationOutcomeReason,
+  ImageVariationResultSummary,
+  ImageVariationLifecycleResultLink,
+  ImageVariationTrackingState,
+} from "./resultsTypes";
+
+export {
+  IMAGE_VARIATION_OUTCOME_LABEL,
+  IMAGE_VARIATION_OUTCOME_COLOR,
+  IMAGE_VARIATION_OUTCOME_BG,
+  IMAGE_VARIATION_TRACKING_LABEL,
+} from "./resultsTypes";
+
+// Results ingestion
+export {
+  ingestImageVariationResults,
+  summarizeImageVariationResults,
+  buildImageVariationLifecycleLink,
+} from "./results";

@@ -514,3 +514,61 @@ export async function loadExperimentLaunchPlansAction(): Promise<CreativeExperim
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Results ingestion actions
+// ---------------------------------------------------------------------------
+
+import {
+  ingestImageVariationResults,
+  summarizeImageVariationResults,
+} from "../../../lib/imageVariation/results";
+import type {
+  ImageVariationTestResult,
+  ImageVariationResultSummary,
+} from "../../../lib/imageVariation/resultsTypes";
+
+export async function ingestResultsForPlanAction(
+  planId: string,
+): Promise<{ ok: true; result: ImageVariationTestResult } | { ok: false; error: string }> {
+  try {
+    const plan = await loadImageVariationExperimentLaunchPlanById(planId);
+    if (!plan) return { ok: false, error: "Launch plan not found." };
+    const result = await ingestImageVariationResults(plan);
+    return { ok: true, result };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
+import { loadImageVariationExperimentLaunchPlanById } from "../../../lib/imageVariation/experimentLaunch";
+
+export async function ingestAllResultsAction(): Promise<{
+  results: ImageVariationTestResult[];
+  summary: ImageVariationResultSummary;
+}> {
+  try {
+    const plans = await loadImageVariationExperimentLaunchPlans({ limit: 50 });
+    const results: ImageVariationTestResult[] = [];
+    for (const plan of plans) {
+      try {
+        const result = await ingestImageVariationResults(plan);
+        results.push(result);
+      } catch {
+        // Skip plans that fail to ingest
+      }
+    }
+    const summary = summarizeImageVariationResults(results);
+    return { results, summary };
+  } catch {
+    return {
+      results: [],
+      summary: {
+        totalTests: 0, inProgress: 0, completed: 0, challengerWins: 0,
+        controlHolds: 0, noClearWinner: 0, insufficientData: 0,
+        failedTests: 0, averageConfidence: 0,
+      },
+    };
+  }
+}

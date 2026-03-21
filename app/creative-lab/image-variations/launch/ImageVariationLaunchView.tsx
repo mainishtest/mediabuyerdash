@@ -266,14 +266,17 @@ export function ImageVariationLaunchView({ initialPlans }: Props) {
 
       {/* Navigation */}
       <div className="flex flex-wrap items-center gap-4">
-        <Link href="/creative-lab/image-variations/selection" className="text-xs text-emerald-500 hover:text-emerald-400">
-          ← Back to Selection
+        <Link href="/creative-lab/image-variations/results" className="text-xs text-emerald-500 hover:text-emerald-400">
+          View Results →
+        </Link>
+        <Link href="/creative-lab/image-variations/selection" className="text-xs text-slate-500 hover:text-slate-300">
+          ← Selection
         </Link>
         <Link href="/creative-lab/image-variations/review" className="text-xs text-slate-500 hover:text-slate-300">
           ← Review Queue
         </Link>
         <Link href="/experiments" className="text-xs text-slate-500 hover:text-slate-300">
-          View Experiments →
+          All Experiments →
         </Link>
         <Link href="/creative-lab" className="ml-auto text-xs text-slate-500 hover:text-slate-300">
           ← Back to Creative Lab
