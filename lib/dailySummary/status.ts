@@ -106,29 +106,29 @@ export function buildClientActionRecommendations(
   clientId: string,
   status: ClientPerformanceStatus,
 ): DailyActionItem[] {
-  const clientHref = `/clients/${clientId}`;
+  const decisionHref = `/clients/${clientId}/decision`;
   const testHref = `/creative-lab/launch?clientId=${clientId}`;
 
   switch (status) {
     case "scaling":
       return [
-        { action: "scale", label: "Scale", href: clientHref, variant: "primary" },
-        { action: "monitor", label: "View Details", href: clientHref, variant: "ghost" },
+        { action: "scale", label: "Scale", href: decisionHref, variant: "primary" },
+        { action: "monitor", label: "View Details", href: decisionHref, variant: "ghost" },
       ];
     case "stable":
       return [
-        { action: "monitor", label: "Monitor", href: clientHref, variant: "secondary" },
-        { action: "monitor", label: "View Details", href: clientHref, variant: "ghost" },
+        { action: "monitor", label: "Monitor", href: decisionHref, variant: "secondary" },
+        { action: "monitor", label: "View Details", href: decisionHref, variant: "ghost" },
       ];
     case "at_risk":
       return [
-        { action: "investigate", label: "Investigate", href: clientHref, variant: "secondary" },
+        { action: "investigate", label: "Investigate", href: decisionHref, variant: "secondary" },
         { action: "create_test", label: "Create Test", href: testHref, variant: "ghost" },
       ];
     case "critical":
       return [
-        { action: "fix_now", label: "Fix Now", href: clientHref, variant: "danger" },
-        { action: "investigate", label: "Pause / Review", href: clientHref, variant: "secondary" },
+        { action: "fix_now", label: "Fix Now", href: decisionHref, variant: "danger" },
+        { action: "investigate", label: "Pause / Review", href: decisionHref, variant: "secondary" },
       ];
   }
 }

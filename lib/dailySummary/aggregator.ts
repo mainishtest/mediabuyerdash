@@ -254,7 +254,7 @@ export async function buildDailyExecutiveSummary(params: {
       hasStaleSync:  clientHasStaleSync,
       hasMissingGoals: clientHasMissingGoals,
       hasPartialData:  clientHasPartialData,
-      href:          `/clients/${cid}`,
+      href:          `/clients/${cid}/decision`,
     };
   });
 
