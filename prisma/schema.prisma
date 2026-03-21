@@ -1808,3 +1808,38 @@ model AutomationOverride {
   @@index([scope, scopeId, isActive])
   @@index([actionId])
 }
+
+// ── AI Image Variation Engine ────────────────────────────────────────────────
+
+// Tracks an image variation generation request and its candidates.
+// Rich context (variation intent, source signals, prompt) stored as JSON.
+// Candidates are stored as a JSON array — no separate table needed until
+// review/scoring workflow requires relational queries on individual candidates.
+model ImageVariationRequest {
+  id                String   @id @default(cuid())
+  workspaceId       String?
+  clientAccountId   String?
+  campaignId        String?
+  creativeId        String?
+  sourceAssetUrl    String?  // thumbnail or uploaded image URL
+  variationIntent   String   // refresh_visual_hook | refresh_offer_framing | refresh_composition | etc.
+  triggerType       String   // fatigue | underperformance | opportunity | manual
+  triggerRationale  String
+  provider          String   // brief_only | dalle | stability | mock
+  status            String   @default("pending") // pending | generating | completed | failed | partial
+  candidateCount    Int      @default(0)
+  promptJson        String   @default("{}") // JSON: the prompt/brief sent to the provider
+  contextJson       String   @default("{}") // JSON: full ImageVariationContext snapshot
+  candidatesJson    String   @default("[]") // JSON: ImageVariationCandidate[]
+  summaryJson       String   @default("{}") // JSON: ImageVariationGenerationSummary
+  errorMessage      String?
+  tokensUsed        Int?
+  latencyMs         Int?
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime @updatedAt
+
+  @@index([clientAccountId])
+  @@index([creativeId])
+  @@index([status])
+}
