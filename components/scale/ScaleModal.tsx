@@ -349,9 +349,9 @@ export function ScaleModal({
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={!canSubmit || phase === "submitting"}
+                  disabled={!canSubmit || phase !== "configure"}
                   className={`rounded-lg px-6 py-2.5 text-sm font-medium transition-colors ${
-                    canSubmit && phase !== "submitting"
+                    canSubmit && phase === "configure"
                       ? "border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500"
                       : "border border-slate-700 bg-slate-800 text-slate-500 cursor-not-allowed"
                   }`}
