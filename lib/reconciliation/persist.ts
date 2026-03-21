@@ -78,7 +78,10 @@ export async function persistReconciliationMatches(
           matchStatus:           row.matchStatus,
         },
       })
-    )
+    ),
+    {
+      timeout: 15000, // 15 seconds for large reconciliation batches
+    }
   );
 }
 
@@ -177,7 +180,10 @@ export async function persistCampaignPerformance(
           attributionWindowDays: row.attributionWindowDays,
         },
       })
-    )
+    ),
+    {
+      timeout: 15000, // 15 seconds for large reconciliation batches
+    }
   );
 }
 
