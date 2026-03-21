@@ -13,6 +13,21 @@ import { ImpactSection }      from "./sections/ImpactSection";
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
 
+// ── Quick range helpers ──────────────────────────────────────────────────────
+
+type QuickRange = { label: string; days: number };
+
+const QUICK_RANGES: QuickRange[] = [
+  { label: "Today",  days: 0 },
+  { label: "3 Day",  days: 3 },
+  { label: "7 Day",  days: 7 },
+  { label: "30 Day", days: 30 },
+];
+
+function daysAgoStr(n: number): string {
+  return new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+}
+
 function FilterBar({
   summary,
   onNavigate,
@@ -25,19 +40,57 @@ function FilterBar({
   const [clientId,  setClientId]  = useState(summary.clientId ?? "");
   const [compare,   setCompare]   = useState(!!summary.comparisonRange);
 
+  function buildParams(from: string, to: string): Record<string, string> {
+    const params: Record<string, string> = { from, to };
+    if (clientId) params.clientId = clientId;
+    if (compare)  params.compare  = "1";
+    return params;
+  }
+
   function apply() {
-    const params: Record<string, string> = { from: dateFrom, to: dateTo };
-    if (clientId)       params.clientId = clientId;
-    if (compare)        params.compare  = "1";
-    onNavigate(params);
+    onNavigate(buildParams(dateFrom, dateTo));
+  }
+
+  function applyQuickRange(days: number) {
+    const to   = daysAgoStr(0);
+    const from = daysAgoStr(days);
+    setDateFrom(from);
+    setDateTo(to);
+    onNavigate(buildParams(from, to));
   }
 
   const inputCls =
     "rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 " +
     "outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors";
 
+  // Detect which quick range is currently active (if any)
+  const today = daysAgoStr(0);
+  const activeQuickDays = QUICK_RANGES.find(
+    (r) => dateTo === today && dateFrom === daysAgoStr(r.days)
+  )?.days;
+
   return (
     <div className="flex flex-wrap items-end gap-2">
+      {/* Quick range buttons — auto-apply on click */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-slate-500">Quick Range</span>
+        <div className="flex gap-1">
+          {QUICK_RANGES.map((r) => (
+            <button
+              key={r.days}
+              onClick={() => applyQuickRange(r.days)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeQuickDays === r.days
+                  ? "border-emerald-700 bg-emerald-900/50 text-emerald-300"
+                  : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Client */}
       <div className="flex flex-col gap-1">
         <label className="text-xs text-slate-500">Client</label>
@@ -89,7 +142,7 @@ function FilterBar({
         <span className="text-xs text-slate-400">Compare to prior period</span>
       </label>
 
-      {/* Apply */}
+      {/* Apply — for custom date ranges */}
       <button
         onClick={apply}
         className="rounded-lg border border-emerald-700 bg-emerald-900/40 px-4 py-1.5 text-xs
