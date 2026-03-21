@@ -32,9 +32,40 @@ function FilterBar({
     onNavigate(params);
   }
 
+  function fmt(d: Date) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function applyPreset(daysBack: number) {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(to.getDate() - daysBack);
+    setDateFrom(fmt(from));
+    setDateTo(fmt(to));
+  }
+
+  function applyYesterday() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const iso = fmt(d);
+    setDateFrom(iso);
+    setDateTo(iso);
+  }
+
+  const presets: { label: string; action: () => void }[] = [
+    { label: "Today",       action: () => { const t = fmt(new Date()); setDateFrom(t); setDateTo(t); } },
+    { label: "Yesterday",   action: applyYesterday },
+    { label: "Last 3 Days", action: () => applyPreset(2) },
+    { label: "Last 7 Days", action: () => applyPreset(6) },
+  ];
+
   const inputCls =
     "rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 " +
     "outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors";
+
+  const presetCls =
+    "rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-400 " +
+    "transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 hover:text-emerald-300";
 
   return (
     <div className="flex flex-wrap items-end gap-2">
@@ -76,6 +107,23 @@ function FilterBar({
           className={inputCls}
           aria-label="Date to"
         />
+      </div>
+
+      {/* Date presets */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-slate-500">Quick Range</label>
+        <div className="flex gap-1">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={p.action}
+              className={presetCls}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Compare toggle */}
