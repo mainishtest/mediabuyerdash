@@ -201,7 +201,7 @@ export async function extractCampaignPerformanceLearnings(filters: {
     prisma.clientGoalDefaults.findMany({
       where:  { clientAccountId: { in: clientIds } },
       select: { clientAccountId: true, targetRoas: true, targetCpa: true },
-    }),
+    }).catch(() => [] as { clientAccountId: string; targetRoas: number | null; targetCpa: number | null }[]),
   ]);
   const clientMap: Record<string, string> = Object.fromEntries(clients.map((c) => [c.id, c.name]));
   const goalMap:   Record<string, { targetRoas: number | null }> = Object.fromEntries(

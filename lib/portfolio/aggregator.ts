@@ -170,7 +170,7 @@ export async function buildPortfolioPayload(params: {
       distinct: ["clientAccountId"],
     }),
 
-    // 11. Client goal defaults
+    // 11. Client goal defaults (graceful fallback if table/columns missing)
     prisma.clientGoalDefaults.findMany({
       where:  clientFilter,
       select: {
@@ -180,7 +180,7 @@ export async function buildPortfolioPayload(params: {
         defaultRoasGoalValue: true,
         defaultCpaGoalValue:  true,
       },
-    }),
+    }).catch(() => [] as { clientAccountId: string; targetRoas: number | null; targetCpa: number | null; defaultRoasGoalValue: number; defaultCpaGoalValue: number }[]),
 
     // 12. Recent auto-execution logs (last 7 days)
     prisma.autoExecutionLog.findMany({

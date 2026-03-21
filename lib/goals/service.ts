@@ -188,7 +188,7 @@ export async function getClientGoalsForClients(
   if (clientIds.length === 0) return new Map();
   const rows = await prisma.clientGoalDefaults.findMany({
     where: { clientAccountId: { in: clientIds } },
-  });
+  }).catch(() => [] as Awaited<ReturnType<typeof prisma.clientGoalDefaults.findMany>>);
   return new Map(rows.map(r => [r.clientAccountId, mapClientGoal(r)]));
 }
 
