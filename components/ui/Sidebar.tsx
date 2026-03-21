@@ -109,6 +109,7 @@ const NAV: NavEntry[] = [
     icon:  "◉",
     children: [
       { kind: "leaf", href: "/clients",      label: "Clients"      },
+      { kind: "leaf", href: "/onboarding",   label: "Onboarding"   },
       { kind: "leaf", href: "/integrations", label: "Integrations" },
     ],
   },
