@@ -6,12 +6,12 @@ CREATE TABLE "AIGenerationJob" (
     "requestType" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "status" TEXT NOT NULL,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt" DATETIME,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
     "errorMessage" TEXT,
     "responseSnapshot" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -22,10 +22,10 @@ CREATE TABLE "CreativeApproval" (
     "entityType" TEXT NOT NULL,
     "adId" TEXT NOT NULL,
     "status" TEXT NOT NULL,
-    "approvedAt" DATETIME,
-    "rejectedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "approvedAt" TIMESTAMP(3),
+    "rejectedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "CreativeApproval_jobId_fkey" FOREIGN KEY ("jobId") REFERENCES "AIGenerationJob" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

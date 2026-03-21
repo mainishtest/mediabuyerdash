@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS "AutomationAuditLog" (
   "relatedExecutionLogId" TEXT,
 
   "notes"                 TEXT,
-  "occurredAt"            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "createdAt"             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "occurredAt"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt"             TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS "AutomationAuditLog_workspaceId_idx"
