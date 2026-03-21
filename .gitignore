@@ -11,3 +11,5 @@ prisma/*.db-journal
 
 # TypeScript build cache
 tsconfig.tsbuildinfo
+.vercel
+.env*.local

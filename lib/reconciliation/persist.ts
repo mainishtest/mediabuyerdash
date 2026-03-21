@@ -31,54 +31,56 @@ export async function persistReconciliationMatches(
   if (rows.length === 0) return;
 
   await prisma.$transaction(
-    rows.map((row) =>
-      prisma.reconciliationMatch.upsert({
-        where: {
-          clientAccountId_matchKey: {
-            clientAccountId: row.clientAccountId,
-            matchKey:        row.matchKey,
+    async (tx) => {
+      for (const row of rows) {
+        await tx.reconciliationMatch.upsert({
+          where: {
+            clientAccountId_matchKey: {
+              clientAccountId: row.clientAccountId,
+              matchKey:        row.matchKey,
+            },
           },
-        },
-        update: {
-          date:                  row.date,
-          attributionWindowDays: row.attributionWindowDays,
-          metaCampaignId:        row.metaCampaignId  ?? null,
-          metaAdSetId:           row.metaAdSetId     ?? null,
-          metaAdId:              row.metaAdId        ?? null,
-          utmCampaign:           row.utmCampaign     ?? null,
-          utmContent:            row.utmContent      ?? null,
-          utmTerm:               row.utmTerm         ?? null,
-          metaSpend:             row.metaSpend,
-          metaClicks:            row.metaClicks      ?? null,
-          metaImpressions:       row.metaImpressions ?? null,
-          crmOrders:             row.crmOrders,
-          crmRevenue:            row.crmRevenue,
-          evaluatedCpa:          row.evaluatedCpa    ?? null,
-          evaluatedRoas:         row.evaluatedRoas   ?? null,
-          matchStatus:           row.matchStatus,
-        },
-        create: {
-          clientAccountId:       row.clientAccountId,
-          matchKey:              row.matchKey,
-          date:                  row.date,
-          attributionWindowDays: row.attributionWindowDays,
-          metaCampaignId:        row.metaCampaignId  ?? null,
-          metaAdSetId:           row.metaAdSetId     ?? null,
-          metaAdId:              row.metaAdId        ?? null,
-          utmCampaign:           row.utmCampaign     ?? null,
-          utmContent:            row.utmContent      ?? null,
-          utmTerm:               row.utmTerm         ?? null,
-          metaSpend:             row.metaSpend,
-          metaClicks:            row.metaClicks      ?? null,
-          metaImpressions:       row.metaImpressions ?? null,
-          crmOrders:             row.crmOrders,
-          crmRevenue:            row.crmRevenue,
-          evaluatedCpa:          row.evaluatedCpa    ?? null,
-          evaluatedRoas:         row.evaluatedRoas   ?? null,
-          matchStatus:           row.matchStatus,
-        },
-      })
-    ),
+          update: {
+            date:                  row.date,
+            attributionWindowDays: row.attributionWindowDays,
+            metaCampaignId:        row.metaCampaignId  ?? null,
+            metaAdSetId:           row.metaAdSetId     ?? null,
+            metaAdId:              row.metaAdId        ?? null,
+            utmCampaign:           row.utmCampaign     ?? null,
+            utmContent:            row.utmContent      ?? null,
+            utmTerm:               row.utmTerm         ?? null,
+            metaSpend:             row.metaSpend,
+            metaClicks:            row.metaClicks      ?? null,
+            metaImpressions:       row.metaImpressions ?? null,
+            crmOrders:             row.crmOrders,
+            crmRevenue:            row.crmRevenue,
+            evaluatedCpa:          row.evaluatedCpa    ?? null,
+            evaluatedRoas:         row.evaluatedRoas   ?? null,
+            matchStatus:           row.matchStatus,
+          },
+          create: {
+            clientAccountId:       row.clientAccountId,
+            matchKey:              row.matchKey,
+            date:                  row.date,
+            attributionWindowDays: row.attributionWindowDays,
+            metaCampaignId:        row.metaCampaignId  ?? null,
+            metaAdSetId:           row.metaAdSetId     ?? null,
+            metaAdId:              row.metaAdId        ?? null,
+            utmCampaign:           row.utmCampaign     ?? null,
+            utmContent:            row.utmContent      ?? null,
+            utmTerm:               row.utmTerm         ?? null,
+            metaSpend:             row.metaSpend,
+            metaClicks:            row.metaClicks      ?? null,
+            metaImpressions:       row.metaImpressions ?? null,
+            crmOrders:             row.crmOrders,
+            crmRevenue:            row.crmRevenue,
+            evaluatedCpa:          row.evaluatedCpa    ?? null,
+            evaluatedRoas:         row.evaluatedRoas   ?? null,
+            matchStatus:           row.matchStatus,
+          },
+        });
+      }
+    },
     {
       timeout: 15000, // 15 seconds for large reconciliation batches
     }
@@ -143,44 +145,46 @@ export async function persistCampaignPerformance(
   if (rows.length === 0) return;
 
   await prisma.$transaction(
-    rows.map((row) =>
-      prisma.reconciledCampaignPerformance.upsert({
-        where: {
-          clientAccountId_externalCampaignId_dateFrom_dateTo: {
+    async (tx) => {
+      for (const row of rows) {
+        await tx.reconciledCampaignPerformance.upsert({
+          where: {
+            clientAccountId_externalCampaignId_dateFrom_dateTo: {
+              clientAccountId,
+              externalCampaignId: row.externalCampaignId,
+              dateFrom,
+              dateTo,
+            },
+          },
+          update: {
+            campaignName:          row.campaignName,
+            metaSpend:             row.metaSpend,
+            attributedRevenue:     row.attributedRevenue,
+            attributedOrders:      row.attributedOrders,
+            calculatedRoas:        row.calculatedRoas    ?? null,
+            calculatedCpa:         row.calculatedCpa     ?? null,
+            utmMatchedOrders:      row.utmMatchedOrders,
+            windowMatchedOrders:   row.windowMatchedOrders,
+            attributionWindowDays: row.attributionWindowDays,
+          },
+          create: {
             clientAccountId,
-            externalCampaignId: row.externalCampaignId,
+            externalCampaignId:    row.externalCampaignId,
+            campaignName:          row.campaignName,
             dateFrom,
             dateTo,
+            metaSpend:             row.metaSpend,
+            attributedRevenue:     row.attributedRevenue,
+            attributedOrders:      row.attributedOrders,
+            calculatedRoas:        row.calculatedRoas    ?? null,
+            calculatedCpa:         row.calculatedCpa     ?? null,
+            utmMatchedOrders:      row.utmMatchedOrders,
+            windowMatchedOrders:   row.windowMatchedOrders,
+            attributionWindowDays: row.attributionWindowDays,
           },
-        },
-        update: {
-          campaignName:          row.campaignName,
-          metaSpend:             row.metaSpend,
-          attributedRevenue:     row.attributedRevenue,
-          attributedOrders:      row.attributedOrders,
-          calculatedRoas:        row.calculatedRoas    ?? null,
-          calculatedCpa:         row.calculatedCpa     ?? null,
-          utmMatchedOrders:      row.utmMatchedOrders,
-          windowMatchedOrders:   row.windowMatchedOrders,
-          attributionWindowDays: row.attributionWindowDays,
-        },
-        create: {
-          clientAccountId,
-          externalCampaignId:    row.externalCampaignId,
-          campaignName:          row.campaignName,
-          dateFrom,
-          dateTo,
-          metaSpend:             row.metaSpend,
-          attributedRevenue:     row.attributedRevenue,
-          attributedOrders:      row.attributedOrders,
-          calculatedRoas:        row.calculatedRoas    ?? null,
-          calculatedCpa:         row.calculatedCpa     ?? null,
-          utmMatchedOrders:      row.utmMatchedOrders,
-          windowMatchedOrders:   row.windowMatchedOrders,
-          attributionWindowDays: row.attributionWindowDays,
-        },
-      })
-    ),
+        });
+      }
+    },
     {
       timeout: 15000, // 15 seconds for large reconciliation batches
     }
