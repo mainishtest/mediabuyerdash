@@ -9,6 +9,7 @@
 
 import { useState, useMemo, useTransition, Fragment, useCallback } from "react";
 import Link from "next/link";
+import { ScaleModal } from "../../../../components/scale/ScaleModal";
 import { StatCard }   from "../../../../components/ui/StatCard";
 import { SectionCard } from "../../../../components/ui/SectionCard";
 import { EmptyState }  from "../../../../components/ui/EmptyState";
@@ -750,7 +751,7 @@ function OpportunityRiskStrip({ snapshots }: { snapshots: CampaignPerformanceSna
 
 // ── Campaign Actions (top-priority recommendation list) ───────────────────────
 
-function CampaignActionsSection({ snapshots }: { snapshots: CampaignPerformanceSnapshot[] }) {
+function CampaignActionsSection({ snapshots, onScale }: { snapshots: CampaignPerformanceSnapshot[]; onScale: (s: CampaignPerformanceSnapshot) => void }) {
   const highPriority = snapshots
     .filter((s) => s.recommendation.priority === "high")
     .sort((a, b) => {
@@ -781,9 +782,19 @@ function CampaignActionsSection({ snapshots }: { snapshots: CampaignPerformanceS
                   <p className="mt-0.5 text-xs text-slate-600">{s.recommendation.supportingMetrics}</p>
                 )}
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-xs text-slate-500">Spend</p>
-                <p className="text-sm font-medium text-slate-300">{fmt$(s.metaSpend)}</p>
+              <div className="flex shrink-0 items-center gap-3">
+                {s.recommendation.actionType === "scale" && (
+                  <button
+                    onClick={() => onScale(s)}
+                    className="rounded-lg border border-emerald-700 bg-emerald-700/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-700/40 transition-colors"
+                  >
+                    Scale
+                  </button>
+                )}
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">Spend</p>
+                  <p className="text-sm font-medium text-slate-300">{fmt$(s.metaSpend)}</p>
+                </div>
               </div>
             </div>
           ))}
@@ -1029,6 +1040,9 @@ export function CampaignPerformanceView({
   // Bulk selection state
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [, startTransition]     = useTransition();
+
+  // Scale modal state
+  const [scaleTarget, setScaleTarget] = useState<CampaignPerformanceSnapshot | null>(null);
 
   // ── Date range state ────────────────────────────────────────────────────────
   const [datePreset,  setDatePreset]  = useState<DatePreset>("30d");
@@ -1456,8 +1470,21 @@ export function CampaignPerformanceView({
           )}
 
           {/* Campaign Actions */}
-          <CampaignActionsSection snapshots={filtered} />
+          <CampaignActionsSection snapshots={filtered} onScale={setScaleTarget} />
         </>
+      )}
+
+      {/* Scale Modal */}
+      {scaleTarget && (
+        <ScaleModal
+          isOpen={!!scaleTarget}
+          onClose={() => setScaleTarget(null)}
+          clientAccountId={clientId}
+          clientName={clientName}
+          campaignId={scaleTarget.campaignId}
+          externalCampaignId={scaleTarget.externalCampaignId}
+          campaignName={scaleTarget.campaignName}
+        />
       )}
     </div>
   );

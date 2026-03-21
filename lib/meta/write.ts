@@ -1,6 +1,6 @@
 // lib/meta/write.ts
 // Write operations to the Meta Graph API.
-// v1: campaign pause only. All writes are conservative and logged.
+// v2: campaign pause + ad set budget update. All writes are conservative and logged.
 //
 // IMPORTANT: This module makes real API calls to Meta Ads Manager.
 // Only call from the auto-execution layer after all guardrails pass.
@@ -75,6 +75,78 @@ export async function pauseMetaCampaign(
   return {
     success:     true,
     message:     `Campaign ${externalCampaignId} paused successfully.`,
+    apiResponse: body,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// updateMetaCampaignBudget
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates the daily budget of a Meta campaign.
+ * Uses the Meta Graph API v20.0 POST /{campaign-id} endpoint.
+ *
+ * Meta expects `daily_budget` in the account's minor currency unit (cents for USD).
+ * The caller must pass the value in **cents** (or equivalent minor unit).
+ *
+ * Returns a typed result rather than throwing.
+ */
+export async function updateMetaCampaignBudget(
+  externalCampaignId: string,
+  dailyBudgetCents:   number,
+  accessToken:        string
+): Promise<MetaWriteResult> {
+  if (dailyBudgetCents <= 0) {
+    return {
+      success: false,
+      message: "Daily budget must be a positive value (in minor currency units).",
+    };
+  }
+
+  const url = `${META_GRAPH_BASE}/${externalCampaignId}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        daily_budget: String(Math.round(dailyBudgetCents)),
+        access_token: accessToken,
+      }),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      message: `Network error calling Meta API: ${msg}`,
+    };
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const errorMsg =
+      body && typeof body === "object" && "error" in body
+        ? (body as { error: { message?: string } }).error?.message ?? response.statusText
+        : response.statusText;
+
+    return {
+      success:     false,
+      message:     `Meta API error ${response.status}: ${errorMsg}`,
+      apiResponse: body,
+    };
+  }
+
+  return {
+    success:     true,
+    message:     `Campaign ${externalCampaignId} budget updated to ${dailyBudgetCents} (minor currency units).`,
     apiResponse: body,
   };
 }
