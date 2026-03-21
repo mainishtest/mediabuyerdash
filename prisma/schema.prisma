@@ -48,11 +48,35 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Business profile (collected during onboarding)
+  brandName   String?
+  industry    String?
+  timezone    String   @default("America/New_York")
+  website     String?
+  monthlyAdSpend String? // e.g. "under_50k", "50k_200k", "200k_plus"
+
   memberships          WorkspaceMembership[]
   clientAccounts       ClientAccount[]
   actionSafetyPolicies ActionSafetyPolicy[]
   governanceStops      GovernanceStop[]
   automationOverrides  AutomationOverride[]
+  onboardingState      OnboardingState?
+}
+
+// Tracks onboarding progress per workspace. Resumable — user can leave and return.
+model OnboardingState {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  currentStep          String   @default("workspace_details") // workspace_details | business_profile | integrations | review | complete
+  workspaceDetailsDone Boolean  @default(false)
+  businessProfileDone  Boolean  @default(false)
+  integrationsDone     Boolean  @default(false)
+  reviewDone           Boolean  @default(false)
+  completedAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 // User ↔ Workspace with role. v1 roles: owner | manager.

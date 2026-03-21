@@ -1,27 +1,46 @@
 export const dynamic = "force-dynamic";
 
 // app/onboarding/page.tsx
-// First-login onboarding. If the workspace already has clients, redirect to /dashboard.
+// Self-serve onboarding flow. Initializes progress state, loads workspace data,
+// and renders the multi-step wizard. Resumable — users can leave and return.
 
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
-import { prisma } from "../../lib/db";
-import { OnboardingView } from "./OnboardingView";
+import {
+  initializeOnboardingState,
+  getWorkspaceProfile,
+  getIntegrationStatus,
+  buildSetupChecklist,
+} from "../../lib/onboarding";
+import { OnboardingWizard } from "./OnboardingWizard";
 
 export default async function OnboardingPage() {
   const session = await getServerSession(authOptions);
-  const workspaceId = session?.user?.workspaceId ?? null;
+  if (!session) redirect("/login");
 
-  // Already has clients — skip onboarding
-  if (workspaceId) {
-    const count = await prisma.clientAccount.count({ where: { workspaceId } });
-    if (count > 0) redirect("/dashboard");
-  }
+  const workspaceId = session.user.workspaceId;
+  if (!workspaceId) redirect("/login");
+
+  // Initialize onboarding state (idempotent — creates if missing, returns existing)
+  const progress = await initializeOnboardingState(workspaceId);
+
+  // If onboarding was already completed, go to dashboard
+  if (progress.completedAt) redirect("/home");
+
+  // Load data for all steps in parallel
+  const [workspace, integrations, checklist] = await Promise.all([
+    getWorkspaceProfile(workspaceId),
+    getIntegrationStatus(workspaceId),
+    buildSetupChecklist(workspaceId),
+  ]);
 
   return (
-    <OnboardingView
-      workspaceName={session?.user?.workspaceName ?? "Your Workspace"}
+    <OnboardingWizard
+      progress={progress}
+      workspace={workspace}
+      integrations={integrations}
+      checklist={checklist}
     />
   );
 }

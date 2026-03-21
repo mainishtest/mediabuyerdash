@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function RegisterPage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect("/dashboard");
+  if (session) redirect("/onboarding");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 px-4">

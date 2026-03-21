@@ -1,16 +1,15 @@
 "use client";
 
-// app/register/RegisterForm.tsx
-// Registration form. Collects name (optional), email, password, confirm password.
-// On success: calls registerUser server action, then signIn() to issue a session,
-// then redirects to /dashboard.
+// app/signup/SignupForm.tsx
+// Trial signup form. Uses the same registerUser action as /register
+// but redirects to /onboarding instead of /dashboard.
 
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { registerUser } from "./actions";
+import { registerUser } from "../register/actions";
 
-export function RegisterForm() {
+export function SignupForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -27,7 +26,6 @@ export function RegisterForm() {
     e.preventDefault();
     setError(null);
 
-    // Client-side pre-checks.
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -45,7 +43,6 @@ export function RegisterForm() {
         return;
       }
 
-      // Account created — now issue a session.
       setSigningIn(true);
       const res = await signIn("credentials", {
         email: email.trim().toLowerCase(),
@@ -55,12 +52,12 @@ export function RegisterForm() {
       setSigningIn(false);
 
       if (res?.error) {
-        // Rare: account was created but sign-in failed (e.g. server restart).
         setError("Account created! Please sign in to continue.");
         router.push("/login");
         return;
       }
 
+      // Go straight to onboarding
       router.push("/onboarding");
       router.refresh();
     });
@@ -75,7 +72,6 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Name (optional) */}
       <div>
         <label htmlFor="name" className={labelClass}>
           Full name <span className="text-slate-600">(optional)</span>
@@ -92,11 +88,8 @@ export function RegisterForm() {
         />
       </div>
 
-      {/* Email */}
       <div>
-        <label htmlFor="email" className={labelClass}>
-          Email address
-        </label>
+        <label htmlFor="email" className={labelClass}>Email address</label>
         <input
           id="email"
           type="email"
@@ -110,11 +103,8 @@ export function RegisterForm() {
         />
       </div>
 
-      {/* Password */}
       <div>
-        <label htmlFor="password" className={labelClass}>
-          Password
-        </label>
+        <label htmlFor="password" className={labelClass}>Password</label>
         <input
           id="password"
           type="password"
@@ -128,11 +118,8 @@ export function RegisterForm() {
         />
       </div>
 
-      {/* Confirm password */}
       <div>
-        <label htmlFor="confirm-password" className={labelClass}>
-          Confirm password
-        </label>
+        <label htmlFor="confirm-password" className={labelClass}>Confirm password</label>
         <input
           id="confirm-password"
           type="password"
@@ -146,18 +133,16 @@ export function RegisterForm() {
         />
       </div>
 
-      {/* Error */}
       {error && (
         <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 px-4 py-2.5 text-sm text-rose-300">
           {error}
         </div>
       )}
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold
+        className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold
           text-white transition-colors hover:bg-emerald-500
           disabled:cursor-not-allowed disabled:opacity-50"
       >
@@ -165,7 +150,7 @@ export function RegisterForm() {
           ? "Creating account…"
           : signingIn
           ? "Signing in…"
-          : "Create account"}
+          : "Start 14-Day $1 Trial"}
       </button>
     </form>
   );
