@@ -59,7 +59,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Portal pages render with no chrome — clients access them via shareable link.
   const isPortal = pathname?.startsWith("/portal/");
-  if (isPortal) {
+  // Marketing / public pages render without app chrome.
+  const isMarketing = pathname === "/" || pathname === "/signup";
+  if (isPortal || isMarketing) {
     return <>{children}</>;
   }
 

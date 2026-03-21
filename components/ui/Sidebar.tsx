@@ -28,7 +28,7 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV: NavEntry[] = [
   {
     kind:  "leaf",
-    href:  "/",
+    href:  "/home",
     label: "Home",
   },
   {
