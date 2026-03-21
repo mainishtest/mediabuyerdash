@@ -183,7 +183,7 @@ export function ImageVariationReviewView({ initialQueue }: Props) {
           <div className="py-10 text-center">
             <p className="text-sm text-slate-500">No image variation candidates in review.</p>
             <p className="mt-2 text-xs text-slate-600">
-              Generate image variations and click "Send to Review" to start reviewing.
+              Generate image variations and click &ldquo;Send to Review&rdquo; to start reviewing.
             </p>
             <Link
               href="/creative-lab/image-variations"
