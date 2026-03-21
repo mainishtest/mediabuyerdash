@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { WorkspaceProfile } from "../../../lib/onboarding-types";
+import type { WorkspaceAccount } from "../../../lib/onboarding-types";
 
 const TIMEZONES = [
   { value: "America/New_York",    label: "Eastern (ET)" },
@@ -17,7 +17,7 @@ const TIMEZONES = [
 ];
 
 type Props = {
-  workspace: WorkspaceProfile;
+  workspace: WorkspaceAccount;
   onSave: (data: { name: string; timezone: string }) => Promise<void>;
   isPending: boolean;
 };

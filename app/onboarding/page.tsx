@@ -8,11 +8,13 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
 import {
-  initializeOnboardingState,
-  getWorkspaceProfile,
-  getIntegrationStatus,
-  buildSetupChecklist,
+  initializeOnboardingSession,
+  getWorkspaceAccount,
+  getIntegrationSetupState,
+  buildAccountSetupChecklist,
+  getOnboardingBlockers,
 } from "../../lib/onboarding";
+import type { AccountDefaults } from "../../lib/onboarding-types";
 import { OnboardingWizard } from "./OnboardingWizard";
 
 export default async function OnboardingPage() {
@@ -23,17 +25,25 @@ export default async function OnboardingPage() {
   if (!workspaceId) redirect("/login");
 
   // Initialize onboarding state (idempotent — creates if missing, returns existing)
-  const progress = await initializeOnboardingState(workspaceId);
+  const progress = await initializeOnboardingSession(workspaceId);
 
   // If onboarding was already completed, go to dashboard
   if (progress.completedAt) redirect("/home");
 
   // Load data for all steps in parallel
-  const [workspace, integrations, checklist] = await Promise.all([
-    getWorkspaceProfile(workspaceId),
-    getIntegrationStatus(workspaceId),
-    buildSetupChecklist(workspaceId),
+  const [workspace, integrations, checklist, blockers] = await Promise.all([
+    getWorkspaceAccount(workspaceId),
+    getIntegrationSetupState(workspaceId),
+    buildAccountSetupChecklist(workspaceId),
+    getOnboardingBlockers(workspaceId),
   ]);
+
+  // Compute account defaults from workspace
+  const accountDefaults: AccountDefaults = {
+    defaultCurrency: "USD",
+    defaultTimezone: workspace.timezone,
+    reportingWindow: "7d",
+  };
 
   return (
     <OnboardingWizard
@@ -41,6 +51,8 @@ export default async function OnboardingPage() {
       workspace={workspace}
       integrations={integrations}
       checklist={checklist}
+      blockers={blockers}
+      accountDefaults={accountDefaults}
     />
   );
 }

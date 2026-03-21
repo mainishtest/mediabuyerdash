@@ -1,12 +1,13 @@
 "use server";
 
 // app/onboarding/actions.ts
-// Server actions for the onboarding wizard steps.
+// Server actions for the 7-step onboarding wizard.
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
 import { prisma } from "../../lib/db";
-import { updateOnboardingProgress, completeOnboarding } from "../../lib/onboarding";
+import { updateOnboardingProgress, completeOnboarding, saveDraftFormData } from "../../lib/onboarding";
+import type { AccountDefaults } from "../../lib/onboarding-types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ async function requireWorkspaceId(): Promise<string> {
   return workspaceId;
 }
 
-// ── Step 1: Workspace details ─────────────────────────────────────────────────
+// ── Step 1: Create workspace (workspace name + timezone) ──────────────────────
 
 export async function saveWorkspaceDetailsAction(input: {
   name: string;
@@ -32,10 +33,10 @@ export async function saveWorkspaceDetailsAction(input: {
     data: { name, timezone: input.timezone },
   });
 
-  await updateOnboardingProgress(workspaceId, "workspace_details", "business_profile");
+  await updateOnboardingProgress(workspaceId, "create_workspace", "business_details");
 }
 
-// ── Step 2: Business profile ──────────────────────────────────────────────────
+// ── Step 2: Business details ──────────────────────────────────────────────────
 
 export async function saveBusinessProfileAction(input: {
   brandName: string;
@@ -57,24 +58,55 @@ export async function saveBusinessProfileAction(input: {
     },
   });
 
-  await updateOnboardingProgress(workspaceId, "business_profile", "integrations");
+  await updateOnboardingProgress(workspaceId, "business_details", "account_defaults");
 }
 
-// ── Step 3: Integrations (skip-able) ──────────────────────────────────────────
+// ── Step 3: Account defaults ──────────────────────────────────────────────────
 
-export async function markIntegrationsDoneAction(): Promise<void> {
+export async function saveAccountDefaultsAction(input: AccountDefaults): Promise<void> {
   const workspaceId = await requireWorkspaceId();
-  await updateOnboardingProgress(workspaceId, "integrations", "review");
+
+  // Store defaults on workspace. Currency and reporting window are workspace-level preferences.
+  // For now we store timezone (already set) and update it if changed.
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      timezone: input.defaultTimezone,
+    },
+  });
+
+  await updateOnboardingProgress(workspaceId, "account_defaults", "connect_meta_placeholder");
 }
 
-// ── Step 4: Complete onboarding ───────────────────────────────────────────────
+// ── Step 4: Connect Meta placeholder ──────────────────────────────────────────
+
+export async function markConnectMetaDoneAction(): Promise<void> {
+  const workspaceId = await requireWorkspaceId();
+  await updateOnboardingProgress(workspaceId, "connect_meta_placeholder", "connect_shopify_placeholder");
+}
+
+// ── Step 5: Connect Shopify placeholder ───────────────────────────────────────
+
+export async function markConnectShopifyDoneAction(): Promise<void> {
+  const workspaceId = await requireWorkspaceId();
+  await updateOnboardingProgress(workspaceId, "connect_shopify_placeholder", "review_setup");
+}
+
+// ── Step 6: Complete onboarding ───────────────────────────────────────────────
 
 export async function completeOnboardingAction(): Promise<void> {
   const workspaceId = await requireWorkspaceId();
   await completeOnboarding(workspaceId);
 }
 
-// ── Legacy: Create first client (preserved for compatibility) ─────────────────
+// ── Draft form persistence ────────────────────────────────────────────────────
+
+export async function saveDraftAction(formData: Record<string, string>): Promise<void> {
+  const workspaceId = await requireWorkspaceId();
+  await saveDraftFormData(workspaceId, formData);
+}
+
+// ── Legacy: Create first client (preserved for backward compatibility) ────────
 
 export type CreateFirstClientInput = {
   name:      string;

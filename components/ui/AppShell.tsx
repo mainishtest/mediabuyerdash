@@ -61,7 +61,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPortal = pathname?.startsWith("/portal/");
   // Marketing / public pages render without app chrome.
   const isMarketing = pathname === "/" || pathname === "/signup";
-  if (isPortal || isMarketing) {
+  // Onboarding renders without sidebar/header — clean, focused experience.
+  const isOnboarding = pathname?.startsWith("/onboarding");
+  if (isPortal || isMarketing || isOnboarding) {
     return <>{children}</>;
   }
 

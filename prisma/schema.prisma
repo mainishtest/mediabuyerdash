@@ -64,19 +64,29 @@ model Workspace {
 }
 
 // Tracks onboarding progress per workspace. Resumable — user can leave and return.
+// Steps: create_workspace → business_details → account_defaults →
+//        connect_meta_placeholder → connect_shopify_placeholder →
+//        review_setup → onboarding_complete
 model OnboardingState {
   id          String   @id @default(cuid())
   workspaceId String   @unique
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  currentStep          String   @default("workspace_details") // workspace_details | business_profile | integrations | review | complete
-  workspaceDetailsDone Boolean  @default(false)
-  businessProfileDone  Boolean  @default(false)
-  integrationsDone     Boolean  @default(false)
-  reviewDone           Boolean  @default(false)
-  completedAt          DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  currentStep                  String   @default("create_workspace")
+  createWorkspaceDone          Boolean  @default(false)
+  businessDetailsDone          Boolean  @default(false)
+  accountDefaultsDone          Boolean  @default(false)
+  connectMetaPlaceholderDone   Boolean  @default(false)
+  connectShopifyPlaceholderDone Boolean @default(false)
+  reviewSetupDone              Boolean  @default(false)
+
+  // Partial form data (persisted so user can resume)
+  draftFormData                String?  // JSON blob of in-progress form fields
+
+  completedAt                  DateTime?
+  lastActiveAt                 DateTime @default(now()) // Tracks staleness
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 }
 
 // User ↔ Workspace with role. v1 roles: owner | manager.

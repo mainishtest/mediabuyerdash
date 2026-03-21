@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { WorkspaceProfile } from "../../../lib/onboarding-types";
+import type { WorkspaceAccount } from "../../../lib/onboarding-types";
 
 const INDUSTRIES = [
   { value: "",              label: "Select industry…" },
@@ -24,7 +24,7 @@ const SPEND_RANGES = [
 ];
 
 type Props = {
-  workspace: WorkspaceProfile;
+  workspace: WorkspaceAccount;
   onSave: (data: {
     brandName: string;
     industry: string;

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { WorkspaceProfile, IntegrationStatus, SetupChecklist } from "../../../lib/onboarding-types";
+import type { WorkspaceAccount, IntegrationSetupState, AccountSetupChecklist } from "../../../lib/onboarding-types";
 
 type Props = {
-  workspace: WorkspaceProfile;
-  integrations: IntegrationStatus;
-  checklist: SetupChecklist;
+  workspace: WorkspaceAccount;
+  integrations: IntegrationSetupState;
+  checklist: AccountSetupChecklist;
   onComplete: () => Promise<void>;
   onBack: () => void;
   isPending: boolean;
