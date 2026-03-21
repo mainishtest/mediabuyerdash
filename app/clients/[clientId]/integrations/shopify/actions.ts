@@ -7,6 +7,7 @@ import { randomBytes }    from "crypto";
 
 import { buildShopifyOAuthUrl }    from "../../../../../lib/shopify/auth";
 import { normaliseShopDomain }     from "../../../../../lib/shopify/config";
+import { deleteShopifyConnection } from "../../../../../lib/shopify/db";
 import { runShopifySyncForClient } from "../../../../../lib/shopify/sync";
 import type { ShopifySyncSummary } from "../../../../../lib/shopify/sync";
 import { prisma }                  from "../../../../../lib/db";
@@ -222,6 +223,18 @@ export async function startClientShopifyOAuthAction(
   } catch {
     redirect(`${errorBase}?error=config_missing`);
   }
+}
+
+/** Fully disconnect (delete) a Shopify connection from this client page. */
+export async function disconnectShopifyFromClientAction(
+  clientId: string,
+  connectionId: string
+) {
+  await deleteShopifyConnection(connectionId).catch(() => null);
+  revalidatePath(`/clients/${clientId}/integrations/shopify`);
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/integrations/shopify");
+  redirect(`/clients/${clientId}/integrations/shopify`);
 }
 
 /** Clear the clientAccountId mapping (does NOT delete the connection). */

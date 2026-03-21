@@ -11,6 +11,7 @@ import {
   startClientShopifyOAuthAction,
   connectShopifyManuallyAction,
   connectShopifyClientCredentialsAction,
+  disconnectShopifyFromClientAction,
   unmapShopifyFromClientPageAction,
   runClientShopifySyncAction,
 } from "./actions";
@@ -176,6 +177,8 @@ export function ClientShopifyView({
   const [manualPending,   startManual]      = useTransition();
   const [syncPending,     startSync]        = useTransition();
   const [unmapPending,    startUnmap]       = useTransition();
+  const [disconnectPending, startDisconnect] = useTransition();
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   // Read error / success from URL (server-rendered, so use window.location on client)
   const searchParams =
@@ -314,6 +317,40 @@ export function ClientShopifyView({
             >
               {unmapPending ? "Removing…" : "Unmap store"}
             </ActionButton>
+
+            {/* Disconnect */}
+            {!showDisconnectConfirm ? (
+              <ActionButton
+                variant="danger"
+                size="sm"
+                onClick={() => setShowDisconnectConfirm(true)}
+              >
+                Disconnect
+              </ActionButton>
+            ) : (
+              <span className="flex items-center gap-2">
+                <span className="text-xs text-red-400">Delete this connection?</span>
+                <ActionButton
+                  variant="danger"
+                  size="sm"
+                  disabled={disconnectPending}
+                  onClick={() => {
+                    startDisconnect(() =>
+                      disconnectShopifyFromClientAction(clientId, connection.id)
+                    );
+                  }}
+                >
+                  {disconnectPending ? "Disconnecting…" : "Confirm"}
+                </ActionButton>
+                <ActionButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDisconnectConfirm(false)}
+                >
+                  Cancel
+                </ActionButton>
+              </span>
+            )}
 
             <Link
               href="/integrations/shopify"
