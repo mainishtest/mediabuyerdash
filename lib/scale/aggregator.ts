@@ -51,7 +51,7 @@ export async function getScaleRecommendation(
     }),
 
     // Check emergency stops
-    prisma.governanceEmergencyStop.findMany({
+    prisma.governanceStop.findMany({
       where: {
         isActive: true,
         OR: [
