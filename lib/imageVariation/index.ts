@@ -98,3 +98,16 @@ export {
   buildImageVariationPublishPrepLink,
   computeLaunchReadiness,
 } from "./scoring";
+
+// Experiment launch bridge
+export type {
+  ImageVariationExperimentLaunchPlan,
+  ImageVariationExperimentSummary,
+} from "./experimentLaunch";
+
+export {
+  buildImageVariationExperimentLaunchPlan,
+  saveImageVariationExperimentLaunchPlan,
+  loadImageVariationExperimentLaunchPlans,
+  loadImageVariationExperimentLaunchPlanById,
+} from "./experimentLaunch";

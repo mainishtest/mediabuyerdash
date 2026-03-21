@@ -273,6 +273,12 @@ export function ImageVariationSelectionView({ initialRequests }: Props) {
             {/* Navigation */}
             <div className="flex flex-wrap items-center gap-3">
               <Link
+                href="/creative-lab/image-variations/launch"
+                className="text-xs text-emerald-500 hover:text-emerald-400"
+              >
+                Experiment Launch →
+              </Link>
+              <Link
                 href="/creative-lab/image-variations/review"
                 className="text-xs text-slate-500 hover:text-slate-300"
               >

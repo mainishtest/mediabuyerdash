@@ -442,3 +442,75 @@ export async function loadApprovedRequestsAction(): Promise<Array<{
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Experiment launch actions
+// ---------------------------------------------------------------------------
+
+import {
+  buildImageVariationExperimentLaunchPlan,
+  saveImageVariationExperimentLaunchPlan,
+  loadImageVariationExperimentLaunchPlans,
+} from "../../../lib/imageVariation/experimentLaunch";
+import type { CreativeExperimentLaunchPlan } from "../../../types/experimentLaunch";
+
+export async function createExperimentLaunchPlanAction(
+  requestId:          string,
+  candidateId:        string,
+  controlCreativeId?: string,
+  controlCreativeName?: string,
+  hypothesis?:        string,
+): Promise<{ ok: true; plan: CreativeExperimentLaunchPlan } | { ok: false; error: string }> {
+  try {
+    const record = await prisma.imageVariationRequest.findUnique({ where: { id: requestId } });
+    if (!record) return { ok: false, error: "Request not found." };
+
+    let candidates: ImageVariationCandidate[] = [];
+    try { candidates = JSON.parse(record.candidatesJson); } catch {
+      return { ok: false, error: "Could not parse candidates." };
+    }
+
+    const candidate = candidates.find((c) => c.id === candidateId);
+    if (!candidate) return { ok: false, error: "Candidate not found." };
+    if (candidate.reviewState !== "approved") {
+      return { ok: false, error: "Candidate must be approved before creating a launch plan." };
+    }
+
+    let context: ImageVariationContext | null = null;
+    try { context = JSON.parse(record.contextJson); } catch { /* empty */ }
+
+    let scorecard: ImageVariationScorecard | null = null;
+    try {
+      scorecard = scoreImageVariation(candidate, context, requestId);
+    } catch { /* scoring is optional */ }
+
+    const plan = buildImageVariationExperimentLaunchPlan({
+      candidate,
+      context,
+      scorecard,
+      requestId,
+      controlCreativeId,
+      controlCreativeName,
+      hypothesis,
+    });
+
+    const saveResult = await saveImageVariationExperimentLaunchPlan(plan);
+    if (!saveResult.ok) {
+      return { ok: false, error: saveResult.error ?? "Failed to save plan." };
+    }
+
+    revalidatePath("/creative-lab/image-variations/launch");
+    return { ok: true, plan };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function loadExperimentLaunchPlansAction(): Promise<CreativeExperimentLaunchPlan[]> {
+  try {
+    return await loadImageVariationExperimentLaunchPlans({ limit: 50 });
+  } catch {
+    return [];
+  }
+}
