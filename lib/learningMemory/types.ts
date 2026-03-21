@@ -6,11 +6,12 @@
 // ── Source types ──────────────────────────────────────────────────────────────
 
 export type LearningSourceType =
-  | "creative_outcome"        // from ReconciledCampaignPerformance vs goals
-  | "experiment_outcome"      // from ExperimentLearningRecord
-  | "fatigue_outcome"         // derived from high-frequency MetaSyncedInsight patterns
-  | "recommendation_outcome"  // from executed ProposedAutomationAction
-  | "publish_outcome";        // from PublishPrepRecord (publishedAt set)
+  | "creative_outcome"           // from ReconciledCampaignPerformance vs goals
+  | "experiment_outcome"         // from ExperimentLearningRecord
+  | "fatigue_outcome"            // derived from high-frequency MetaSyncedInsight patterns
+  | "recommendation_outcome"     // from executed ProposedAutomationAction
+  | "publish_outcome"            // from PublishPrepRecord (publishedAt set)
+  | "image_variation_outcome";   // from image variation test results
 
 // ── Category ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,15 @@ export type LearningCategory =
   | "audience_message_fit"     // message ↔ audience alignment signal
   | "launch_condition"         // conditions associated with stronger launches
   | "refresh_pattern"          // which refresh intents are being used
-  | "experiment_pattern";      // general experiment outcome pattern
+  | "experiment_pattern"       // general experiment outcome pattern
+  // Image variation categories
+  | "winning_visual_hook"          // visual element that drives scroll-stop
+  | "winning_composition"          // layout/hierarchy that improves engagement
+  | "winning_color_direction"      // color palette that improves performance
+  | "winning_product_focus"        // product emphasis that converts
+  | "winning_ugc_style"            // UGC aesthetic that performs
+  | "fatigue_prone_visual_pattern" // visual pattern that fatigues quickly
+  | "poor_performer_visual_pattern"; // visual approach that underperforms
 
 // ── Confidence ────────────────────────────────────────────────────────────────
 

@@ -145,7 +145,10 @@ export function ImageVariationResultsView() {
 
       {/* Navigation */}
       <div className="flex flex-wrap items-center gap-4">
-        <Link href="/creative-lab/image-variations/launch" className="text-xs text-emerald-500 hover:text-emerald-400">
+        <Link href="/creative-lab/image-variations/insights" className="text-xs text-emerald-500 hover:text-emerald-400">
+          Learning Insights →
+        </Link>
+        <Link href="/creative-lab/image-variations/launch" className="text-xs text-slate-500 hover:text-slate-300">
           ← Launch Plans
         </Link>
         <Link href="/creative-lab/image-variations/selection" className="text-xs text-slate-500 hover:text-slate-300">

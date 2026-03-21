@@ -27,23 +27,31 @@ export function avgConfidence(entries: LearningMemoryEntry[]): LearningConfidenc
 // ── Category labels ───────────────────────────────────────────────────────────
 
 export const CATEGORY_LABEL: Record<LearningCategory, string> = {
-  winning_hook:          "Winning Hook",
-  winning_angle:         "Winning Angle",
-  winning_offer_framing: "Winning Offer Framing",
-  fatigue_pattern:       "Fatigue Pattern",
-  poor_performer_pattern: "Poor Performer Pattern",
-  audience_message_fit:  "Audience-Message Fit",
-  launch_condition:      "Launch Condition",
-  refresh_pattern:       "Refresh Pattern",
-  experiment_pattern:    "Experiment Pattern",
+  winning_hook:                  "Winning Hook",
+  winning_angle:                 "Winning Angle",
+  winning_offer_framing:         "Winning Offer Framing",
+  fatigue_pattern:               "Fatigue Pattern",
+  poor_performer_pattern:        "Poor Performer Pattern",
+  audience_message_fit:          "Audience-Message Fit",
+  launch_condition:              "Launch Condition",
+  refresh_pattern:               "Refresh Pattern",
+  experiment_pattern:            "Experiment Pattern",
+  winning_visual_hook:           "Winning Visual Hook",
+  winning_composition:           "Winning Composition",
+  winning_color_direction:       "Winning Color Direction",
+  winning_product_focus:         "Winning Product Focus",
+  winning_ugc_style:             "Winning UGC Style",
+  fatigue_prone_visual_pattern:  "Fatigue-Prone Visual",
+  poor_performer_visual_pattern: "Poor Visual Pattern",
 };
 
 export const SOURCE_LABEL: Record<string, string> = {
-  creative_outcome:       "Campaign Performance",
-  experiment_outcome:     "Experiment",
-  fatigue_outcome:        "Fatigue Signal",
-  recommendation_outcome: "Automation",
-  publish_outcome:        "Creative Launch",
+  creative_outcome:         "Campaign Performance",
+  experiment_outcome:       "Experiment",
+  fatigue_outcome:          "Fatigue Signal",
+  recommendation_outcome:   "Automation",
+  publish_outcome:          "Creative Launch",
+  image_variation_outcome:  "Image Variation Test",
 };
 
 export const CONFIDENCE_BADGE: Record<LearningConfidence, string> = {
@@ -53,23 +61,31 @@ export const CONFIDENCE_BADGE: Record<LearningConfidence, string> = {
 };
 
 export const SOURCE_BADGE: Record<string, string> = {
-  experiment_outcome:     "border-violet-800/50 bg-violet-950/60 text-violet-300",
-  creative_outcome:       "border-emerald-800/50 bg-emerald-950/60 text-emerald-300",
-  publish_outcome:        "border-sky-800/50 bg-sky-950/60 text-sky-300",
-  recommendation_outcome: "border-amber-800/50 bg-amber-950/60 text-amber-300",
-  fatigue_outcome:        "border-rose-800/50 bg-rose-950/60 text-rose-300",
+  experiment_outcome:       "border-violet-800/50 bg-violet-950/60 text-violet-300",
+  creative_outcome:         "border-emerald-800/50 bg-emerald-950/60 text-emerald-300",
+  publish_outcome:          "border-sky-800/50 bg-sky-950/60 text-sky-300",
+  recommendation_outcome:   "border-amber-800/50 bg-amber-950/60 text-amber-300",
+  fatigue_outcome:          "border-rose-800/50 bg-rose-950/60 text-rose-300",
+  image_variation_outcome:  "border-cyan-800/50 bg-cyan-950/60 text-cyan-300",
 };
 
 export const CATEGORY_ACCENT: Record<LearningCategory, string> = {
-  winning_hook:           "text-emerald-300",
-  winning_angle:          "text-emerald-300",
-  winning_offer_framing:  "text-emerald-300",
-  fatigue_pattern:        "text-rose-300",
-  poor_performer_pattern: "text-rose-300",
-  audience_message_fit:   "text-sky-300",
-  launch_condition:       "text-sky-300",
-  refresh_pattern:        "text-amber-300",
-  experiment_pattern:     "text-violet-300",
+  winning_hook:                  "text-emerald-300",
+  winning_angle:                 "text-emerald-300",
+  winning_offer_framing:         "text-emerald-300",
+  fatigue_pattern:               "text-rose-300",
+  poor_performer_pattern:        "text-rose-300",
+  audience_message_fit:          "text-sky-300",
+  launch_condition:              "text-sky-300",
+  refresh_pattern:               "text-amber-300",
+  experiment_pattern:            "text-violet-300",
+  winning_visual_hook:           "text-emerald-300",
+  winning_composition:           "text-emerald-300",
+  winning_color_direction:       "text-emerald-300",
+  winning_product_focus:         "text-emerald-300",
+  winning_ugc_style:             "text-emerald-300",
+  fatigue_prone_visual_pattern:  "text-rose-300",
+  poor_performer_visual_pattern: "text-rose-300",
 };
 
 // ── Pattern extraction ────────────────────────────────────────────────────────

@@ -281,6 +281,169 @@ export async function extractCampaignPerformanceLearnings(filters: {
   return entries.slice(0, limit);
 }
 
+// ── 2b. Image variation outcome learnings ────────────────────────────────────
+
+const INTENT_TO_VISUAL_CATEGORY: Record<string, LearningCategory> = {
+  refresh_visual_hook:    "winning_visual_hook",
+  refresh_composition:    "winning_composition",
+  refresh_color_direction: "winning_color_direction",
+  refresh_product_focus:  "winning_product_focus",
+  refresh_ugc_style:      "winning_ugc_style",
+  refresh_offer_framing:  "winning_offer_framing",
+  refresh_lifestyle_angle: "winning_angle",
+  full_visual_reset:      "refresh_pattern",
+};
+
+export async function extractImageVariationLearnings(filters: {
+  clientId?: string;
+  dateFrom?: string;
+  dateTo?:   string;
+  limit?:    number;
+}): Promise<LearningMemoryEntry[]> {
+  const { clientId, dateFrom, dateTo, limit = 60 } = filters;
+
+  // Load launched experiment launch plans with image variation challengers
+  const plans = await prisma.experimentLaunchPlanRecord.findMany({
+    where: {
+      ...(clientId ? { clientAccountId: clientId } : {}),
+      readinessState: "launched",
+      challengerVariantType: "image",
+      ...(dateFrom ? { createdAt: { gte: new Date(dateFrom + "T00:00:00") } } : {}),
+      ...(dateTo   ? { createdAt: { lte: new Date(dateTo   + "T23:59:59") } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id:                    true,
+      name:                  true,
+      clientAccountId:       true,
+      challengerClientName:  true,
+      challengerCampaignName: true,
+      challengerVariantTitle: true,
+      challengerBriefIntent: true,
+      challengerBriefDraftType: true,
+      controlLabel:          true,
+      controlCreativeName:   true,
+      hypothesis:            true,
+      primaryMetric:         true,
+      successThreshold:      true,
+      targetCampaignExternalId: true,
+      linkedExperimentId:    true,
+      createdAt:             true,
+      launchedAt:            true,
+    },
+  });
+
+  if (plans.length === 0) return [];
+
+  // Cross-reference with experiment results if available
+  const experimentIds = plans.map((p) => p.linkedExperimentId).filter(Boolean) as string[];
+  const results = experimentIds.length > 0
+    ? await prisma.experimentResultRecord.findMany({
+        where: { experimentId: { in: experimentIds } },
+        select: {
+          experimentId:     true,
+          outcome:          true,
+          winningVariant:   true,
+          confidence:       true,
+          primaryMetricLift: true,
+        },
+      })
+    : [];
+  const resultMap = new Map(results.map((r) => [r.experimentId, r]));
+
+  const entries: LearningMemoryEntry[] = [];
+
+  for (const plan of plans) {
+    const result = plan.linkedExperimentId ? resultMap.get(plan.linkedExperimentId) : null;
+    const intent = plan.challengerBriefIntent ?? "image_variation";
+
+    // Determine category from intent + outcome
+    let category: LearningCategory;
+    let conf: LearningConfidence;
+    let insightText: string;
+    const clientName = plan.challengerClientName ?? "Unknown";
+    const variantTitle = plan.challengerVariantTitle ?? "Image variation";
+
+    if (result) {
+      const outcome = result.outcome;
+      const lift = result.primaryMetricLift ?? 0;
+      const liftPct = (lift * 100).toFixed(1);
+
+      if (outcome === "challenger_wins") {
+        category = INTENT_TO_VISUAL_CATEGORY[intent] ?? "winning_visual_hook";
+        conf = result.confidence >= 0.7 ? "high" : "medium";
+        insightText = `Image variation "${variantTitle}" outperformed control with +${liftPct}% lift on ${plan.primaryMetric}. Visual direction: ${intent.replace(/_/g, " ")}.`;
+      } else if (outcome === "control_holds") {
+        category = "poor_performer_visual_pattern";
+        conf = result.confidence >= 0.7 ? "high" : "medium";
+        insightText = `Image variation "${variantTitle}" underperformed control (${liftPct}% lift). The ${intent.replace(/_/g, " ")} direction did not improve ${plan.primaryMetric} for ${clientName}.`;
+      } else if (outcome === "no_clear_winner" || outcome === "mixed_result") {
+        category = "experiment_pattern";
+        conf = "medium";
+        insightText = `Image variation test "${plan.name}" showed ${outcome.replace(/_/g, " ")} — no definitive winner between control and "${variantTitle}".`;
+      } else {
+        category = "experiment_pattern";
+        conf = "low";
+        insightText = `Image variation test "${plan.name}" resulted in ${outcome.replace(/_/g, " ")}. Insufficient data to draw conclusions.`;
+      }
+    } else {
+      // No result yet — still a learning about launch patterns
+      category = "launch_condition";
+      conf = "low";
+      insightText = `Image variation "${variantTitle}" was launched for testing (${intent.replace(/_/g, " ")}). Awaiting results.`;
+    }
+
+    const evidence: LearningSignal[] = [
+      { label: "Visual direction", value: intent.replace(/_/g, " "), direction: "neutral" },
+      { label: "Variant", value: variantTitle, direction: "neutral" },
+    ];
+
+    if (result) {
+      const lift = result.primaryMetricLift ?? 0;
+      evidence.push({
+        label: `${plan.primaryMetric} lift`,
+        value: `${lift >= 0 ? "+" : ""}${(lift * 100).toFixed(1)}%`,
+        direction: lift > 0 ? "positive" : lift < 0 ? "negative" : "neutral",
+      });
+      evidence.push({
+        label: "Confidence",
+        value: `${((result.confidence ?? 0) * 100).toFixed(0)}%`,
+        direction: (result.confidence ?? 0) >= 0.7 ? "positive" : "neutral",
+      });
+    }
+
+    if (plan.hypothesis) {
+      evidence.push({ label: "Hypothesis", value: plan.hypothesis.slice(0, 100), direction: "neutral" });
+    }
+
+    entries.push({
+      id:           `imgvar-${plan.id}`,
+      sourceType:   "image_variation_outcome",
+      category,
+      confidence:   conf,
+      clientId:     plan.clientAccountId,
+      clientName,
+      campaignId:   plan.targetCampaignExternalId ?? null,
+      campaignName: plan.challengerCampaignName ?? null,
+      insightText,
+      pattern:      intent,
+      evidence,
+      relatedEntities: [
+        { type: "experiment_launch_plan", id: plan.id, label: plan.name },
+        ...(plan.linkedExperimentId ? [{ type: "experiment", id: plan.linkedExperimentId, label: plan.name }] : []),
+      ],
+      usableForBriefs:  result?.outcome === "challenger_wins",
+      usableForScoring: !!result,
+      createdAt:    (plan.launchedAt ?? plan.createdAt).toISOString(),
+      periodFrom:   (plan.launchedAt ?? plan.createdAt).toISOString().slice(0, 10),
+      periodTo:     null,
+    });
+  }
+
+  return entries.slice(0, limit);
+}
+
 // ── 3. Publish / launch outcome learnings ─────────────────────────────────────
 
 const INTENT_TO_CATEGORY: Record<string, LearningCategory> = {

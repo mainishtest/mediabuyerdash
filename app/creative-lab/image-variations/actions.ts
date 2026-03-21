@@ -572,3 +572,49 @@ export async function ingestAllResultsAction(): Promise<{
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Learning memory actions
+// ---------------------------------------------------------------------------
+
+import { queryLearningMemory, buildLearningSummary } from "../../../lib/learningMemory/aggregator";
+import { extractImageVariationLearnings } from "../../../lib/learningMemory/extractor";
+import type { LearningMemoryEntry, LearningSummary, LearningCategory, LearningConfidence } from "../../../lib/learningMemory/types";
+
+export async function loadImageVariationInsightsAction(opts?: {
+  clientId?:   string;
+  category?:   string;
+  confidence?: string;
+  dateFrom?:   string;
+  dateTo?:     string;
+}): Promise<{ entries: LearningMemoryEntry[]; summary: LearningSummary }> {
+  try {
+    // Load image-variation-specific learnings plus experiment learnings tagged to image variants
+    const entries = await queryLearningMemory({
+      clientId:   opts?.clientId,
+      sourceType: "image_variation_outcome",
+      category:   (opts?.category as LearningCategory) ?? undefined,
+      confidence: (opts?.confidence as LearningConfidence) ?? undefined,
+      dateFrom:   opts?.dateFrom,
+      dateTo:     opts?.dateTo,
+      limit: 100,
+    });
+
+    const clients = await prisma.clientAccount.findMany({
+      where: { status: "active" },
+      select: { id: true, name: true },
+    });
+
+    const summary = buildLearningSummary(entries, clients);
+    return { entries, summary };
+  } catch {
+    return {
+      entries: [],
+      summary: {
+        totalEntries: 0, highConfidenceCount: 0, experimentCount: 0,
+        creativeCount: 0, usableForBriefsCount: 0, topPatterns: [],
+        topInsight: null, clientsWithLearnings: [], isSparse: true,
+      },
+    };
+  }
+}

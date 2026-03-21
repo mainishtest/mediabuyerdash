@@ -14,6 +14,7 @@ import {
   extractCampaignPerformanceLearnings,
   extractPublishLearnings,
   extractAutomationLearnings,
+  extractImageVariationLearnings,
 } from "./extractor";
 import {
   extractLearningPatterns,
@@ -47,14 +48,15 @@ export async function queryLearningMemory(query: LearningQuery): Promise<Learnin
   // Run all extractors in parallel; each respects client/date filters
   const extractorFilters = { clientId, dateFrom, dateTo, limit };
 
-  const [expLearnings, perfLearnings, pubLearnings, autoLearnings] = await Promise.all([
-    sourceType && sourceType !== "experiment_outcome"     ? [] : extractExperimentLearnings(extractorFilters),
-    sourceType && sourceType !== "creative_outcome"       ? [] : extractCampaignPerformanceLearnings(extractorFilters),
-    sourceType && sourceType !== "publish_outcome"        ? [] : extractPublishLearnings(extractorFilters),
-    sourceType && sourceType !== "recommendation_outcome" ? [] : extractAutomationLearnings(extractorFilters),
+  const [expLearnings, perfLearnings, pubLearnings, autoLearnings, imgVarLearnings] = await Promise.all([
+    sourceType && sourceType !== "experiment_outcome"       ? [] : extractExperimentLearnings(extractorFilters),
+    sourceType && sourceType !== "creative_outcome"         ? [] : extractCampaignPerformanceLearnings(extractorFilters),
+    sourceType && sourceType !== "publish_outcome"          ? [] : extractPublishLearnings(extractorFilters),
+    sourceType && sourceType !== "recommendation_outcome"   ? [] : extractAutomationLearnings(extractorFilters),
+    sourceType && sourceType !== "image_variation_outcome"  ? [] : extractImageVariationLearnings(extractorFilters),
   ]);
 
-  let entries = deduplicate([...expLearnings, ...perfLearnings, ...pubLearnings, ...autoLearnings]);
+  let entries = deduplicate([...expLearnings, ...perfLearnings, ...pubLearnings, ...autoLearnings, ...imgVarLearnings]);
 
   // Apply remaining filters
   if (category)        entries = entries.filter((e) => e.category        === category);
