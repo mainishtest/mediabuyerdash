@@ -28,6 +28,11 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV: NavEntry[] = [
   {
     kind:  "leaf",
+    href:  "/",
+    label: "Home",
+  },
+  {
+    kind:  "leaf",
     href:  "/portfolio",
     label: "Portfolio",
   },
@@ -270,8 +275,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         <ul className="space-y-0.5 px-3">
           {NAV.map((entry) => {
             if (entry.kind === "leaf") {
-              const active =
-                pathname === entry.href || pathname.startsWith(entry.href + "/");
+              const active = entry.href === "/"
+                ? pathname === "/"
+                : pathname === entry.href || pathname.startsWith(entry.href + "/");
               return (
                 <li key={entry.href}>
                   <Link
