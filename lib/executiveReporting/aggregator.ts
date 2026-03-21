@@ -71,16 +71,85 @@ async function fetchTrendSummary(params: {
     orderBy: { date: "asc" },
   });
 
-  // Build date-keyed maps
-  const spendByDate: Record<string, number>  = {};
-  for (const r of spendRows) spendByDate[r.date]  = r._sum.spend   ?? 0;
+  // ── Fallback to live synced tables when intermediary tables are empty ──
+  // UTMPerformanceRow and CRMPerformanceRow are not populated by the sync
+  // jobs. When empty, read directly from MetaSyncedInsight and ShopifyOrder.
+
+  let metaSpendByDate:  Record<string, number> = {};
+  let shopifyByDate:    Record<string, { revenue: number; orders: number }> = {};
+  let usedSyncedFallback = false;
+
+  if (spendRows.length === 0) {
+    // Resolve external ad account IDs for this client (or all)
+    const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
+      where: clientId ? { clientAccountId: clientId } : {},
+      include: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+    });
+    const externalAdAccountIds = selectedAccounts.map(
+      (sa) => sa.accessibleAdAccount.externalAdAccountId
+    );
+
+    if (externalAdAccountIds.length > 0) {
+      const insightRows = await prisma.metaSyncedInsight.groupBy({
+        by:    ["dateStart"],
+        where: {
+          externalAdAccountId: { in: externalAdAccountIds },
+          dateStart:           { gte: dateFrom, lte: dateTo },
+        },
+        _sum:  { spend: true },
+        orderBy: { dateStart: "asc" },
+      });
+
+      for (const r of insightRows) {
+        metaSpendByDate[r.dateStart] = (metaSpendByDate[r.dateStart] ?? 0) + (r._sum.spend ?? 0);
+      }
+      if (insightRows.length > 0) usedSyncedFallback = true;
+    }
+  }
+
+  if (crmRows.length === 0) {
+    const dateFromDt = new Date(dateFrom + "T00:00:00.000Z");
+    const dateToDt   = new Date(dateTo   + "T23:59:59.999Z");
+
+    // Prisma groupBy on DateTime groups by exact timestamp, not by date.
+    // Load orders and aggregate by date string in JS.
+    const orders = await prisma.shopifyOrder.findMany({
+      where: {
+        ...(clientId ? { clientAccountId: clientId } : {}),
+        orderCreatedAt: { gte: dateFromDt, lte: dateToDt },
+      },
+      select: { orderCreatedAt: true, totalPrice: true },
+    });
+
+    for (const o of orders) {
+      const dateKey = o.orderCreatedAt.toISOString().slice(0, 10);
+      const prev = shopifyByDate[dateKey] ?? { revenue: 0, orders: 0 };
+      shopifyByDate[dateKey] = {
+        revenue: prev.revenue + (o.totalPrice ?? 0),
+        orders:  prev.orders + 1,
+      };
+    }
+    if (orders.length > 0) usedSyncedFallback = true;
+  }
+
+  // Build date-keyed maps from UTMPerformanceRow (or MetaSyncedInsight fallback)
+  const spendByDate: Record<string, number> = {};
+  if (spendRows.length > 0) {
+    for (const r of spendRows) spendByDate[r.date] = r._sum.spend ?? 0;
+  } else {
+    Object.assign(spendByDate, metaSpendByDate);
+  }
 
   const crmByDate: Record<string, { revenue: number; orders: number }> = {};
-  for (const r of crmRows) {
-    crmByDate[r.date] = {
-      revenue: r._sum.revenue ?? 0,
-      orders:  r._sum.orders  ?? 0,
-    };
+  if (crmRows.length > 0) {
+    for (const r of crmRows) {
+      crmByDate[r.date] = {
+        revenue: r._sum.revenue ?? 0,
+        orders:  r._sum.orders  ?? 0,
+      };
+    }
+  } else {
+    Object.assign(crmByDate, shopifyByDate);
   }
 
   // Build unified day array covering the full range
@@ -113,10 +182,12 @@ async function fetchTrendSummary(params: {
   const totalRevenue = recoRows.reduce((s, r) => s + r.totalCrmRevenue, 0);
   const totalOrders  = recoRows.reduce((s, r) => s + r.totalCrmOrders,  0);
 
-  // Fall back to UTM rows if no reconciliation data exists yet
+  // Fall back to daily rows (from UTM/CRM tables or synced tables) if no reconciliation data
   const fallbackSpend   = byDay.reduce((s, d) => s + d.spend,   0);
   const fallbackRevenue = byDay.reduce((s, d) => s + d.revenue, 0);
-  const fallbackOrders  = crmRows.reduce((s, r) => s + (r._sum.orders ?? 0), 0);
+  const fallbackOrders  = crmRows.length > 0
+    ? crmRows.reduce((s, r) => s + (r._sum.orders ?? 0), 0)
+    : Object.values(crmByDate).reduce((s, d) => s + d.orders, 0);
 
   const effectiveSpend   = recoRows.length > 0 ? totalSpend   : fallbackSpend;
   const effectiveRevenue = recoRows.length > 0 ? totalRevenue : fallbackRevenue;
@@ -364,13 +435,39 @@ export async function buildExecutiveSummary(params: {
   let pacingRisksCount = 0;
   if (pacingTargets.length > 0) {
     const pClientIds = pacingTargets.map((t) => t.clientAccountId);
+
+    // Try UTMPerformanceRow first
     const spendRows2 = await prisma.uTMPerformanceRow.groupBy({
       by:    ["clientAccountId"],
       where: { clientAccountId: { in: pClientIds }, date: { gte: monthStart, lte: monthToday } },
       _sum:  { spend: true },
     });
+
     const spendMap: Record<string, number> = {};
-    for (const r of spendRows2) spendMap[r.clientAccountId] = r._sum.spend ?? 0;
+
+    if (spendRows2.length > 0) {
+      for (const r of spendRows2) spendMap[r.clientAccountId] = r._sum.spend ?? 0;
+    } else {
+      // Fall back to MetaSyncedInsight via ad account mapping
+      for (const cid of pClientIds) {
+        const selectedAccts = await prisma.metaSelectedAdAccount.findMany({
+          where: { clientAccountId: cid },
+          include: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+        });
+        const extIds = selectedAccts.map((sa) => sa.accessibleAdAccount.externalAdAccountId);
+        if (extIds.length === 0) continue;
+
+        const agg = await prisma.metaSyncedInsight.aggregate({
+          where: {
+            externalAdAccountId: { in: extIds },
+            dateStart:           { gte: monthStart, lte: monthToday },
+          },
+          _sum: { spend: true },
+        });
+        spendMap[cid] = agg._sum.spend ?? 0;
+      }
+    }
+
     for (const t of pacingTargets) {
       const spent    = spendMap[t.clientAccountId] ?? 0;
       const expected = (dayOfMonth / daysInMonth) * t.monthlyBudget;
