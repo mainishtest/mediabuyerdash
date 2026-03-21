@@ -300,9 +300,12 @@ export function ImageVariationReviewView({ initialQueue }: Props) {
                   ← Return to Generation
                 </Link>
                 {activeSet.items.some((i) => i.reviewState === "approved") && (
-                  <span className="ml-auto rounded-lg border border-emerald-700 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-300">
-                    Has approved candidates — ready for next step
-                  </span>
+                  <Link
+                    href="/creative-lab/image-variations/selection"
+                    className="ml-auto rounded-lg border border-emerald-700 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-900/40 transition-colors"
+                  >
+                    Score &amp; Select for Publish Prep →
+                  </Link>
                 )}
               </div>
             </div>

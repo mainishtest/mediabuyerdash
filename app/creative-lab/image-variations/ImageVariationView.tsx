@@ -478,7 +478,7 @@ export function ImageVariationView({ creatives, recentHistory }: Props) {
       )}
 
       {/* ── Navigation links ────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center gap-4">
         <Link
           href="/creative-lab/image-variations/review"
           className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
@@ -486,8 +486,14 @@ export function ImageVariationView({ creatives, recentHistory }: Props) {
           Open Review Queue →
         </Link>
         <Link
+          href="/creative-lab/image-variations/selection"
+          className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+        >
+          Score &amp; Select →
+        </Link>
+        <Link
           href="/creative-lab"
-          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
           ← Back to Creative Lab
         </Link>

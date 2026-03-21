@@ -64,3 +64,37 @@ export {
   archiveImageVariationCandidate,
   summarizeImageVariationReview,
 } from "./review";
+
+// Scoring types
+export type {
+  ImageVariationScoreDimension,
+  ImageVariationScore,
+  ImageVariationScorecard,
+  ImageVariationScoreExplanation,
+  ImageVariationReadiness,
+  ImageVariationRisk,
+  ImageVariationRanking,
+  ImageVariationRankingSummary,
+  ImageVariationLaunchReadiness,
+  ImageVariationSelectionDecision,
+  ImageVariationPublishPrepLink,
+  ImageVariationScoreReason,
+} from "./scoringTypes";
+
+export {
+  IMAGE_VARIATION_SCORE_DIMENSIONS,
+  IMAGE_VARIATION_READINESS_LABEL,
+  IMAGE_VARIATION_READINESS_COLOR,
+  IMAGE_VARIATION_READINESS_BG,
+} from "./scoringTypes";
+
+// Scoring workflow
+export {
+  scoreImageVariation,
+  buildImageVariationScorecard,
+  rankImageVariationCandidates,
+  computeImageVariationReadiness,
+  summarizeImageVariationRanking,
+  buildImageVariationPublishPrepLink,
+  computeLaunchReadiness,
+} from "./scoring";

@@ -286,3 +286,159 @@ export async function loadReviewSummaryAction(requestId: string) {
   try { candidates = JSON.parse(record.candidatesJson); } catch { return null; }
   return summarizeImageVariationReview(requestId, candidates);
 }
+
+// ---------------------------------------------------------------------------
+// Scoring and selection workflow actions
+// ---------------------------------------------------------------------------
+
+import {
+  scoreImageVariation,
+  rankImageVariationCandidates,
+  summarizeImageVariationRanking,
+  buildImageVariationPublishPrepLink,
+  computeLaunchReadiness,
+} from "../../../lib/imageVariation/scoring";
+import type {
+  ImageVariationScorecard,
+  ImageVariationRanking,
+  ImageVariationRankingSummary,
+  ImageVariationLaunchReadiness,
+  ImageVariationPublishPrepLink,
+} from "../../../lib/imageVariation/scoringTypes";
+import type { ImageVariationContext } from "../../../lib/imageVariation/types";
+
+export type ScoredSelectionResult = {
+  rankings:       ImageVariationRanking[];
+  summary:        ImageVariationRankingSummary;
+  launchReadiness: ImageVariationLaunchReadiness;
+  requestId:      string;
+};
+
+export async function scoreAndRankCandidatesAction(
+  requestId: string,
+): Promise<{ ok: true; data: ScoredSelectionResult } | { ok: false; error: string }> {
+  try {
+    const record = await prisma.imageVariationRequest.findUnique({ where: { id: requestId } });
+    if (!record) return { ok: false, error: "Request not found." };
+
+    let candidates: ImageVariationCandidate[] = [];
+    try { candidates = JSON.parse(record.candidatesJson); } catch {
+      return { ok: false, error: "Could not parse candidates." };
+    }
+
+    // Only score approved candidates
+    const approved = candidates.filter((c) => c.reviewState === "approved");
+    if (approved.length === 0) {
+      return { ok: false, error: "No approved candidates to score." };
+    }
+
+    let context: ImageVariationContext | null = null;
+    try { context = JSON.parse(record.contextJson); } catch { /* empty */ }
+
+    const scorecards = approved.map((c) => scoreImageVariation(c, context, requestId));
+    const rankings = rankImageVariationCandidates(scorecards);
+    const summary = summarizeImageVariationRanking(requestId, scorecards);
+    const launchReadiness = computeLaunchReadiness(requestId, scorecards);
+
+    return { ok: true, data: { rankings, summary, launchReadiness, requestId } };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function selectForPublishPrepAction(
+  requestId:   string,
+  candidateId: string,
+  note?:       string,
+): Promise<{ ok: boolean; error?: string; link?: ImageVariationPublishPrepLink }> {
+  try {
+    const record = await prisma.imageVariationRequest.findUnique({ where: { id: requestId } });
+    if (!record) return { ok: false, error: "Request not found." };
+
+    let candidates: ImageVariationCandidate[] = [];
+    try { candidates = JSON.parse(record.candidatesJson); } catch {
+      return { ok: false, error: "Could not parse candidates." };
+    }
+
+    const idx = candidates.findIndex((c) => c.id === candidateId);
+    if (idx === -1) return { ok: false, error: "Candidate not found." };
+
+    const candidate = candidates[idx];
+    if (candidate.reviewState !== "approved") {
+      return { ok: false, error: "Candidate must be approved before selecting for publish prep." };
+    }
+
+    let context: ImageVariationContext | null = null;
+    try { context = JSON.parse(record.contextJson); } catch { /* empty */ }
+
+    const scorecard = scoreImageVariation(candidate, context, requestId);
+    const link = buildImageVariationPublishPrepLink(candidate, scorecard, requestId);
+
+    // Update candidate with selection state
+    candidates[idx] = {
+      ...candidates[idx],
+      reviewerNote: note ?? candidates[idx].reviewerNote ?? null,
+    };
+
+    await prisma.imageVariationRequest.update({
+      where: { id: requestId },
+      data:  { candidatesJson: JSON.stringify(candidates) },
+    });
+
+    revalidatePath("/creative-lab/image-variations/selection");
+    return { ok: true, link };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function loadApprovedRequestsAction(): Promise<Array<{
+  id:              string;
+  variationIntent: string;
+  triggerType:     string;
+  status:          string;
+  approvedCount:   number;
+  totalCount:      number;
+  createdAt:       string;
+  clientName:      string | null;
+}>> {
+  try {
+    const records = await prisma.imageVariationRequest.findMany({
+      where: { status: { in: ["completed", "partial"] }, candidateCount: { gt: 0 } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    const results: Array<{
+      id: string; variationIntent: string; triggerType: string; status: string;
+      approvedCount: number; totalCount: number; createdAt: string; clientName: string | null;
+    }> = [];
+
+    for (const r of records) {
+      let candidates: ImageVariationCandidate[] = [];
+      try { candidates = JSON.parse(r.candidatesJson); } catch { continue; }
+      const approved = candidates.filter((c) => c.reviewState === "approved");
+      if (approved.length === 0) continue;
+
+      let ctx: { clientName?: string } | null = null;
+      try { ctx = JSON.parse(r.contextJson); } catch { /* empty */ }
+
+      results.push({
+        id:              r.id,
+        variationIntent: r.variationIntent,
+        triggerType:     r.triggerType,
+        status:          r.status,
+        approvedCount:   approved.length,
+        totalCount:      candidates.length,
+        createdAt:       r.createdAt.toISOString(),
+        clientName:      ctx?.clientName ?? null,
+      });
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
