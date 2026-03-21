@@ -2,8 +2,7 @@
 // Production: PostgreSQL (Neon). Set DATABASE_URL in .env
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
