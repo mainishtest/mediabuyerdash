@@ -6,6 +6,7 @@
 
 import { prisma }             from "../db";
 import { buildPriorityCards, formatAlertType, formatActionType } from "./priorityEngine";
+import { buildDailyOutcomeSummary } from "../dailyOutcomes/aggregator";
 import type {
   CommandCenterPayload,
   CommandCenterSummary,
@@ -14,6 +15,8 @@ import type {
   CommandCenterExperimentItem,
   CommandCenterCreativeItem,
   CommandCenterPacingItem,
+  CommandCenterOutcomeItem,
+  CommandCenterOutcomeSummary,
   CommandCenterPriority,
 } from "./types";
 
@@ -258,10 +261,52 @@ export async function buildCommandCenterPayload(params: {
     }
   }
 
-  // ── 8. Priority queue ─────────────────────────────────────────────────────
+  // ── 8. Launched-test outcomes ─────────────────────────────────────────────
+  let outcomeItems: CommandCenterOutcomeItem[] = [];
+  let outcomeSummary: CommandCenterOutcomeSummary = {
+    winnersCount: 0, losersCount: 0, scaleReadyCount: 0,
+    refreshNeededCount: 0, retestNeededCount: 0, monitoringCount: 0,
+    pendingActionCount: 0,
+  };
+
+  try {
+    const dailyOutcomes = await buildDailyOutcomeSummary({
+      clientAccountId: clientId,
+      limit: 30,
+    });
+
+    outcomeItems = dailyOutcomes.highlights.map((h) => ({
+      id:              h.id,
+      type:            h.type,
+      title:           h.title,
+      subtitle:        h.subtitle,
+      routeType:       h.routeType,
+      readinessState:  h.readinessState,
+      nextActionLabel: h.nextActionLabel,
+      linkedWorkflow:  h.linkedWorkflow,
+      isBlocker:       h.isBlocker,
+      href:            h.href,
+      clientAccountId: h.clientAccountId,
+    }));
+
+    outcomeSummary = {
+      winnersCount:       dailyOutcomes.winnersCount,
+      losersCount:        dailyOutcomes.losersCount,
+      scaleReadyCount:    dailyOutcomes.scaleReadyCount,
+      refreshNeededCount: dailyOutcomes.refreshNeededCount,
+      retestNeededCount:  dailyOutcomes.retestNeededCount,
+      monitoringCount:    dailyOutcomes.monitoringCount,
+      pendingActionCount: dailyOutcomes.pendingActionCount,
+    };
+  } catch (err) {
+    // Non-blocking — outcome loading failure shouldn't break the command center
+    console.warn("[CommandCenter] Failed to load outcome highlights:", err);
+  }
+
+  // ── 9. Priority queue ─────────────────────────────────────────────────────
   const priorities = buildPriorityCards({ alertItems, approvals, experiments, creativeItems, pacingItems });
 
-  // ── 9. Summary ────────────────────────────────────────────────────────────
+  // ── 10. Summary ───────────────────────────────────────────────────────────
   const summary: CommandCenterSummary = {
     generatedAt:             now.toISOString(),
     dateRange:               { from: dateFrom, to: dateTo },
@@ -288,6 +333,8 @@ export async function buildCommandCenterPayload(params: {
     creativeItems,
     pacingItems,
     alertItems,
+    outcomeItems,
+    outcomeSummary,
     clients: clients.map((c) => ({ id: c.id, name: c.name })),
   };
 }

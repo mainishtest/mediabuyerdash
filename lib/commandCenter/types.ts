@@ -139,6 +139,40 @@ export type CommandCenterPacingItem = {
 
 // ── Full payload (server → client) ────────────────────────────────────────────
 
+// ── Outcome highlight item ───────────────────────────────────────────────────
+
+export type CommandCenterOutcomeHighlightType =
+  | "winner"
+  | "loser"
+  | "scale_opportunity"
+  | "refresh_needed"
+  | "retest_needed"
+  | "monitoring";
+
+export type CommandCenterOutcomeItem = {
+  id:              string;
+  type:            CommandCenterOutcomeHighlightType;
+  title:           string;
+  subtitle:        string;
+  routeType:       string;
+  readinessState:  string;
+  nextActionLabel: string;
+  linkedWorkflow:  string | null;
+  isBlocker:       boolean;
+  href:            string;
+  clientAccountId: string;
+};
+
+export type CommandCenterOutcomeSummary = {
+  winnersCount:       number;
+  losersCount:        number;
+  scaleReadyCount:    number;
+  refreshNeededCount: number;
+  retestNeededCount:  number;
+  monitoringCount:    number;
+  pendingActionCount: number;
+};
+
 export type CommandCenterPayload = {
   summary: CommandCenterSummary;
   priorities: CommandCenterPriorityCard[];
@@ -147,5 +181,7 @@ export type CommandCenterPayload = {
   creativeItems: CommandCenterCreativeItem[];
   pacingItems: CommandCenterPacingItem[];
   alertItems: CommandCenterAlertItem[];
+  outcomeItems: CommandCenterOutcomeItem[];
+  outcomeSummary: CommandCenterOutcomeSummary;
   clients: { id: string; name: string }[];
 };

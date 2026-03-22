@@ -13,6 +13,7 @@ import { ExperimentsPanel } from "./sections/ExperimentsPanel";
 import { CreativePanel }   from "./sections/CreativePanel";
 import { PacingPanel }     from "./sections/PacingPanel";
 import { AlertsPanel }     from "./sections/AlertsPanel";
+import { OutcomesPanel }   from "./sections/OutcomesPanel";
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,13 @@ export function CommandCenterView({ payload }: { payload: CommandCenterPayload }
     [payload.pacingItems, selectedClientId]
   );
 
+  const outcomeItems = useMemo(() =>
+    selectedClientId
+      ? payload.outcomeItems.filter((o) => o.clientAccountId === selectedClientId)
+      : payload.outcomeItems,
+    [payload.outcomeItems, selectedClientId]
+  );
+
   const priorities   = useMemo(() => {
     let list = selectedClientId
       ? payload.priorities.filter(
@@ -273,6 +281,28 @@ export function CommandCenterView({ payload }: { payload: CommandCenterPayload }
             <CreativePanel creativeItems={creativeItems} />
           </Section>
         </div>
+
+        {/* Launched-Test Outcomes */}
+        {(outcomeItems.length > 0 || payload.outcomeSummary.pendingActionCount > 0) && (
+          <Section
+            title="Launched-Test Outcomes"
+            count={payload.outcomeSummary.pendingActionCount}
+            countVariant={
+              payload.outcomeSummary.scaleReadyCount > 0 ? "success" :
+              payload.outcomeSummary.refreshNeededCount > 0 ? "warning" : "info"
+            }
+            action={
+              <a href="/creative-lab/outcomes" className="text-xs text-slate-400 hover:text-slate-200">
+                All outcomes →
+              </a>
+            }
+          >
+            <OutcomesPanel
+              outcomeItems={outcomeItems}
+              outcomeSummary={payload.outcomeSummary}
+            />
+          </Section>
+        )}
 
         {/* Budget Pacing Risks + Alerts & Blockers */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
