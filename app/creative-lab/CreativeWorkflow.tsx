@@ -71,7 +71,13 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<GeneratedVariant | null>(null);
   const [launching, setLaunching]             = useState(false);
-  const [launchResult, setLaunchResult]       = useState<{ ok: boolean; error?: string } | null>(null);
+  const [launchResult, setLaunchResult]       = useState<{
+    ok: boolean;
+    error?: string;
+    result?: { metaAdId?: string | null; experimentId?: string | null; launchRecordId?: string | null };
+    summary?: { launchStatus?: string; metaAdId?: string | null };
+  } | null>(null);
+  const [rejectedIds, setRejectedIds]        = useState<Set<string>>(new Set());
 
   // ── Filtering ────────────────────────────────────────────────────────────
   const filtered = items.filter((item) => {
@@ -232,7 +238,15 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
     [handleGenerate],
   );
 
-  // ── Quick Launch ─────────────────────────────────────────────────────────
+  // ── Reject variant ──────────────────────────────────────────────────────
+  const handleReject = useCallback((variantId: string) => {
+    setRejectedIds((prev) => new Set(prev).add(variantId));
+    if (selectedVariant?.id === variantId) {
+      setSelectedVariant(null);
+    }
+  }, [selectedVariant]);
+
+  // ── Launch to Meta ─────────────────────────────────────────────────────
   const handleLaunch = useCallback(async () => {
     if (!selectedItem || !selectedVariant) return;
 
@@ -240,20 +254,33 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
     setLaunchResult(null);
 
     try {
-      const res = await fetch("/api/creative-lab/quick-launch", {
+      const res = await fetch("/api/creative-lab/review-launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          overviewItemId:      selectedItem.id,
-          controlCreativeId:   selectedItem.externalCreativeId,
-          challengerVariantId: selectedVariant.id,
-          challengerTitle:     selectedVariant.title,
-          challengerType:      selectedVariant.type,
-          clientAccountId:     selectedItem.clientAccountId,
-          campaignId:          selectedItem.externalCampaignId,
-          suggestedName:       `Test: ${selectedVariant.title} vs ${selectedItem.creativeName ?? "Control"}`,
-          primaryMetric:       selectedItem.roas != null ? "roas" : "cpa",
-          evaluationWindowDays: 7,
+          candidate: {
+            id:              selectedVariant.id,
+            variantType:     selectedVariant.type === "image_brief" ? "image" : "copy",
+            title:           selectedVariant.title,
+            content:         selectedVariant.content,
+            rationale:       selectedVariant.rationale ?? "",
+            sourceId:        selectedItem.externalCreativeId,
+            sourceType:      selectedItem.externalCampaignId === "uploaded" ? "uploaded_asset" : "synced_ad",
+            generationJobId: null,
+          },
+          clientAccountId:   selectedItem.clientAccountId,
+          clientName:        selectedItem.clientName,
+          campaignName:      selectedItem.campaignName,
+          creativeName:      selectedItem.creativeName,
+          controlExternalId: selectedItem.externalCreativeId,
+          target: {
+            campaignExternalId: selectedItem.externalCampaignId !== "uploaded" ? selectedItem.externalCampaignId : null,
+            campaignName:       selectedItem.campaignName,
+            adSetExternalId:    null,
+            adSetName:          null,
+            destinationUrl:     null,
+            ctaType:            selectedItem.callToAction ?? "SHOP_NOW",
+          },
         }),
       });
 
@@ -281,6 +308,7 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
     setSelectedVariant(null);
     setGenerationError(null);
     setLaunchResult(null);
+    setRejectedIds(new Set());
   }, []);
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -396,17 +424,37 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
             <SectionCard>
               <div className="flex flex-col items-center py-8">
                 <div className="mb-2 text-2xl">✓</div>
-                <p className="text-sm font-medium text-emerald-400">Test launched successfully</p>
+                <p className="text-sm font-medium text-emerald-400">Test launched to Meta</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Your experiment plan has been created. Monitor results in the Experiment Launch section.
+                  Your challenger ad has been created in Meta. Monitor results in the Experiment Launch section.
                 </p>
-                <div className="mt-4 flex gap-2">
+                {launchResult.result?.metaAdId && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Meta Ad ID: {launchResult.result.metaAdId}
+                  </p>
+                )}
+                {launchResult.result?.experimentId && (
+                  <p className="text-xs text-slate-500">
+                    Experiment: {launchResult.result.experimentId}
+                  </p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Link
                     href="/creative-lab/launch"
                     className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
                   >
                     View Experiments
                   </Link>
+                  {launchResult.result?.metaAdId && (
+                    <a
+                      href={`https://www.facebook.com/adsmanager/manage/ads?act=${selectedItem?.clientAccountId ?? ""}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs text-slate-300 hover:bg-slate-700"
+                    >
+                      Open in Meta
+                    </a>
+                  )}
                   <button
                     onClick={handleBack}
                     className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs text-slate-300 hover:bg-slate-700"
@@ -426,16 +474,18 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
           )}
 
           {/* Variant cards */}
-          {step === "review" && variants.length > 0 && (
+          {step === "review" && variants.length > 0 && (() => {
+            const activeVariants = variants.filter((v) => !rejectedIds.has(v.id));
+            return (
             <SectionCard
-              title={`Generated Variants (${variants.length})`}
-              description="Select a variant to launch as a challenger test"
+              title={`Generated Variants (${activeVariants.length})`}
+              description="Select a variant to approve and launch as a challenger test"
             >
+              {/* Side-by-side comparison grid */}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {variants.map((v) => (
-                  <button
+                {activeVariants.map((v) => (
+                  <div
                     key={v.id}
-                    onClick={() => setSelectedVariant(v)}
                     className={`rounded-lg border p-4 text-left transition-all ${
                       selectedVariant?.id === v.id
                         ? "border-indigo-500 bg-indigo-950/30 ring-1 ring-indigo-500/30"
@@ -458,36 +508,87 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
                       {v.content}
                     </p>
                     {v.rationale && (
-                      <p className="text-[10px] italic text-slate-500 line-clamp-2">
+                      <p className="mb-3 text-[10px] italic text-slate-500 line-clamp-2">
                         {v.rationale}
                       </p>
                     )}
-                  </button>
+                    {/* Action buttons per card */}
+                    <div className="flex gap-2 border-t border-slate-700/50 pt-3">
+                      <button
+                        onClick={() => setSelectedVariant(v)}
+                        className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                          selectedVariant?.id === v.id
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-700 text-slate-300 hover:bg-emerald-700 hover:text-white"
+                        }`}
+                      >
+                        {selectedVariant?.id === v.id ? "Approved" : "Approve"}
+                      </button>
+                      <button
+                        onClick={() => handleReject(v.id)}
+                        className="rounded-md bg-slate-700 px-2 py-1.5 text-[11px] text-slate-400 hover:bg-red-900/40 hover:text-red-400"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
 
-              {/* Launch bar */}
-              {selectedVariant && (
-                <div className="mt-4 flex items-center justify-between rounded-lg border border-indigo-800/50 bg-indigo-950/20 px-4 py-3">
-                  <div>
-                    <p className="text-xs font-medium text-white">
-                      Selected: {selectedVariant.title}
-                    </p>
-                    <p className="text-[10px] text-slate-500">
-                      {selectedVariant.type === "copy" ? "Copy test" : "Image variation test"} vs current ad
-                    </p>
-                  </div>
+              {/* Rejected count */}
+              {rejectedIds.size > 0 && (
+                <p className="mt-2 text-[10px] text-slate-500">
+                  {rejectedIds.size} variant{rejectedIds.size > 1 ? "s" : ""} rejected
+                </p>
+              )}
+
+              {/* No active variants left */}
+              {activeVariants.length === 0 && (
+                <div className="py-6 text-center">
+                  <p className="text-sm text-slate-400">All variants rejected.</p>
                   <button
-                    onClick={handleLaunch}
-                    disabled={launching}
-                    className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                    onClick={() => {
+                      setRejectedIds(new Set());
+                      setSelectedVariant(null);
+                    }}
+                    className="mt-2 text-xs text-indigo-400 underline hover:text-indigo-300"
                   >
-                    {launching ? "Launching..." : "Launch Test"}
+                    Reset rejections
                   </button>
                 </div>
               )}
+
+              {/* Launch bar — only shows when a variant is approved */}
+              {selectedVariant && !rejectedIds.has(selectedVariant.id) && (
+                <div className="mt-4 flex flex-col gap-3 rounded-lg border border-indigo-800/50 bg-indigo-950/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-white">
+                      Approved: {selectedVariant.title}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {selectedVariant.type === "copy" ? "Copy challenger" : "Image challenger"} vs {selectedItem?.creativeName ?? "current ad"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleLaunch}
+                      disabled={launching}
+                      className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {launching ? "Launching to Meta..." : "Launch Test"}
+                    </button>
+                    <button
+                      onClick={handleBack}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400 hover:bg-slate-700"
+                    >
+                      Return to Source
+                    </button>
+                  </div>
+                </div>
+              )}
             </SectionCard>
-          )}
+          );
+          })()}
 
           {/* Re-generate options */}
           {step === "review" && (
