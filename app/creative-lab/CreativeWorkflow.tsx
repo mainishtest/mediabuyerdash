@@ -109,50 +109,36 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
       setLaunchResult(null);
 
       try {
-        const engineMode =
-          mode === "copy_variations"
-            ? "copy_blocks"
-            : mode === "image_brief_variations"
-              ? "concepts"
-              : "concepts";
+        const intent =
+          mode === "copy_variations"         ? "copy_only" as const
+          : mode === "image_brief_variations" ? "image_only" as const
+          : "copy_and_image" as const;
 
-        const triggerType =
-          item.status === "fatigued"
-            ? "fatigue"
-            : item.status === "weak"
-              ? "underperformance"
-              : item.status === "strong"
-                ? "opportunity"
-                : "manual";
+        const sourceType = item.externalCampaignId === "uploaded" ? "uploaded_asset" : "synced_ad";
 
-        const res = await fetch("/api/creative-lab/creative-engine", {
+        const res = await fetch("/api/creative-lab/quick-generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clientAccountId: item.clientAccountId,
-            snapshot: {
-              externalCreativeId: item.externalCreativeId,
-              externalCampaignId: item.externalCampaignId,
+            source: {
+              type:               sourceType,
+              sourceId:           item.externalCreativeId,
               clientAccountId:    item.clientAccountId,
               clientName:         item.clientName,
-              campaignName:       item.campaignName,
-              creativeName:       item.creativeName,
-              spend:              item.spend,
-              impressions:        item.impressions,
-              clicks:             item.clicks,
-              avgCtr:             item.ctr,
-              avgFrequency:       item.frequency,
-              campaignRoas:       item.roas,
-              campaignCpa:        item.cpa,
-              adCopy:             item.adCopy,
-              callToAction:       item.callToAction,
-              thumbnailUrl:       item.thumbnailUrl,
+              sourceCopy:         item.adCopy,
+              sourceCallToAction: item.callToAction,
               imageUrl:           item.imageUrl,
+              thumbnailUrl:       item.thumbnailUrl,
+              spend:              item.spend,
+              ctr:                item.ctr,
+              roas:               item.roas,
+              cpa:                item.cpa,
+              frequency:          item.frequency,
               evaluationStatus:   item.status,
+              creativeName:       item.creativeName,
+              campaignName:       item.campaignName,
             },
-            mode:           engineMode,
-            triggerType,
-            generationMode: mode,
+            intent,
           }),
         });
 
@@ -164,62 +150,35 @@ export function CreativeWorkflow({ items, clients, selectedClientId, sourceAsset
           return;
         }
 
-        // Normalize response into GeneratedVariant[]
+        // Normalize UnifiedVariationSet response into GeneratedVariant[]
         const generated: GeneratedVariant[] = [];
+        const variationSet = data.set;
 
-        if (data.copyBlocks && Array.isArray(data.copyBlocks)) {
-          for (const block of data.copyBlocks) {
+        if (variationSet?.copyVariations) {
+          for (const v of variationSet.copyVariations) {
             generated.push({
-              id:        block.id ?? crypto.randomUUID(),
+              id:        v.id,
               type:      "copy",
-              title:     block.hook?.text ?? block.title ?? `Copy Variant`,
-              content:   [block.hook?.text, block.body, block.callToAction].filter(Boolean).join("\n\n"),
-              rationale: block.rationale ?? block.performanceRationale ?? "",
+              title:     v.hook || v.angle || "Copy Variant",
+              content:   [v.hook, v.body, v.callToAction].filter(Boolean).join("\n\n"),
+              rationale: v.rationale ?? "",
             });
           }
         }
 
-        if (data.concepts && Array.isArray(data.concepts)) {
-          for (const concept of data.concepts) {
-            if (concept.copyBlock) {
-              generated.push({
-                id:        concept.copyBlock.id ?? crypto.randomUUID(),
-                type:      "copy",
-                title:     concept.title ?? "Copy Variant",
-                content:   [
-                  concept.copyBlock.hook?.text,
-                  concept.copyBlock.body,
-                  concept.copyBlock.callToAction,
-                ].filter(Boolean).join("\n\n"),
-                rationale: concept.performanceRationale ?? "",
-              });
-            }
-            if (concept.imageBrief) {
-              generated.push({
-                id:        crypto.randomUUID(),
-                type:      "image_brief",
-                title:     `${concept.title ?? "Image"} — Image Brief`,
-                content:   [
-                  concept.imageBrief.conceptSummary,
-                  concept.imageBrief.visualChanges?.join(", "),
-                  concept.imageBrief.goal,
-                ].filter(Boolean).join("\n\n"),
-                rationale: concept.imageBrief.directResponseAngle ?? concept.performanceRationale ?? "",
-              });
-            }
-          }
-        }
-
-        if (data.variants && Array.isArray(data.variants)) {
-          for (const v of data.variants) {
+        if (variationSet?.imageVariations) {
+          for (const v of variationSet.imageVariations) {
             generated.push({
-              id:        v.id ?? crypto.randomUUID(),
-              type:      v.variantType === "image" ? "image_brief" : "copy",
-              title:     v.title ?? "Variant",
-              content:   v.variantType === "image"
-                ? [v.conceptSummary, v.visualChanges?.join(", "), v.goal].filter(Boolean).join("\n\n")
-                : [v.hook, v.body, v.callToAction].filter(Boolean).join("\n\n"),
-              rationale: v.performanceRationale ?? "",
+              id:        v.id,
+              type:      "image_brief",
+              title:     v.title || "Image Variation",
+              content:   [
+                v.conceptSummary,
+                v.visualChanges?.join(", "),
+                v.goal,
+                v.generatedImagePath ? `Generated: ${v.generatedImagePath}` : null,
+              ].filter(Boolean).join("\n\n"),
+              rationale: v.directResponseAngle ?? "",
             });
           }
         }
