@@ -115,6 +115,7 @@ const NAV: NavEntry[] = [
     children: [
       { kind: "leaf", href: "/clients",      label: "Clients"      },
       { kind: "leaf", href: "/integrations", label: "Integrations" },
+      { kind: "leaf", href: "/readiness",    label: "Readiness"    },
     ],
   },
 ];

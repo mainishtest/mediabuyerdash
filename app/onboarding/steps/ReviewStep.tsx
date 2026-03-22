@@ -142,7 +142,7 @@ export function ReviewStep({ workspace, integrations, checklist, onComplete, onB
           disabled={isPending}
           className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? "Finishing…" : "Go to Dashboard"}
+          {isPending ? "Finishing…" : "Check Readiness & Go Live"}
         </button>
       </div>
     </div>

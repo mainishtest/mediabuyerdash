@@ -164,7 +164,7 @@ export function OnboardingWizard({
     startTransition(async () => {
       try {
         await completeOnboardingAction();
-        router.push("/home");
+        router.push("/readiness");
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to complete onboarding.");
