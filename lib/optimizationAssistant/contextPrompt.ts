@@ -105,6 +105,25 @@ export function buildContextPrompt(ctx: OptimizationAssistantContext): string {
     lines.push("");
   }
 
+  // ── Outcome routing ──────────────────────────────────────────────────────
+  if (ctx.outcomeWinnersCount > 0 || ctx.outcomeLosersCount > 0 || ctx.outcomeScaleReadyCount > 0) {
+    lines.push(`## Outcome Routing`);
+    lines.push(`- Winners: ${ctx.outcomeWinnersCount}`);
+    lines.push(`- Losers: ${ctx.outcomeLosersCount}`);
+    lines.push(`- Scale-ready: ${ctx.outcomeScaleReadyCount}`);
+    lines.push(`- Refresh needed: ${ctx.outcomeRefreshNeededCount}`);
+    lines.push("");
+  }
+
+  // ── Recent actions ──────────────────────────────────────────────────────
+  if (ctx.recentActionsCount > 0) {
+    lines.push(`## Recent Actions (24h)`);
+    lines.push(`- Total: ${ctx.recentActionsCount}`);
+    if (ctx.recentActionsFailedCount > 0) lines.push(`- Failed: ${ctx.recentActionsFailedCount}`);
+    if (ctx.recentActionsBlockedCount > 0) lines.push(`- Blocked: ${ctx.recentActionsBlockedCount}`);
+    lines.push("");
+  }
+
   // ── Learning memory ────────────────────────────────────────────────────────
   if (ctx.learnings.length > 0) {
     lines.push(`## Learning Memory`);

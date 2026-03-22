@@ -112,8 +112,14 @@ export function summarizeAssistantEvidence(
   const all: OptimizationAssistantEvidence[] = [];
 
   switch (intent) {
+    case "summarize_today":
+      all.push(...kpiEvidence(ctx), ...alertEvidence(ctx), ...approvalEvidence(ctx));
+      break;
     case "summarize_account_state":
       all.push(...kpiEvidence(ctx), ...kpiDeltaEvidence(ctx));
+      break;
+    case "summarize_week":
+      all.push(...kpiEvidence(ctx), ...kpiDeltaEvidence(ctx), ...experimentEvidence(ctx), ...learningEvidence(ctx));
       break;
     case "explain_performance_drop":
       all.push(...kpiDeltaEvidence(ctx), ...alertEvidence(ctx), ...pacingEvidence(ctx));
@@ -130,11 +136,21 @@ export function summarizeAssistantEvidence(
     case "explain_loser":
       all.push(...alertEvidence(ctx), ...kpiDeltaEvidence(ctx), ...pacingEvidence(ctx));
       break;
+    case "find_scale_candidates":
+      all.push(...kpiEvidence(ctx), ...experimentEvidence(ctx), ...learningEvidence(ctx));
+      break;
+    case "find_accounts_at_risk":
+      all.push(...alertEvidence(ctx), ...pacingEvidence(ctx), ...kpiDeltaEvidence(ctx));
+      break;
     case "summarize_creative_fatigue":
       all.push(...creativeEvidence(ctx), ...learningEvidence(ctx));
       break;
     case "summarize_experiment_status":
+    case "summarize_recent_tests":
       all.push(...experimentEvidence(ctx), ...learningEvidence(ctx));
+      break;
+    case "summarize_blockers":
+      all.push(...alertEvidence(ctx), ...approvalEvidence(ctx), ...pacingEvidence(ctx));
       break;
     case "identify_pending_approvals":
       all.push(...approvalEvidence(ctx), ...alertEvidence(ctx));

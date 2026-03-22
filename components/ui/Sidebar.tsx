@@ -48,6 +48,11 @@ const NAV: NavEntry[] = [
   },
   {
     kind:  "leaf",
+    href:  "/command",
+    label: "AI Command Center",
+  },
+  {
+    kind:  "leaf",
     href:  "/assistant",
     label: "AI Assistant",
   },

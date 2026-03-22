@@ -18,13 +18,19 @@ import type { LearningMemoryEntry } from "../learningMemory/types";
 
 export type OptimizationAssistantIntent =
   | "summarize_account_state"
+  | "summarize_today"
+  | "summarize_week"
   | "explain_performance_drop"
   | "identify_goal_risk"
   | "recommend_next_actions"
   | "explain_winner"
   | "explain_loser"
+  | "find_scale_candidates"
+  | "find_accounts_at_risk"
   | "summarize_creative_fatigue"
   | "summarize_experiment_status"
+  | "summarize_recent_tests"
+  | "summarize_blockers"
   | "identify_pending_approvals"
   | "find_highest_priority_issue"
   | "unknown";
@@ -79,6 +85,15 @@ export interface OptimizationAssistantContext {
   // From executive reporting
   kpis: ExecutiveKpiCard[];
   narrative?: ExecutiveNarrativeSection;
+  // From daily outcomes
+  outcomeWinnersCount: number;
+  outcomeLosersCount: number;
+  outcomeScaleReadyCount: number;
+  outcomeRefreshNeededCount: number;
+  // From action history
+  recentActionsCount: number;
+  recentActionsFailedCount: number;
+  recentActionsBlockedCount: number;
   // From learning memory
   learnings: LearningMemoryEntry[];
   learningSummary: string;

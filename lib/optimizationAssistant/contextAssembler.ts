@@ -107,6 +107,15 @@ export async function buildOptimizationAssistantContext(params: {
     pacingItems:    cc?.pacingItems                 ?? [],
     kpis:           exec?.kpiCards                  ?? [],
     narrative:      exec?.narrative,
+    // Outcome data from command center
+    outcomeWinnersCount:       cc?.outcomeSummary.winnersCount ?? 0,
+    outcomeLosersCount:        cc?.outcomeSummary.losersCount ?? 0,
+    outcomeScaleReadyCount:    cc?.outcomeSummary.scaleReadyCount ?? 0,
+    outcomeRefreshNeededCount: cc?.outcomeSummary.refreshNeededCount ?? 0,
+    // Action history from command center
+    recentActionsCount:        cc?.recentActionsSummary.totalCount ?? 0,
+    recentActionsFailedCount:  cc?.recentActionsSummary.failedCount ?? 0,
+    recentActionsBlockedCount: cc?.recentActionsSummary.blockedCount ?? 0,
     learnings,
     learningSummary,
     dataWarnings,

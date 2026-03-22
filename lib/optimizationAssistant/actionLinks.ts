@@ -18,19 +18,19 @@ export function buildOptimizationAssistantEntityReferences(
 ): OptimizationAssistantEntityReference[] {
   const entities: OptimizationAssistantEntityReference[] = [];
 
-  if (intent === "identify_pending_approvals" || intent === "recommend_next_actions" || intent === "find_highest_priority_issue") {
+  if (intent === "identify_pending_approvals" || intent === "recommend_next_actions" || intent === "find_highest_priority_issue" || intent === "summarize_today" || intent === "summarize_blockers") {
     ctx.approvals.slice(0, 3).forEach((a) => {
       entities.push({ type: "approval", id: a.id, label: `${a.clientName}: ${a.actionType.replace(/_/g, " ")}`, href: "/automation" });
     });
   }
 
-  if (intent === "summarize_experiment_status" || intent === "explain_winner" || intent === "explain_loser") {
+  if (intent === "summarize_experiment_status" || intent === "summarize_recent_tests" || intent === "explain_winner" || intent === "explain_loser" || intent === "summarize_week") {
     ctx.experiments.slice(0, 3).forEach((e) => {
       entities.push({ type: "experiment", id: e.id, label: e.name, href: e.href });
     });
   }
 
-  if (intent === "explain_performance_drop" || intent === "identify_goal_risk") {
+  if (intent === "explain_performance_drop" || intent === "identify_goal_risk" || intent === "find_accounts_at_risk") {
     ctx.alerts.slice(0, 3).forEach((a) => {
       entities.push({ type: "alert", id: a.id, label: `${a.clientName}: ${a.alertType.replace(/_/g, " ")}`, href: a.href });
     });
@@ -77,10 +77,26 @@ export function buildOptimizationAssistantActionLinks(
   const clientParam = ctx.clientId ? `?clientId=${ctx.clientId}` : "";
 
   switch (intent) {
+    case "summarize_today":
+      links.push(
+        { label: "Morning Brief", href: "/briefs", icon: "◈", description: "Full daily morning brief" },
+        { label: "Command Center", href: `/command-center${clientParam}`, icon: "⌘", description: "All priorities in one view" },
+        { label: "Action History", href: "/history", icon: "◎", description: "Recent actions taken" },
+      );
+      break;
+
     case "summarize_account_state":
       links.push(
         { label: "Executive report", href: `/reports/executive${clientParam}`, icon: "◈", description: "Full period report with trends" },
         { label: "Reconciliation", href: "/reconciliation", icon: "◎", description: "CRM reconciliation data" },
+      );
+      break;
+
+    case "summarize_week":
+      links.push(
+        { label: "Weekly Rollup", href: "/weekly", icon: "◈", description: "Full weekly strategy rollup" },
+        { label: "Learning Memory", href: "/insights/memory", icon: "◇", description: "Patterns captured this week" },
+        { label: "Action History", href: "/history", icon: "◎", description: "Week's actions timeline" },
       );
       break;
 
@@ -113,6 +129,38 @@ export function buildOptimizationAssistantActionLinks(
         { label: "Executive report", href: `/reports/executive${clientParam}`, icon: "◈", description: "Period summary with experiments" },
         { label: "Experiments", href: "/experiments", icon: "⊡", description: "All experiment outcomes" },
         { label: "Learning memory", href: "/insights/memory", icon: "◇", description: "Captured patterns and winners" },
+      );
+      break;
+
+    case "find_scale_candidates":
+      links.push(
+        { label: "Optimization", href: `/optimization${clientParam}`, icon: "◈", description: "Campaign-level scale recommendations" },
+        { label: "Outcome Routing", href: "/creative-lab/outcomes", icon: "◇", description: "Winners ready to scale" },
+        { label: "Command Center", href: `/command-center${clientParam}`, icon: "⌘", description: "Scale-ready highlights" },
+      );
+      break;
+
+    case "find_accounts_at_risk":
+      links.push(
+        { label: "Open alerts", href: "/alerts", icon: "⚠", description: "Review all active alerts" },
+        { label: "Pacing dashboard", href: "/pacing", icon: "◐", description: "Check budget pacing risks" },
+        { label: "Daily Dashboard", href: "/home", icon: "◈", description: "Client status overview" },
+      );
+      break;
+
+    case "summarize_blockers":
+      links.push(
+        { label: "Action History", href: "/history", icon: "◎", description: "Failed and blocked actions" },
+        { label: "Approval queue", href: "/automation", icon: "✓", description: "Pending automation approvals" },
+        { label: "Open alerts", href: "/alerts", icon: "⚠", description: "Active alert events" },
+      );
+      break;
+
+    case "summarize_recent_tests":
+      links.push(
+        { label: "Test Results", href: "/creative-lab/results", icon: "⊡", description: "All test result details" },
+        { label: "Outcome Routing", href: "/creative-lab/outcomes", icon: "◇", description: "Winner/loser routing" },
+        { label: "Experiment Launch", href: "/creative-lab/launch", icon: "↗", description: "Launch new experiments" },
       );
       break;
 

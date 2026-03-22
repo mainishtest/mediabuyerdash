@@ -82,6 +82,18 @@ function buildTemplateResponse(
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
   switch (intent) {
+    case "summarize_today": {
+      const critPriorities = ctx.topPriorities.filter((p) => p.priority === "critical" || p.priority === "high");
+      const parts: string[] = [];
+      if (critPriorities.length > 0) parts.push(`Top priority: ${critPriorities[0].title} — ${critPriorities[0].subtitle}.`);
+      if (s.openAlerts > 0) parts.push(`${s.openAlerts} open alert${s.openAlerts !== 1 ? "s" : ""}.`);
+      if (s.pendingApprovals > 0) parts.push(`${s.pendingApprovals} approval${s.pendingApprovals !== 1 ? "s" : ""} pending.`);
+      if (ctx.outcomeScaleReadyCount > 0) parts.push(`${ctx.outcomeScaleReadyCount} winner${ctx.outcomeScaleReadyCount !== 1 ? "s" : ""} ready to scale.`);
+      if (ctx.recentActionsBlockedCount > 0) parts.push(`${ctx.recentActionsBlockedCount} blocked action${ctx.recentActionsBlockedCount !== 1 ? "s" : ""}.`);
+      if (parts.length === 0) parts.push(`All clear today. Spend: ${fmtCurrency(s.totalSpend)}, ROAS: ${s.overallRoas?.toFixed(2) ?? "N/A"}×.`);
+      return parts.join(" ");
+    }
+
     case "summarize_account_state": {
       const roasStr = s.overallRoas !== null ? ` Overall ROAS is ${s.overallRoas.toFixed(2)}× (CRM, 7-day).` : "";
       return `For ${ctx.dateFrom} to ${ctx.dateTo}, total spend was ${fmtCurrency(s.totalSpend)} with CRM revenue of ${fmtCurrency(s.totalRevenue)}.${roasStr} There are ${s.openAlerts} open alert${s.openAlerts !== 1 ? "s" : ""} and ${s.pendingApprovals} pending approval${s.pendingApprovals !== 1 ? "s" : ""}.${ctx.narrative ? " " + ctx.narrative.headline : ""}`;
@@ -153,6 +165,50 @@ function buildTemplateResponse(
       if (s.pendingApprovals === 0) return "No approvals are currently pending. The automation queue is clear.";
       const top = ctx.approvals[0];
       return `${s.pendingApprovals} approval${s.pendingApprovals !== 1 ? "s" : ""} pending. Top item: ${top?.clientName} — ${top?.actionType.replace(/_/g, " ")}: ${top?.rationale.slice(0, 100)} Open the automation page to review and approve.`;
+    }
+
+    case "summarize_week": {
+      const parts: string[] = [];
+      parts.push(`This period: ${fmtCurrency(s.totalSpend)} spent, ${fmtCurrency(s.totalRevenue)} CRM revenue, ROAS ${s.overallRoas?.toFixed(2) ?? "N/A"}×.`);
+      if (ctx.outcomeWinnersCount > 0) parts.push(`${ctx.outcomeWinnersCount} winner${ctx.outcomeWinnersCount !== 1 ? "s" : ""} identified.`);
+      if (ctx.outcomeLosersCount > 0) parts.push(`${ctx.outcomeLosersCount} loser${ctx.outcomeLosersCount !== 1 ? "s" : ""} needing refresh.`);
+      if (ctx.recentActionsCount > 0) parts.push(`${ctx.recentActionsCount} action${ctx.recentActionsCount !== 1 ? "s" : ""} taken.`);
+      parts.push(`Open the Weekly Rollup for the full strategy view.`);
+      return parts.join(" ");
+    }
+
+    case "find_scale_candidates": {
+      if (ctx.outcomeScaleReadyCount > 0) {
+        return `${ctx.outcomeScaleReadyCount} winner${ctx.outcomeScaleReadyCount !== 1 ? "s" : ""} ready to scale. Overall ROAS is ${s.overallRoas?.toFixed(2) ?? "N/A"}×. Review the Outcome Routing page to see scale-ready assets and action on them.`;
+      }
+      return `No scale-ready winners detected right now. ${s.activeExperiments} experiment${s.activeExperiments !== 1 ? "s" : ""} are running. Check the Command Center for current priorities.`;
+    }
+
+    case "find_accounts_at_risk": {
+      const riskyPacing = ctx.pacingItems.filter((p) => p.status !== "on_pacing");
+      const parts: string[] = [];
+      if (s.openAlerts > 0) parts.push(`${s.openAlerts} open alert${s.openAlerts !== 1 ? "s" : ""}.`);
+      if (riskyPacing.length > 0) parts.push(`${riskyPacing.length} client${riskyPacing.length !== 1 ? "s" : ""} off-pacing.`);
+      if (ctx.outcomeLosersCount > 0) parts.push(`${ctx.outcomeLosersCount} test loser${ctx.outcomeLosersCount !== 1 ? "s" : ""} needing attention.`);
+      if (parts.length === 0) return `No accounts appear at immediate risk. All pacing looks healthy with ${s.openAlerts} alerts. ROAS: ${s.overallRoas?.toFixed(2) ?? "N/A"}×.`;
+      return parts.join(" ") + " Review the alerts panel and pacing dashboard for details.";
+    }
+
+    case "summarize_recent_tests": {
+      const active = ctx.experiments.filter((e) => e.status === "active" || e.status === "evaluating").length;
+      const completed = ctx.experiments.filter((e) => e.status === "completed").length;
+      const winners = ctx.experiments.filter((e) => e.outcome === "winner_found").length;
+      return `${ctx.experiments.length} experiment${ctx.experiments.length !== 1 ? "s" : ""} tracked: ${active} active, ${completed} completed, ${winners} with a declared winner. ${ctx.outcomeWinnersCount > 0 ? `${ctx.outcomeWinnersCount} winner${ctx.outcomeWinnersCount !== 1 ? "s" : ""} in outcome routing.` : ""} Open Test Results for full details.`;
+    }
+
+    case "summarize_blockers": {
+      const parts: string[] = [];
+      if (ctx.recentActionsBlockedCount > 0) parts.push(`${ctx.recentActionsBlockedCount} blocked action${ctx.recentActionsBlockedCount !== 1 ? "s" : ""}.`);
+      if (ctx.recentActionsFailedCount > 0) parts.push(`${ctx.recentActionsFailedCount} failed action${ctx.recentActionsFailedCount !== 1 ? "s" : ""}.`);
+      if (s.pendingApprovals > 0) parts.push(`${s.pendingApprovals} approval${s.pendingApprovals !== 1 ? "s" : ""} pending.`);
+      if (s.openAlerts > 0) parts.push(`${s.openAlerts} unresolved alert${s.openAlerts !== 1 ? "s" : ""}.`);
+      if (parts.length === 0) return "No blockers detected. Action queue is clear and all systems are operating normally.";
+      return parts.join(" ") + " Review the Action History and approval queue to resolve these.";
     }
 
     case "find_highest_priority_issue":

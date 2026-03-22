@@ -8,10 +8,20 @@ import type { OptimizationAssistantIntent, OptimizationAssistantSuggestion } fro
 // ── Suggested follow-ups per intent ──────────────────────────────────────────
 
 const FOLLOW_UPS: Record<OptimizationAssistantIntent, OptimizationAssistantSuggestion[]> = {
+  summarize_today: [
+    { text: "What should I scale right now?", intent: "find_scale_candidates" },
+    { text: "Which accounts are at risk?", intent: "find_accounts_at_risk" },
+    { text: "What approvals are waiting?", intent: "identify_pending_approvals" },
+  ],
   summarize_account_state: [
     { text: "Which campaigns are at goal risk?", intent: "identify_goal_risk" },
     { text: "What approvals are waiting?", intent: "identify_pending_approvals" },
     { text: "What experiments are most promising right now?", intent: "summarize_experiment_status" },
+  ],
+  summarize_week: [
+    { text: "What should I scale right now?", intent: "find_scale_candidates" },
+    { text: "What tests should I launch next?", intent: "summarize_recent_tests" },
+    { text: "Which accounts need attention?", intent: "find_accounts_at_risk" },
   ],
   explain_performance_drop: [
     { text: "Which campaigns are closest to goal risk?", intent: "identify_goal_risk" },
@@ -58,6 +68,26 @@ const FOLLOW_UPS: Record<OptimizationAssistantIntent, OptimizationAssistantSugge
     { text: "What approvals are waiting?", intent: "identify_pending_approvals" },
     { text: "Which campaigns are at goal risk?", intent: "identify_goal_risk" },
   ],
+  find_scale_candidates: [
+    { text: "What won this week?", intent: "explain_winner" },
+    { text: "What tests should I launch?", intent: "summarize_recent_tests" },
+    { text: "What's the weekly rollup?", intent: "summarize_week" },
+  ],
+  find_accounts_at_risk: [
+    { text: "Why is ROAS dropping?", intent: "explain_performance_drop" },
+    { text: "What should I fix first?", intent: "recommend_next_actions" },
+    { text: "What's blocked?", intent: "summarize_blockers" },
+  ],
+  summarize_recent_tests: [
+    { text: "What won this week?", intent: "explain_winner" },
+    { text: "What should I scale?", intent: "find_scale_candidates" },
+    { text: "What tests should I launch next?", intent: "recommend_next_actions" },
+  ],
+  summarize_blockers: [
+    { text: "What approvals are waiting?", intent: "identify_pending_approvals" },
+    { text: "What should I fix first?", intent: "recommend_next_actions" },
+    { text: "Which accounts are at risk?", intent: "find_accounts_at_risk" },
+  ],
   unknown: [
     { text: "What should I work on first today?", intent: "recommend_next_actions" },
     { text: "What happened this week that matters most?", intent: "summarize_account_state" },
@@ -68,14 +98,16 @@ const FOLLOW_UPS: Record<OptimizationAssistantIntent, OptimizationAssistantSugge
 // ── Starter prompts (shown on empty state) ────────────────────────────────────
 
 export const STARTER_SUGGESTIONS: OptimizationAssistantSuggestion[] = [
-  { text: "What should I work on today?", intent: "recommend_next_actions" },
-  { text: "What's the highest priority issue right now?", intent: "find_highest_priority_issue" },
-  { text: "What happened this week that matters most?", intent: "summarize_account_state" },
+  { text: "What should I do today?", intent: "summarize_today" },
+  { text: "What should I scale right now?", intent: "find_scale_candidates" },
+  { text: "Which accounts are at risk?", intent: "find_accounts_at_risk" },
+  { text: "What happened this week?", intent: "summarize_week" },
   { text: "Why is ROAS dropping?", intent: "explain_performance_drop" },
-  { text: "Which campaigns are closest to goal risk?", intent: "identify_goal_risk" },
+  { text: "What tests should I launch next?", intent: "summarize_recent_tests" },
+  { text: "What's blocked right now?", intent: "summarize_blockers" },
   { text: "What approvals are waiting?", intent: "identify_pending_approvals" },
-  { text: "Which creative should I refresh next?", intent: "summarize_creative_fatigue" },
-  { text: "What experiments are most promising right now?", intent: "summarize_experiment_status" },
+  { text: "Which creative should I refresh?", intent: "summarize_creative_fatigue" },
+  { text: "What's the highest priority issue?", intent: "find_highest_priority_issue" },
 ];
 
 // ── Builder ───────────────────────────────────────────────────────────────────
