@@ -2,6 +2,7 @@
 // Typed models for the alerting and anomaly detection system.
 
 export type AlertType =
+  // Anomaly detection (existing)
   | "roas_drop"
   | "cpa_spike"
   | "spend_drop"
@@ -10,7 +11,16 @@ export type AlertType =
   | "no_data"
   | "campaign_below_goal"
   | "campaign_above_goal"
-  | "integration_failure";
+  | "integration_failure"
+  // Proactive triggers (new)
+  | "scale_ready"
+  | "winner_detected"
+  | "loser_detected"
+  | "creative_fatigue_detected"
+  | "follow_up_test_needed"
+  | "action_blocked"
+  | "trust_state_warning"
+  | "sync_health_issue";
 
 export type AlertSeverity = "low" | "medium" | "high";
 

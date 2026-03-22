@@ -216,6 +216,15 @@ export function formatAlertType(alertType: string): string {
     campaign_below_goal:  "Below Goal",
     campaign_above_goal:  "Above Goal",
     integration_failure:  "Integration Failure",
+    // Proactive triggers
+    scale_ready:               "Scale Ready",
+    winner_detected:           "Winner Detected",
+    loser_detected:            "Loser Detected",
+    creative_fatigue_detected: "Creative Fatigue",
+    follow_up_test_needed:     "Follow-Up Test",
+    action_blocked:            "Action Blocked",
+    trust_state_warning:       "Trust Warning",
+    sync_health_issue:         "Sync Issue",
   };
   return LABELS[alertType] ?? alertType.replace(/_/g, " ");
 }
