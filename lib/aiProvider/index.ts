@@ -1,35 +1,49 @@
 // AI Provider module
 //
-// Exports the contract interfaces and the mock provider implementations.
-// Future: add getCopyProvider(providerId) and getImageProvider(providerId)
-// that return the appropriate implementation based on config.
+// Exports the contract interfaces and provider implementations.
+// Automatically selects real (Anthropic) providers when API keys are configured,
+// falling back to mock providers otherwise.
 
 import type { AIGenerationProvider } from "../../types/aiProvider";
 import type { CopyGenerationProvider, ImageVariationProvider } from "./contract";
 import { mockCopyProvider, mockImageProvider } from "./mockProvider";
-import { getOpenAIConfig } from "../providerExecution/config";
+import { anthropicCopyProvider, anthropicImageProvider } from "./anthropicProvider";
+import { getAnthropicConfig, getOpenAIConfig } from "../providerExecution/config";
 
 export type { CopyGenerationProvider, ImageVariationProvider } from "./contract";
 export { mockCopyProvider, mockImageProvider } from "./mockProvider";
 
-export function getCopyProvider(_provider: AIGenerationProvider): CopyGenerationProvider {
+/**
+ * Returns the best available copy provider.
+ * Uses Anthropic when ANTHROPIC_API_KEY is set, otherwise falls back to mock.
+ */
+export function getCopyProvider(_provider?: AIGenerationProvider): CopyGenerationProvider {
+  const config = getAnthropicConfig();
+  if (config.ready) {
+    return anthropicCopyProvider;
+  }
   return mockCopyProvider;
 }
 
 /**
- * Returns the image variation provider.
- * Uses mock provider when OpenAI is not configured.
- * Note: The real DALL-E image generation is handled separately via
- * generateConceptImageAction() which calls lib/creativelab/imageGeneration.ts.
- * The provider here generates text concepts (not actual images).
+ * Returns the best available image concept provider.
+ * Uses Anthropic for concept generation when ANTHROPIC_API_KEY is set.
+ * Note: Actual pixel generation uses DALL-E 3 via lib/creativelab/imageGeneration.ts.
  */
-export function getImageProvider(_provider: AIGenerationProvider): ImageVariationProvider {
-  // Concept generation (text) still uses mock — actual image pixels
-  // are generated via the DALL-E integration in creativelab/imageGeneration.ts
+export function getImageProvider(_provider?: AIGenerationProvider): ImageVariationProvider {
+  const config = getAnthropicConfig();
+  if (config.ready) {
+    return anthropicImageProvider;
+  }
   return mockImageProvider;
 }
 
 /** Check if real image generation is available (OPENAI_API_KEY set). */
 export function isImageGenerationConfigured(): boolean {
   return getOpenAIConfig().ready;
+}
+
+/** Check if any real AI provider is configured. */
+export function isAnyProviderConfigured(): boolean {
+  return getAnthropicConfig().ready || getOpenAIConfig().ready;
 }
