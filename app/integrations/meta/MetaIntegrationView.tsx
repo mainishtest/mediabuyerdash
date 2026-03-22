@@ -10,11 +10,13 @@ import {
   disconnectMetaAction,
   refreshAccountsAction,
   saveSelectedAccountsAction,
+  triggerMetaSyncAction,
 } from "./actions";
 import {
   getAdAccountStatusLabel,
   getAdAccountStatusVariant,
 } from "../../../lib/meta/accounts";
+import type { MetaReconnectState, MetaPermissionStatus, MetaSyncSetupState } from "../../../lib/meta/types";
 
 // ── Prop types (plain serialisable objects from the server component) ─────────
 
@@ -45,6 +47,9 @@ interface Props {
   initialSelectedIds:  string[];
   errorParam?:         string;
   connectedParam?:     string;
+  reconnectState:      MetaReconnectState;
+  permissionStatus:    MetaPermissionStatus;
+  syncState:           MetaSyncSetupState;
 }
 
 // ── Error messages ────────────────────────────────────────────────────────────
@@ -66,6 +71,9 @@ export function MetaIntegrationView({
   initialSelectedIds,
   errorParam,
   connectedParam,
+  reconnectState,
+  permissionStatus,
+  syncState,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSelectedIds)
@@ -73,8 +81,10 @@ export function MetaIntegrationView({
   const [saveMessage,    setSaveMessage]    = useState<string | null>(null);
   const [refreshError,   setRefreshError]   = useState<string | null>(null);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [syncMessage,    setSyncMessage]    = useState<string | null>(null);
   const [isPending,      startTransition]   = useTransition();
   const [isRefreshing,   startRefresh]      = useTransition();
+  const [isSyncing,      startSync]         = useTransition();
 
   const isConnected     = connection !== null;
   const selectedCount   = selected.size;
@@ -101,6 +111,14 @@ export function MetaIntegrationView({
   const disconnectAction = connection
     ? disconnectMetaAction.bind(null, connection.id)
     : null;
+
+  function handleSync() {
+    setSyncMessage(null);
+    startSync(async () => {
+      const result = await triggerMetaSyncAction();
+      setSyncMessage(result.message);
+    });
+  }
 
   function handleRefresh() {
     if (!connection) return;
@@ -131,6 +149,34 @@ export function MetaIntegrationView({
           )
         }
       />
+
+      {/* Reconnect banner */}
+      {reconnectState.needsReconnect && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-300">Reconnection needed</p>
+              <p className="mt-0.5 text-xs text-amber-400/80">{reconnectState.message}</p>
+            </div>
+            <a
+              href="/api/auth/meta/start"
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-500"
+            >
+              Reconnect
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Permission warning */}
+      {isConnected && permissionStatus.state !== "valid" && permissionStatus.state !== "unknown" && (
+        <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 px-4 py-3">
+          <p className="text-sm font-medium text-rose-300">Permissions incomplete</p>
+          <p className="mt-0.5 text-xs text-rose-400/80">
+            Missing: {permissionStatus.missingScopes.join(", ")}. Disconnect and reconnect to grant all required permissions.
+          </p>
+        </div>
+      )}
 
       {/* Error banner */}
       {errorParam && (
@@ -457,6 +503,61 @@ export function MetaIntegrationView({
               </div>
             </>
           )}
+        </SectionCard>
+      )}
+
+      {/* Sync status & trigger — shown when connected with accounts selected */}
+      {isConnected && selectedCount > 0 && (
+        <SectionCard
+          title="Sync Status"
+          description="Sync campaign data from Meta to populate dashboards and reports."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              {syncMessage && (
+                <span className="text-xs text-slate-300">{syncMessage}</span>
+              )}
+              <ActionButton
+                variant="primary"
+                size="sm"
+                disabled={isSyncing}
+                onClick={handleSync}
+              >
+                {isSyncing ? "Syncing…" : syncState.status === "failed" ? "Retry Sync" : "Run Sync Now"}
+              </ActionButton>
+            </div>
+          }
+        >
+          <div className="space-y-3">
+            {/* Sync state summary */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Status", value: syncState.lastSyncStatus ?? "Not run" },
+                { label: "Accounts", value: String(syncState.accountsProcessed) },
+                { label: "Campaigns", value: String(syncState.campaignsSynced) },
+                { label: "Last sync", value: syncState.lastSyncAt ? new Date(syncState.lastSyncAt).toLocaleString() : "Never" },
+              ].map((s) => (
+                <div key={s.label} className="rounded-lg bg-slate-800/40 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{s.label}</p>
+                  <p className="mt-1 text-sm font-medium capitalize text-white">{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Sync error */}
+            {syncState.status === "failed" && syncState.errorMessage && (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+                {syncState.errorMessage}
+              </div>
+            )}
+
+            {/* Link to detailed sync page */}
+            <a
+              href="/integrations/meta/sync"
+              className="inline-block text-xs text-slate-400 transition-colors hover:text-white"
+            >
+              View detailed sync log →
+            </a>
+          </div>
         </SectionCard>
       )}
     </div>

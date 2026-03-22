@@ -29,6 +29,7 @@ import type {
   OnboardingBlocker,
   AccountDefaults,
 } from "../../lib/onboarding-types";
+import type { MetaSetupChecklistItem } from "../../lib/meta/types";
 import { VISIBLE_ONBOARDING_STEPS, type OnboardingStepId } from "../../lib/onboarding-types";
 
 type Props = {
@@ -38,6 +39,8 @@ type Props = {
   checklist: AccountSetupChecklist;
   blockers: OnboardingBlocker[];
   accountDefaults: AccountDefaults;
+  metaChecklist: MetaSetupChecklistItem[];
+  metaConfigured: boolean;
 };
 
 export function OnboardingWizard({
@@ -47,6 +50,8 @@ export function OnboardingWizard({
   checklist,
   blockers,
   accountDefaults,
+  metaChecklist,
+  metaConfigured,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -303,6 +308,8 @@ export function OnboardingWizard({
           {currentStep === "connect_meta_placeholder" && (
             <ConnectMetaStep
               integrations={integrations}
+              metaChecklist={metaChecklist}
+              metaConfigured={metaConfigured}
               onContinue={handleConnectMetaContinue}
               onBack={() => goTo("account_defaults")}
               isPending={isPending}

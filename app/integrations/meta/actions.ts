@@ -88,3 +88,19 @@ export async function saveSelectedAccountsAction(
   await saveSelectedAdAccounts(connectionId, selectedIds);
   revalidatePath(PAGE);
 }
+
+// ── Trigger sync after selection ──────────────────────────────────────────────
+
+export async function triggerMetaSyncAction(): Promise<{ success: boolean; message: string }> {
+  const { initializeMetaSyncSetup } = await import("../../../lib/meta/integrationState");
+  const { getServerSession } = await import("next-auth");
+  const { authOptions } = await import("../../../lib/auth");
+
+  const session = await getServerSession(authOptions);
+  const workspaceId = session?.user?.workspaceId ?? null;
+
+  const result = await initializeMetaSyncSetup(workspaceId);
+  revalidatePath(PAGE);
+  revalidatePath("/integrations/meta/sync");
+  return result;
+}

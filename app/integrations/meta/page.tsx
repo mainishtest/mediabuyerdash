@@ -2,8 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { getMetaConnection } from "../../../lib/meta/db";
 import { isMetaConfigured }  from "../../../lib/meta/config";
+import { getMetaReconnectState, validateMetaPermissions, getMetaSyncSetupState }
+  from "../../../lib/meta/integrationState";
 import { MetaIntegrationView, type MetaConnectionProps, type AccessibleAccountProps }
   from "./MetaIntegrationView";
+import type { MetaReconnectState, MetaPermissionStatus, MetaSyncSetupState }
+  from "../../../lib/meta/types";
 
 export const metadata = {
   title: "Meta Integration — Media Buying Dashboard",
@@ -45,6 +49,19 @@ export default async function MetaIntegrationPage({ searchParams }: PageProps) {
     .filter((a) => a.isSelected)
     .map((a) => a.id);
 
+  // Load reconnect state, permissions, and sync status
+  const [reconnectState, syncState] = await Promise.all([
+    getMetaReconnectState().catch(() => ({
+      needsReconnect: false, reason: null, message: null, previousUserDisplayName: null,
+    } as MetaReconnectState)),
+    getMetaSyncSetupState().catch(() => ({
+      status: "not_started", lastSyncAt: null, lastSyncStatus: null,
+      accountsProcessed: 0, campaignsSynced: 0, errorMessage: null,
+    } as MetaSyncSetupState)),
+  ]);
+
+  const permissionStatus = validateMetaPermissions(dbConn?.scopes ?? null);
+
   return (
     <MetaIntegrationView
       configured={configured}
@@ -53,6 +70,9 @@ export default async function MetaIntegrationPage({ searchParams }: PageProps) {
       initialSelectedIds={initialSelectedIds}
       errorParam={searchParams.error}
       connectedParam={searchParams.connected}
+      reconnectState={reconnectState}
+      permissionStatus={permissionStatus}
+      syncState={syncState}
     />
   );
 }
