@@ -14,6 +14,7 @@
 import { buildDailyExecutiveSummary }  from "../dailySummary/aggregator";
 import { buildDailyOutcomeSummary }    from "../dailyOutcomes/aggregator";
 import { buildActionHistoryTimeline }  from "../actionHistory/aggregator";
+import type { PortfolioHealthBoardItem } from "../portfolio/types";
 import { buildPortfolioPayload }       from "../portfolio/aggregator";
 import {
   computePortfolioPriorityScore,
@@ -112,7 +113,7 @@ export async function buildPortfolioIntelligenceSummary(opts: {
   }
 
   // Portfolio health board lookup
-  const healthByClient = new Map<string, (typeof portfolio)["healthBoard"][number]>();
+  const healthByClient = new Map<string, PortfolioHealthBoardItem>();
   if (portfolio) {
     for (const h of portfolio.healthBoard) healthByClient.set(h.clientId, h);
   }
