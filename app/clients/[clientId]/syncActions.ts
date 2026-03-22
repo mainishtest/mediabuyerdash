@@ -9,6 +9,7 @@ import { revalidatePath }   from "next/cache";
 import { authOptions }      from "../../../lib/auth";
 import { prisma }           from "../../../lib/db";
 import { runClientSync }    from "../../../lib/clientSync/orchestrator";
+import { runClientReconciliation } from "../../../lib/reconciliation/runForClient";
 import type { SyncType }    from "../../../lib/clientSync/types";
 import type { ClientSyncResult } from "../../../lib/clientSync/types";
 
@@ -44,8 +45,16 @@ export async function runClientSyncAction(
 
     const result = await runClientSync(clientId, syncType);
 
+    // Run reconciliation after sync so dashboard summaries update immediately
+    try {
+      await runClientReconciliation(clientId);
+    } catch (recoErr) {
+      console.error("[syncAction] reconciliation failed (sync data still saved):", recoErr);
+    }
+
     revalidatePath(`/clients/${clientId}`);
     revalidatePath(`/clients/${clientId}/sync`);
+    revalidatePath(`/home`);
 
     return { success: true, result };
   } catch (err) {
