@@ -338,7 +338,210 @@ async function main() {
     }
   });
 
-  console.log("Seed completed: client accounts, campaigns, ad sets, ads, creatives, UTM rows, CRM rows, reconciliation results.");
+  // ── Date helper ────────────────────────────────────────────────────────────
+  function dateStr(daysAgo) {
+    return new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
+  }
+
+  // ── Recent UTM + CRM performance rows (last 7 days, for executive report) ──
+  // The executive report queries UTMPerformanceRow + CRMPerformanceRow
+  // for the selected date range. Old seed data (2024-03-01) is too stale.
+
+  const utmRecentData = [
+    { client: "act_1", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 1, spend: 280.50, impressions: 24500, clicks: 490, conversions: 16, revenue: 1008 },
+    { client: "act_1", campaign: "camp_1", adSet: "adset_2", ad: "ad_2", daysAgo: 1, spend: 145.00, impressions: 11200, clicks: 198, conversions: 6, revenue: 479.25 },
+    { client: "act_1", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 2, spend: 262.00, impressions: 22100, clicks: 465, conversions: 14, revenue: 917.00 },
+    { client: "act_1", campaign: "camp_1", adSet: "adset_2", ad: "ad_2", daysAgo: 2, spend: 136.20, impressions: 10500, clicks: 178, conversions: 5, revenue: 437.90 },
+    { client: "act_1", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 3, spend: 270.00, impressions: 23000, clicks: 480, conversions: 15, revenue: 877.50 },
+    { client: "act_1", campaign: "camp_1", adSet: "adset_2", ad: "ad_2", daysAgo: 3, spend: 140.00, impressions: 10800, clicks: 185, conversions: 5, revenue: 434.50 },
+    { client: "act_2", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 1, spend: 185.00, impressions: 16200, clicks: 285, conversions: 8, revenue: 462.50 },
+    { client: "act_2", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 2, spend: 172.50, impressions: 14800, clicks: 262, conversions: 7, revenue: 414.00 },
+    { client: "act_2", campaign: "camp_1", adSet: "adset_1", ad: "ad_1", daysAgo: 3, spend: 190.00, impressions: 17100, clicks: 298, conversions: 9, revenue: 494.00 },
+  ];
+
+  for (const row of utmRecentData) {
+    const d = dateStr(row.daysAgo);
+    const utmId = `utr_recent_${row.client}_${row.ad}_${d}`;
+    await prisma.uTMPerformanceRow.upsert({
+      where: { id: utmId },
+      update: { spend: row.spend, impressions: row.impressions, clicks: row.clicks, conversions: row.conversions, revenue: row.revenue },
+      create: {
+        id: utmId,
+        clientAccountId: row.client,
+        date: d,
+        campaignId: row.campaign,
+        campaignName: row.campaign === "camp_1" ? "Prospecting Q1" : "Retargeting Q1",
+        adSetId: row.adSet,
+        adSetName: row.adSet === "adset_1" ? "US - Broad" : "US - Interest Targeting",
+        adId: row.ad,
+        adName: row.ad === "ad_1" ? "Video V1 - Broad" : "Static V1 - Interest",
+        utmCampaign: "prospecting-q1",
+        utmContent: row.ad === "ad_1" ? "video-v1-broad" : "static-v1-interest",
+        utmTerm: row.ad === "ad_1" ? "broad" : "fitness-interest",
+        utmSource: "facebook",
+        utmMedium: "cpc",
+        spend: row.spend,
+        impressions: row.impressions,
+        clicks: row.clicks,
+        conversions: row.conversions,
+        revenue: row.revenue,
+        cpa: row.conversions > 0 ? row.spend / row.conversions : null,
+        roas: row.spend > 0 ? row.revenue / row.spend : null,
+      },
+    });
+  }
+
+  // Recent CRM rows (matching the UTM rows above)
+  const crmRecentData = [
+    { client: "act_1", daysAgo: 1, utmContent: "video-v1-broad", orders: 13, revenue: 845.00, aov: 65.0 },
+    { client: "act_1", daysAgo: 1, utmContent: "static-v1-interest", orders: 5, revenue: 382.50, aov: 76.5 },
+    { client: "act_1", daysAgo: 2, utmContent: "video-v1-broad", orders: 11, revenue: 726.00, aov: 66.0 },
+    { client: "act_1", daysAgo: 2, utmContent: "static-v1-interest", orders: 4, revenue: 310.00, aov: 77.5 },
+    { client: "act_1", daysAgo: 3, utmContent: "video-v1-broad", orders: 12, revenue: 780.00, aov: 65.0 },
+    { client: "act_1", daysAgo: 3, utmContent: "static-v1-interest", orders: 4, revenue: 296.00, aov: 74.0 },
+    { client: "act_2", daysAgo: 1, utmContent: "video-v1-broad", orders: 6, revenue: 378.00, aov: 63.0 },
+    { client: "act_2", daysAgo: 2, utmContent: "video-v1-broad", orders: 5, revenue: 320.00, aov: 64.0 },
+    { client: "act_2", daysAgo: 3, utmContent: "video-v1-broad", orders: 7, revenue: 420.00, aov: 60.0 },
+  ];
+
+  for (const row of crmRecentData) {
+    const d = dateStr(row.daysAgo);
+    const crmId = `crm_recent_${row.client}_${row.utmContent}_${d}`;
+    await prisma.cRMPerformanceRow.upsert({
+      where: { id: crmId },
+      update: { orders: row.orders, revenue: row.revenue, averageOrderValue: row.aov },
+      create: {
+        id: crmId,
+        clientAccountId: row.client,
+        date: d,
+        sourcePlatform: "shopify",
+        utmCampaign: "prospecting-q1",
+        utmContent: row.utmContent,
+        utmTerm: row.utmContent === "video-v1-broad" ? "broad" : "fitness-interest",
+        utmSource: "facebook",
+        utmMedium: "cpc",
+        orders: row.orders,
+        revenue: row.revenue,
+        averageOrderValue: row.aov,
+      },
+    });
+  }
+
+  // ── Client Goal Defaults (used by daily executive summary) ──────────────
+  await prisma.clientGoalDefaults.upsert({
+    where: { clientAccountId: "act_1" },
+    update: {},
+    create: {
+      clientAccountId: "act_1",
+      defaultRoasGoalType: "high",
+      defaultRoasGoalValue: 3.5,
+      defaultCpaGoalType: "low",
+      defaultCpaGoalValue: 20.0,
+      targetRoas: 3.5,
+      targetCpa: 20.0,
+    },
+  });
+
+  await prisma.clientGoalDefaults.upsert({
+    where: { clientAccountId: "act_2" },
+    update: {},
+    create: {
+      clientAccountId: "act_2",
+      defaultRoasGoalType: "high",
+      defaultRoasGoalValue: 2.5,
+      defaultCpaGoalType: "low",
+      defaultCpaGoalValue: 30.0,
+      targetRoas: 2.5,
+      targetCpa: 30.0,
+    },
+  });
+
+  // ── Reconciliation Summaries (rolling recent data for daily executive summary) ──
+  // The daily summary queries ReconciliationSummary for yesterday and a 3-day trend.
+  // Generate data for the last 7 days so the dashboard always has something to show.
+
+  const recoSeedData = [
+    // act_1 — 7 days of performance data
+    { client: "act_1", daysAgo: 1, spend: 425.50, revenue: 1487.25, orders: 22 },
+    { client: "act_1", daysAgo: 2, spend: 398.20, revenue: 1354.90, orders: 19 },
+    { client: "act_1", daysAgo: 3, spend: 410.00, revenue: 1312.00, orders: 20 },
+    { client: "act_1", daysAgo: 4, spend: 380.75, revenue: 1219.40, orders: 18 },
+    { client: "act_1", daysAgo: 5, spend: 445.00, revenue: 1601.80, orders: 24 },
+    { client: "act_1", daysAgo: 6, spend: 390.30, revenue: 1288.00, orders: 17 },
+    { client: "act_1", daysAgo: 7, spend: 415.00, revenue: 1411.00, orders: 21 },
+    // act_2 — 7 days of performance data
+    { client: "act_2", daysAgo: 1, spend: 185.00, revenue: 462.50, orders: 8 },
+    { client: "act_2", daysAgo: 2, spend: 172.50, revenue: 414.00, orders: 7 },
+    { client: "act_2", daysAgo: 3, spend: 190.00, revenue: 494.00, orders: 9 },
+    { client: "act_2", daysAgo: 4, spend: 168.00, revenue: 369.60, orders: 6 },
+    { client: "act_2", daysAgo: 5, spend: 195.00, revenue: 507.00, orders: 10 },
+    { client: "act_2", daysAgo: 6, spend: 160.00, revenue: 352.00, orders: 5 },
+    { client: "act_2", daysAgo: 7, spend: 178.00, revenue: 445.00, orders: 8 },
+  ];
+
+  for (const row of recoSeedData) {
+    const d = dateStr(row.daysAgo);
+    const recoId = `reco_${row.client}_${d}`;
+    await prisma.reconciliationSummary.upsert({
+      where: { clientAccountId_dateFrom_dateTo: { clientAccountId: row.client, dateFrom: d, dateTo: d } },
+      update: {
+        totalMetaSpend:  row.spend,
+        totalCrmRevenue: row.revenue,
+        totalCrmOrders:  row.orders,
+        evaluatedRoas:   row.spend > 0 ? row.revenue / row.spend : null,
+        evaluatedCpa:    row.orders > 0 ? row.spend / row.orders : null,
+        matchedRows:     row.orders,
+        unmatchedRows:   0,
+      },
+      create: {
+        id:              recoId,
+        clientAccountId: row.client,
+        dateFrom:        d,
+        dateTo:          d,
+        totalMetaSpend:  row.spend,
+        totalCrmRevenue: row.revenue,
+        totalCrmOrders:  row.orders,
+        evaluatedRoas:   row.spend > 0 ? row.revenue / row.spend : null,
+        evaluatedCpa:    row.orders > 0 ? row.spend / row.orders : null,
+        matchedRows:     row.orders,
+        unmatchedRows:   0,
+      },
+    });
+  }
+
+  // ── Client Sync Runs (fresh sync = data is trusted) ───────────────────────
+  const recentSync = new Date(Date.now() - 6 * 3600000); // 6 hours ago
+  await prisma.clientSyncRun.upsert({
+    where: { id: "sync_act_1" },
+    update: { completedAt: recentSync },
+    create: {
+      id: "sync_act_1",
+      clientAccountId: "act_1",
+      status: "completed",
+      startedAt: new Date(recentSync.getTime() - 120000),
+      completedAt: recentSync,
+      campaignsSynced: 2,
+      adSetsSynced: 2,
+      adsSynced: 2,
+    },
+  });
+
+  await prisma.clientSyncRun.upsert({
+    where: { id: "sync_act_2" },
+    update: { completedAt: recentSync },
+    create: {
+      id: "sync_act_2",
+      clientAccountId: "act_2",
+      status: "completed",
+      startedAt: new Date(recentSync.getTime() - 90000),
+      completedAt: recentSync,
+      campaignsSynced: 1,
+      adSetsSynced: 1,
+      adsSynced: 1,
+    },
+  });
+
+  console.log("Seed completed: client accounts, campaigns, ad sets, ads, creatives, UTM rows, CRM rows, reconciliation results, reconciliation summaries (7 days), client goal defaults, sync runs.");
 }
 
 main()
