@@ -36,9 +36,9 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
 
   // Verify HMAC
-  const appSecret = process.env.SHOPIFY_APP_SECRET;
+  const appSecret = process.env.SHOPIFY_APP_SECRET ?? process.env.SHOPIFY_API_SECRET;
   if (!appSecret) {
-    console.error("[Shopify webhook] SHOPIFY_APP_SECRET not configured");
+    console.error("[Shopify webhook] SHOPIFY_APP_SECRET / SHOPIFY_API_SECRET not configured");
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
 

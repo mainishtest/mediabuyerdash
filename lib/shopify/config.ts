@@ -8,8 +8,8 @@ export interface ShopifyConfig {
 }
 
 export function getShopifyConfig(): ShopifyConfig | null {
-  const appKey    = process.env.SHOPIFY_APP_KEY;
-  const appSecret = process.env.SHOPIFY_APP_SECRET;
+  const appKey    = process.env.SHOPIFY_APP_KEY    ?? process.env.SHOPIFY_API_KEY;
+  const appSecret = process.env.SHOPIFY_APP_SECRET ?? process.env.SHOPIFY_API_SECRET;
   if (!appKey || !appSecret) return null;
 
   const redirectUri =
