@@ -101,8 +101,8 @@ function detectScaleReadyConditions(exec: ExecSummary): ProactiveTriggerConditio
       entityType:  "client",
       reason:      `${c.clientName} is scaling with ROAS ${c.roas?.toFixed(2) ?? "N/A"}× (goal: ${c.roasGoal?.toFixed(2) ?? "N/A"}×) and upward trend. Ready to increase budget.`,
       evidence: [
-        ev("ROAS", c.roas?.toFixed(2) + "×" ?? "N/A", "CRM reconciliation", "positive"),
-        ev("ROAS goal", c.roasGoal?.toFixed(2) + "×" ?? "N/A", "Client goals", "neutral"),
+        ev("ROAS", c.roas != null ? c.roas.toFixed(2) + "×" : "N/A", "CRM reconciliation", "positive"),
+        ev("ROAS goal", c.roasGoal != null ? c.roasGoal.toFixed(2) + "×" : "N/A", "Client goals", "neutral"),
         ev("Trend", c.trend, "3-day trend", c.trend === "up" ? "positive" : "neutral"),
         ev("Spend", `$${c.spend.toLocaleString()}`, "Meta", "neutral"),
       ],
@@ -135,7 +135,7 @@ function detectPerformanceDropConditions(exec: ExecSummary): ProactiveTriggerCon
           : `${c.clientName} is at risk with declining trend. ROAS: ${c.roas?.toFixed(2) ?? "N/A"}×.`,
         evidence: [
           ev("Status", c.status, "Performance status", "negative"),
-          ev("ROAS", c.roas?.toFixed(2) + "×" ?? "N/A", "CRM reconciliation", "negative"),
+          ev("ROAS", c.roas != null ? c.roas.toFixed(2) + "×" : "N/A", "CRM reconciliation", "negative"),
           ev("Trend", c.trend, "3-day trend", "negative"),
           ...(c.alertCount > 0 ? [ev("Alerts", String(c.alertCount), "Alert system", "negative")] : []),
         ],
