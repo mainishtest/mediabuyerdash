@@ -4,6 +4,15 @@ import { runShopifySync } from "../../../../lib/shopify/sync";
 
 export const maxDuration = 300;
 
+/**
+ * Cron-triggered Shopify sync endpoint.
+ *
+ * - Runs every 5 minutes (incremental mode)
+ * - Syncs all active Shopify connections in parallel
+ * - Skips connections with non-active status
+ *
+ * Auth: Bearer CRON_SECRET
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -11,19 +20,27 @@ export async function GET(request: Request) {
   }
 
   const connections = await getAllShopifyConnections();
-  if (connections.length === 0) {
-    return NextResponse.json({ message: "No Shopify connections found" });
+  const activeConnections = connections.filter(
+    (c: { connectionStatus: string }) => c.connectionStatus === "active"
+  );
+
+  if (activeConnections.length === 0) {
+    return NextResponse.json({ message: "No active Shopify connections", total: connections.length });
   }
 
   const results = await Promise.allSettled(
-    connections.map((c: { id: string }) => runShopifySync(c.id))
+    activeConnections.map((c: { id: string }) => runShopifySync(c.id, "incremental"))
   );
 
   const summaries = results.map((r, i) =>
     r.status === "fulfilled"
-      ? { connectionId: connections[i].id, ...r.value }
-      : { connectionId: connections[i].id, status: "failed", error: String((r as PromiseRejectedResult).reason) }
+      ? { connectionId: activeConnections[i].id, ...r.value }
+      : { connectionId: activeConnections[i].id, status: "failed", error: String((r as PromiseRejectedResult).reason) }
   );
 
-  return NextResponse.json({ synced: connections.length, results: summaries });
+  return NextResponse.json({
+    synced: activeConnections.length,
+    skipped: connections.length - activeConnections.length,
+    results: summaries,
+  });
 }

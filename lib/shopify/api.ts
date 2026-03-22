@@ -1,5 +1,26 @@
 import { SHOPIFY_API_VERSION } from "./config";
 
+// ── Rate limit / retry helpers ───────────────────────────────────────────────
+
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Detects Shopify token errors (401 or explicit auth error messages).
+ */
+export function isShopifyTokenError(status: number, body: unknown): boolean {
+  if (status === 401 || status === 403) return true;
+  if (body && typeof body === "object") {
+    const errors = (body as { errors?: string }).errors;
+    if (typeof errors === "string" && errors.includes("access token")) return true;
+  }
+  return false;
+}
+
 // ── Raw API types ──────────────────────────────────────────────────────────────
 
 export interface RawShopifyMoneyBag {
@@ -96,29 +117,62 @@ async function shopifyGraphQL<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const res = await fetch(
-    `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-    {
+  const url = `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const body = JSON.stringify({ query, variables });
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type":           "application/json",
         "X-Shopify-Access-Token": accessToken,
       },
-      body: JSON.stringify({ query, variables }),
+      body,
       cache: "no-store",
+    });
+
+    // Rate-limited (Shopify uses 429 for REST, throttled cost for GraphQL)
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = parseFloat(res.headers.get("Retry-After") ?? "0");
+      const backoff = Math.max(retryAfter * 1000, INITIAL_BACKOFF_MS * Math.pow(2, attempt));
+      console.warn(`[Shopify API] 429 throttled, retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await sleep(backoff);
+      continue;
     }
-  );
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(`Shopify GraphQL HTTP ${res.status}: ${JSON.stringify(body)}`);
+    // Server errors — retry with backoff
+    if (res.status >= 500 && attempt < MAX_RETRIES) {
+      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`[Shopify API] ${res.status} server error, retrying in ${backoff}ms`);
+      await sleep(backoff);
+      continue;
+    }
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const err = new Error(`Shopify GraphQL HTTP ${res.status}: ${JSON.stringify(errBody)}`);
+      if (isShopifyTokenError(res.status, errBody)) {
+        (err as Error & { isTokenError: boolean }).isTokenError = true;
+      }
+      throw err;
+    }
+
+    const json = await res.json();
+
+    // GraphQL-level throttling (Shopify returns cost info in extensions)
+    if (json.extensions?.cost?.throttleStatus?.currentlyAvailable < 50 && attempt < MAX_RETRIES) {
+      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`[Shopify API] Low query cost budget, backing off ${backoff}ms`);
+      await sleep(backoff);
+    }
+
+    if (json.errors) {
+      throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+    }
+    return json.data as T;
   }
 
-  const json = await res.json();
-  if (json.errors) {
-    throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
-  }
-  return json.data as T;
+  throw new Error("Shopify GraphQL: max retries exceeded");
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────

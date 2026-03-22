@@ -1,15 +1,19 @@
+import { prisma } from "../db";
 import { getShopifyConnectionById, getClientShopifyConnection } from "./db";
 import { streamOrdersSince }        from "./api";
 import { mapOrder, mapLineItemsForOrder } from "./mappers";
 import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems } from "./syncDb";
 
+export type ShopifySyncMode = "incremental" | "backfill";
+
 export interface ShopifySyncSummary {
-  status:          "completed" | "partial" | "failed";
+  status:          "completed" | "partial" | "failed" | "token_invalid";
   ordersSynced:    number;
   lineItemsSynced: number;
   errors:          string[];
   startedAt:       string;
   completedAt:     string;
+  mode:            ShopifySyncMode;
 }
 
 /**
@@ -20,22 +24,25 @@ export interface ShopifySyncSummary {
  * - Writes a ShopifySyncLog audit entry.
  * - Returns a summary for the UI.
  */
-export async function runShopifySync(connectionId: string): Promise<ShopifySyncSummary> {
+export async function runShopifySync(
+  connectionId: string,
+  mode: ShopifySyncMode = "incremental"
+): Promise<ShopifySyncSummary> {
   const startedAt = new Date();
 
   const connection = await getShopifyConnectionById(connectionId);
   if (!connection) {
-    return {
-      status:          "failed",
-      ordersSynced:    0,
-      lineItemsSynced: 0,
-      errors:          ["Connection not found"],
-      startedAt:       startedAt.toISOString(),
-      completedAt:     new Date().toISOString(),
-    };
+    return emptySummary("failed", ["Connection not found"], startedAt, mode);
   }
 
-  return _runSync(connection, startedAt);
+  // Validate connection status before syncing
+  if (connection.connectionStatus !== "active") {
+    return emptySummary("token_invalid", [
+      `Connection is ${connection.connectionStatus}. Reconnect Shopify to resume syncing.`,
+    ], startedAt, mode);
+  }
+
+  return _runSync(connection, startedAt, mode);
 }
 
 /**
@@ -43,26 +50,48 @@ export async function runShopifySync(connectionId: string): Promise<ShopifySyncS
  * Resolves the connection automatically from the clientAccountId.
  */
 export async function runShopifySyncForClient(
-  clientAccountId: string
+  clientAccountId: string,
+  mode: ShopifySyncMode = "incremental"
 ): Promise<ShopifySyncSummary> {
   const startedAt = new Date();
 
   const connection = await getClientShopifyConnection(clientAccountId);
   if (!connection) {
-    return {
-      status:          "failed",
-      ordersSynced:    0,
-      lineItemsSynced: 0,
-      errors:          ["No Shopify store mapped to this client"],
-      startedAt:       startedAt.toISOString(),
-      completedAt:     new Date().toISOString(),
-    };
+    return emptySummary("failed", ["No Shopify store mapped to this client"], startedAt, mode);
   }
 
-  return _runSync(connection, startedAt);
+  if (connection.connectionStatus !== "active") {
+    return emptySummary("token_invalid", [
+      `Connection is ${connection.connectionStatus}. Reconnect Shopify to resume syncing.`,
+    ], startedAt, mode);
+  }
+
+  return _runSync(connection, startedAt, mode);
+}
+
+function emptySummary(
+  status: ShopifySyncSummary["status"],
+  errors: string[],
+  startedAt: Date,
+  mode: ShopifySyncMode
+): ShopifySyncSummary {
+  return {
+    status,
+    ordersSynced: 0,
+    lineItemsSynced: 0,
+    errors,
+    startedAt: startedAt.toISOString(),
+    completedAt: new Date().toISOString(),
+    mode,
+  };
 }
 
 // ── Internal sync engine ───────────────────────────────────────────────────────
+
+// Backfill window: 90 days for initial data load
+const BACKFILL_DAYS = 90;
+// Incremental fallback: 30 days when no orders exist
+const INCREMENTAL_FALLBACK_DAYS = 30;
 
 async function _runSync(
   connection: {
@@ -70,20 +99,29 @@ async function _runSync(
     shopDomain:       string;
     accessToken:      string;
     clientAccountId:  string | null;
+    connectionStatus: string;
     workspaceId?:     string | null;
   },
-  startedAt: Date
+  startedAt: Date,
+  mode: ShopifySyncMode = "incremental"
 ): Promise<ShopifySyncSummary> {
   const syncLog = await createSyncLog(connection.id);
   const counts  = { ordersSynced: 0, lineItemsSynced: 0 };
   const errors: string[] = [];
+  let hasTokenError = false;
 
-  // Incremental window: start from 1 day before the latest order so we
-  // catch any late-arriving updates, falling back to 30 days on first sync.
-  const latestOrderDate = await getLatestOrderDate(connection.id);
-  const since = latestOrderDate
-    ? new Date(latestOrderDate.getTime() - 24 * 60 * 60 * 1000)
-    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  // Determine sync window based on mode
+  let since: Date;
+  if (mode === "backfill") {
+    since = new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000);
+    console.log(`[Shopify sync] Backfill mode: fetching last ${BACKFILL_DAYS} days`);
+  } else {
+    // Incremental: start from 1 day before the latest order
+    const latestOrderDate = await getLatestOrderDate(connection.id);
+    since = latestOrderDate
+      ? new Date(latestOrderDate.getTime() - 24 * 60 * 60 * 1000)
+      : new Date(Date.now() - INCREMENTAL_FALLBACK_DAYS * 24 * 60 * 60 * 1000);
+  }
 
   try {
     await streamOrdersSince(
@@ -115,22 +153,44 @@ async function _runSync(
       }
     );
   } catch (err) {
-    errors.push(
-      `Order fetch failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Order fetch failed: ${msg}`);
+
+    // Detect token/auth errors and mark connection
+    if (err instanceof Error && (err as Error & { isTokenError?: boolean }).isTokenError) {
+      hasTokenError = true;
+      await markConnectionInvalid(connection.id);
+    }
   }
 
   await completeSyncLog(syncLog.id, counts, errors);
 
+  let status: ShopifySyncSummary["status"];
+  if (hasTokenError) status = "token_invalid";
+  else if (errors.length === 0) status = "completed";
+  else if (counts.ordersSynced > 0) status = "partial";
+  else status = "failed";
+
   return {
-    status:
-      errors.length === 0         ? "completed"
-      : counts.ordersSynced > 0   ? "partial"
-      : "failed",
+    status,
     ordersSynced:    counts.ordersSynced,
     lineItemsSynced: counts.lineItemsSynced,
     errors,
     startedAt:       startedAt.toISOString(),
     completedAt:     new Date().toISOString(),
+    mode,
   };
+}
+
+/** Mark connection as error state so UI surfaces reconnection prompt. */
+async function markConnectionInvalid(connectionId: string): Promise<void> {
+  try {
+    await prisma.shopifyConnection.update({
+      where: { id: connectionId },
+      data:  { connectionStatus: "error" },
+    });
+    console.warn("[Shopify sync] Token invalid, connection marked for reconnection");
+  } catch (err) {
+    console.error("[Shopify sync] Failed to mark connection as error", err);
+  }
 }
