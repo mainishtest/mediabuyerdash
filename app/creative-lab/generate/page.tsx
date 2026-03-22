@@ -1,33 +1,90 @@
 // app/creative-lab/generate/page.tsx
 // Creative Lab — AI generation pipeline.
 //
-// This route hosts the original AI copy and image variation generator,
-// moved here to make /creative-lab the workflow queue landing page.
-// Access via "AI Generator →" in the Creative Lab header, or directly
-// from an item detail panel via "Open in Generator".
+// Loads real synced ad data from Meta to populate the creative generator.
+// Falls back to mock data only if no real ads are available yet.
 
 export const dynamic = "force-dynamic";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../../lib/auth";
+import {
+  loadCreativePerformanceData,
+  buildCreativePerformanceSnapshots,
+} from "../../../lib/creativelab/performance";
 import { mockCreativeDiagnosisInputs } from "../../../lib/data/mockCreativeDiagnosisInputs";
 import {
   diagnoseCreative,
   generateCopyRecommendation,
   generateImageRecommendation,
 } from "../../../lib/creativeDiagnosisUtils";
-import type { CreativeLabEntry }             from "../../../types/creativeDiagnosis";
+import type { CreativeDiagnosisInput, CreativeLabEntry } from "../../../types/creativeDiagnosis";
 import type { JobWithVariations, ApprovalMap } from "../../../types/aiProvider";
-import { prisma }                             from "../../../lib/db";
-import { getProviderConfigStatusAction }      from "../actions";
-import { CreativeLabView }                    from "../CreativeLabView";
+import type { CreativePerformanceSnapshot } from "../../../lib/creativelab/types";
+import { prisma } from "../../../lib/db";
+import { getProviderConfigStatusAction } from "../actions";
+import { CreativeLabView } from "../CreativeLabView";
 
 export const metadata = {
   title: "Creative Generator — Creative Lab",
 };
 
+/** Convert a real CreativePerformanceSnapshot into the CreativeDiagnosisInput the generator expects. */
+function snapshotToDiagnosisInput(s: CreativePerformanceSnapshot): CreativeDiagnosisInput {
+  return {
+    adId:          s.externalCreativeId,
+    adName:        s.creativeName ?? `Creative ${s.externalCreativeId.slice(-6)}`,
+    campaignId:    s.externalCampaignId,
+    campaignName:  s.campaignName,
+    actualCpa:     s.campaignCpa ?? 0,
+    actualRoas:    s.campaignRoas ?? 0,
+    spend:         s.spend,
+    conversions:   s.campaignCpa && s.campaignCpa > 0 ? Math.round(s.spend / s.campaignCpa) : 0,
+    cpaGoalValue:  s.campaignCpa ? s.campaignCpa * 0.8 : 25, // 20% improvement target
+    cpaGoalType:   "low",
+    roasGoalValue: s.campaignRoas ? Math.max(s.campaignRoas * 1.2, 2.0) : 3.0,
+    roasGoalType:  "high",
+    copy: {
+      hook:         s.adCopy?.split(/[.!?\n]/)?.[0]?.trim() ?? "",
+      body:         s.adCopy ?? "",
+      callToAction: s.callToAction ?? "Shop Now",
+    },
+    image: {
+      imageHeadline:   s.creativeName ?? "",
+      imageStyle:      s.imageUrl ? "product" : "unknown",
+      dominantMessage: s.creativeName ?? "Product creative",
+      visualTheme:     "synced",
+    },
+  };
+}
+
 export default async function CreativeLabGeneratePage() {
-  const entries: CreativeLabEntry[] = mockCreativeDiagnosisInputs.map((input) => {
-    const diagnosis           = diagnoseCreative(input);
-    const copyRecommendation  =
+  const session = await getServerSession(authOptions);
+  const workspaceId = session?.user?.workspaceId ?? null;
+
+  // Try to load real synced ad data
+  let inputs: CreativeDiagnosisInput[] = [];
+  try {
+    const perfData = await loadCreativePerformanceData(workspaceId);
+    const snapshots = buildCreativePerformanceSnapshots(perfData);
+    if (snapshots.length > 0) {
+      inputs = snapshots
+        .filter((s) => s.spend > 0) // Only include ads with actual spend
+        .slice(0, 20) // Cap at 20 to keep page manageable
+        .map(snapshotToDiagnosisInput);
+    }
+  } catch {
+    // Fall through to mock data
+  }
+
+  // Fall back to mock data if no real ads are synced yet
+  if (inputs.length === 0) {
+    inputs = mockCreativeDiagnosisInputs;
+  }
+
+  const entries: CreativeLabEntry[] = inputs.map((input) => {
+    const diagnosis = diagnoseCreative(input);
+    const copyRecommendation =
       diagnosis.causeType === "copy" || diagnosis.causeType === "mixed"
         ? generateCopyRecommendation(input)
         : null;
