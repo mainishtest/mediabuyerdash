@@ -18,6 +18,7 @@
 
 import { prisma } from "../db";
 import { attemptMetaLaunch } from "../publishExecution/metaLaunch";
+import { createTestResultFromLaunch } from "../launchedAssetResults/bridge";
 import { loadPublishPrepItemById } from "../publishPrep/db";
 import { canProceedToLaunch, evaluatePublishGuardrails } from "../publishPrep/guardrails";
 import { resolveMetaCredentials } from "./credentialResolver";
@@ -215,6 +216,34 @@ export async function executeMetaLaunch(
       if (experimentId) {
         await updateLaunchStatus(launchRecord.id, "launched", { experimentId });
       }
+    }
+
+    // 10. Auto-create CreativeTestResultRecord for result tracking
+    try {
+      await createTestResultFromLaunch({
+        launchRecordId:          launchRecord.id,
+        clientAccountId,
+        experimentId,
+        launchPlanId:            request.launchPlanId ?? null,
+        prepItemId,
+        briefId:                 request.briefId ?? null,
+        controlCreativeId:       request.controlCreativeId ?? null,
+        controlCreativeName:     request.controlLabel ?? null,
+        controlAdExternalId:     request.controlAdExternalId ?? null,
+        challengerVariantTitle:  prepItem.variantTitle,
+        challengerAdExternalId:  launchResult.metaAdId ?? null,
+        externalAdAccountId:     credentials.externalAdAccountId,
+        targetCampaignExternalId: target.targetCampaignExternalId,
+        targetCampaignName:      target.targetCampaignName,
+        targetAdSetExternalId:   target.targetAdSetExternalId,
+        targetAdSetName:         target.targetAdSetName,
+        clientName:              null,
+        campaignName:            target.targetCampaignName,
+        adSetName:               target.targetAdSetName,
+      });
+    } catch (err) {
+      // Non-blocking — test result creation failure should not fail the launch
+      console.warn("[MetaLaunch] Failed to create test result record:", err);
     }
 
     return {
