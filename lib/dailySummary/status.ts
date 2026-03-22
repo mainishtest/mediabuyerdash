@@ -40,6 +40,7 @@ export type StatusInput = {
   trend:         ClientTrendDirection;
   alertCount:    number;
   hasStaleSync:  boolean;
+  hasData:       boolean;
 };
 
 /**
@@ -51,12 +52,15 @@ export type StatusInput = {
  * - critical: ROAS < 70% of goal OR alertCount ≥ 2
  */
 export function computeClientPerformanceStatus(input: StatusInput): ClientPerformanceStatus {
-  const { roas, roasGoal, alertCount } = input;
+  const { roas, roasGoal, alertCount, hasData } = input;
+
+  // No data at all — insufficient
+  if (!hasData) return "insufficient_data";
 
   // Critical: high alert volume always overrides
   if (alertCount >= 2) return "critical";
 
-  // No data or no goal — conservative stable
+  // No ROAS or no goal — conservative stable
   if (roas === null || roasGoal === null || roasGoal <= 0) return "stable";
 
   const ratio = roas / roasGoal;
@@ -81,10 +85,11 @@ export function computeClientPerformanceStatus(input: StatusInput): ClientPerfor
 
 export function computeRiskLevel(status: ClientPerformanceStatus): ClientRiskLevel {
   switch (status) {
-    case "critical": return "critical";
-    case "at_risk":  return "high";
-    case "stable":   return "low";
-    case "scaling":  return "none";
+    case "critical":          return "critical";
+    case "at_risk":           return "high";
+    case "stable":            return "low";
+    case "scaling":           return "none";
+    case "insufficient_data": return "none";
   }
 }
 
@@ -95,6 +100,7 @@ export function computeScaleReadiness(
   trend: ClientTrendDirection,
   hasStaleSync: boolean,
 ): ClientScaleReadiness {
+  if (status === "insufficient_data") return "not_ready";
   if (status === "scaling" && !hasStaleSync) return "ready";
   if (status === "stable" && trend === "up" && !hasStaleSync) return "possible";
   return "not_ready";
@@ -130,6 +136,11 @@ export function buildClientActionRecommendations(
         { action: "fix_now", label: "Fix Now", href: decisionHref, variant: "danger" },
         { action: "investigate", label: "Pause / Review", href: decisionHref, variant: "secondary" },
       ];
+    case "insufficient_data":
+      return [
+        { action: "investigate", label: "Review Health", href: "/health", variant: "secondary" },
+        { action: "monitor", label: "View Account", href: decisionHref, variant: "ghost" },
+      ];
   }
 }
 
@@ -137,20 +148,22 @@ export function buildClientActionRecommendations(
 
 export function statusLabel(status: ClientPerformanceStatus): string {
   const MAP: Record<ClientPerformanceStatus, string> = {
-    scaling:  "Scaling",
-    stable:   "Stable",
-    at_risk:  "At Risk",
-    critical: "Critical",
+    scaling:           "Scaling",
+    stable:            "Stable",
+    at_risk:           "At Risk",
+    critical:          "Critical",
+    insufficient_data: "No Data",
   };
   return MAP[status];
 }
 
-export function statusBadgeVariant(status: ClientPerformanceStatus): "success" | "warning" | "danger" | "neutral" {
+export function statusBadgeVariant(status: ClientPerformanceStatus): "success" | "warning" | "danger" | "neutral" | "info" {
   switch (status) {
-    case "scaling":  return "success";
-    case "stable":   return "neutral";
-    case "at_risk":  return "warning";
-    case "critical": return "danger";
+    case "scaling":           return "success";
+    case "stable":            return "neutral";
+    case "at_risk":           return "warning";
+    case "critical":          return "danger";
+    case "insufficient_data": return "info";
   }
 }
 

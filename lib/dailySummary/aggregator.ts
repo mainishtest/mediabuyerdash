@@ -16,6 +16,7 @@ import type {
   DailyExecutiveSummary,
   PortfolioDailySummary,
   ClientDailySummary,
+  DataTrustLevel,
 } from "../../types/dailySummary";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -55,9 +56,9 @@ export async function buildDailyExecutiveSummary(params: {
     syncRuns,
   ] = await Promise.all([
 
-    // 1. Active clients
+    // 1. Active clients (scoped to workspace)
     prisma.clientAccount.findMany({
-      where:   { status: "active" },
+      where:   { status: "active", ...(workspaceId ? { workspaceId } : {}) },
       select:  { id: true, name: true, currency: true },
       orderBy: { name: "asc" },
     }),
@@ -225,6 +226,7 @@ export async function buildDailyExecutiveSummary(params: {
       trend,
       alertCount: alerts,
       hasStaleSync: clientHasStaleSync,
+      hasData,
     });
 
     const riskLevel = computeRiskLevel(status);
@@ -258,8 +260,8 @@ export async function buildDailyExecutiveSummary(params: {
     };
   });
 
-  // Sort: critical first, then at_risk, then scaling, then stable
-  const STATUS_ORDER: Record<string, number> = { critical: 0, at_risk: 1, scaling: 2, stable: 3 };
+  // Sort: critical first, then at_risk, then scaling, then stable, then insufficient
+  const STATUS_ORDER: Record<string, number> = { critical: 0, at_risk: 1, scaling: 2, stable: 3, insufficient_data: 4 };
   clientSummaries.sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
 
   // ── Build portfolio summary ────────────────────────────────────────────
@@ -278,11 +280,30 @@ export async function buildDailyExecutiveSummary(params: {
     cpaVsTarget:   null, // Would need a portfolio-level CPA target
     totalOrders,
     totalClients:  clients.length,
-    scalingCount:  clientSummaries.filter((c) => c.status === "scaling").length,
-    stableCount:   clientSummaries.filter((c) => c.status === "stable").length,
-    atRiskCount:   clientSummaries.filter((c) => c.status === "at_risk").length,
-    criticalCount: clientSummaries.filter((c) => c.status === "critical").length,
+    scalingCount:          clientSummaries.filter((c) => c.status === "scaling").length,
+    stableCount:           clientSummaries.filter((c) => c.status === "stable").length,
+    atRiskCount:           clientSummaries.filter((c) => c.status === "at_risk").length,
+    criticalCount:         clientSummaries.filter((c) => c.status === "critical").length,
+    insufficientDataCount: clientSummaries.filter((c) => c.status === "insufficient_data").length,
   };
+
+  // ── Trust state from health checks ─────────────────────────────────────
+  let trustState: DataTrustLevel = "healthy";
+  let trustMessage = "Data looks healthy. You can trust these numbers.";
+
+  if (!hasAnyData) {
+    trustState = "unverified";
+    trustMessage = "No data available yet. Run syncs to populate the dashboard.";
+  } else if (hasPartialCrm && hasStaleSync) {
+    trustState = "suspect";
+    trustMessage = "Stale sync and partial CRM data detected. Numbers may be unreliable.";
+  } else if (hasStaleSync) {
+    trustState = "warning";
+    trustMessage = "Some accounts have stale sync data (>48h). Numbers may be outdated.";
+  } else if (hasPartialCrm) {
+    trustState = "warning";
+    trustMessage = "Some accounts have spend but no CRM revenue. ROAS may be understated.";
+  }
 
   return {
     portfolio,
@@ -292,5 +313,7 @@ export async function buildDailyExecutiveSummary(params: {
     hasPartialCrm,
     hasMissingGoals,
     hasStaleSync,
+    trustState,
+    trustMessage,
   };
 }

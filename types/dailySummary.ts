@@ -9,7 +9,8 @@ export type ClientPerformanceStatus =
   | "scaling"
   | "stable"
   | "at_risk"
-  | "critical";
+  | "critical"
+  | "insufficient_data";
 
 export type ClientTrendDirection = "up" | "flat" | "down";
 
@@ -84,6 +85,7 @@ export type PortfolioDailySummary = {
   stableCount:       number;
   atRiskCount:       number;
   criticalCount:     number;
+  insufficientDataCount: number;
 };
 
 // ── Filter state ────────────────────────────────────────────────────────────
@@ -97,6 +99,12 @@ export type DailySummaryFilterState = {
 
 // ── Full payload (server → client) ──────────────────────────────────────────
 
+// ── Trust state (from health check) ──────────────────────────────────────────
+
+export type DataTrustLevel = "unverified" | "healthy" | "warning" | "suspect" | "blocked";
+
+// ── Full payload (server → client) ──────────────────────────────────────────
+
 export type DailyExecutiveSummary = {
   portfolio:     PortfolioDailySummary;
   clients:       ClientDailySummary[];
@@ -106,4 +114,7 @@ export type DailyExecutiveSummary = {
   hasPartialCrm:   boolean;
   hasMissingGoals: boolean;
   hasStaleSync:    boolean;
+  // Trust state integration
+  trustState:      DataTrustLevel;
+  trustMessage:    string;
 };

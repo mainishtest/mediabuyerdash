@@ -20,6 +20,7 @@ import type {
   ClientPerformanceStatus,
   ClientTrendDirection,
   ClientRiskLevel,
+  DataTrustLevel,
 } from "../types/dailySummary";
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -79,10 +80,11 @@ function FilterSelect<T extends string>({
 
 function ClientCard({ client }: { client: ClientDailySummary }) {
   const borderColor = {
-    scaling:  "border-l-emerald-500",
-    stable:   "border-l-slate-600",
-    at_risk:  "border-l-amber-500",
-    critical: "border-l-rose-500",
+    scaling:           "border-l-emerald-500",
+    stable:            "border-l-slate-600",
+    at_risk:           "border-l-amber-500",
+    critical:          "border-l-rose-500",
+    insufficient_data: "border-l-sky-500",
   }[client.status];
 
   return (
@@ -216,6 +218,37 @@ function AlertsBanner({ data }: { data: DailyExecutiveSummary }) {
   );
 }
 
+// ── Trust state banner ──────────────────────────────────────────────────────
+
+function TrustBanner({ trustState, trustMessage }: { trustState: DataTrustLevel; trustMessage: string }) {
+  if (trustState === "healthy") return null;
+
+  const config: Record<string, { border: string; bg: string; text: string; labelColor: string; label: string }> = {
+    unverified: { border: "border-slate-700", bg: "bg-slate-900/60", text: "text-slate-400", labelColor: "text-slate-300", label: "Unverified" },
+    warning:    { border: "border-amber-800/40", bg: "bg-amber-950/30", text: "text-amber-400/80", labelColor: "text-amber-300", label: "Data Warning" },
+    suspect:    { border: "border-orange-800/40", bg: "bg-orange-950/30", text: "text-orange-400/80", labelColor: "text-orange-300", label: "Suspect Data" },
+    blocked:    { border: "border-rose-800/40", bg: "bg-rose-950/30", text: "text-rose-400/80", labelColor: "text-rose-300", label: "Blocked" },
+  };
+  const c = config[trustState] ?? config.warning;
+
+  return (
+    <div className={`rounded-xl border ${c.border} ${c.bg} px-4 py-3 sm:px-5`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className={`text-xs font-semibold ${c.labelColor}`}>{c.label}</p>
+          <p className={`mt-1 text-xs ${c.text}`}>{trustMessage}</p>
+        </div>
+        <Link
+          href="/health"
+          className="shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white min-h-[36px] inline-flex items-center"
+        >
+          View Health Check
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 // ── Main dashboard view ─────────────────────────────────────────────────────
 
 export default function DailyDashboardView({ data }: { data: DailyExecutiveSummary }) {
@@ -244,11 +277,14 @@ export default function DailyDashboardView({ data }: { data: DailyExecutiveSumma
         <p className="mt-1 text-xs text-slate-500">{p.dateLabel} · CRM source of truth · 7-day attribution</p>
       </div>
 
+      {/* Trust state banner */}
+      <TrustBanner trustState={data.trustState} trustMessage={data.trustMessage} />
+
       {/* Alerts banner */}
       <AlertsBanner data={data} />
 
       {/* SECTION 1: Portfolio Summary */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <StatCard label="Total Spend" value={fmtCurrency(p.totalSpend)} />
         <StatCard label="CRM Revenue" value={fmtCurrency(p.totalRevenue)} />
         <StatCard label="Blended ROAS" value={fmtRoas(p.blendedRoas)} />
@@ -264,6 +300,9 @@ export default function DailyDashboardView({ data }: { data: DailyExecutiveSumma
           sub={p.criticalCount > 0 ? `${p.criticalCount} critical` : undefined}
         />
         <StatCard label="Stable" value={p.stableCount} />
+        {p.insufficientDataCount > 0 && (
+          <StatCard label="No Data" value={p.insufficientDataCount} />
+        )}
       </div>
 
       {/* Filters */}
@@ -279,10 +318,11 @@ export default function DailyDashboardView({ data }: { data: DailyExecutiveSumma
           value={filters.status}
           onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
           options={[
-            { value: "scaling",  label: "Scaling" },
-            { value: "stable",   label: "Stable" },
-            { value: "at_risk",  label: "At Risk" },
-            { value: "critical", label: "Critical" },
+            { value: "scaling",           label: "Scaling" },
+            { value: "stable",            label: "Stable" },
+            { value: "at_risk",           label: "At Risk" },
+            { value: "critical",          label: "Critical" },
+            { value: "insufficient_data", label: "No Data" },
           ]}
         />
         <FilterSelect<ClientTrendDirection>
