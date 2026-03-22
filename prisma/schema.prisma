@@ -990,6 +990,68 @@ model PublishPrepRecord {
   @@index([clientAccountId])
 }
 
+// ── Meta Launch Records ──────────────────────────────────────────────────────
+//
+// Persists every launch attempt from approved creatives to Meta entities.
+// Links back to PublishPrepRecord, ExperimentRecord, and stores resulting
+// Meta creative/ad IDs for tracking and retry.
+
+model MetaLaunchRecord {
+  id               String    @id @default(cuid())
+  clientAccountId  String
+  workspaceId      String?
+
+  // Source linkage
+  prepItemId       String?   // PublishPrepRecord.id
+  briefId          String?
+  variantId        String?
+  experimentId     String?   // ExperimentRecord.id (set after launch creates experiment)
+  launchPlanId     String?   // ExperimentLaunchPlanRecord.id
+
+  // Variant role in the test
+  variantRole      String    @default("challenger") // control | challenger | backup_candidate
+
+  // Launch status lifecycle
+  status           String    @default("draft") // draft | ready_for_approval | approved | launching | launched | failed | blocked
+
+  // Target mapping (denormalised from PublishPrepRecord)
+  targetCampaignExternalId  String?
+  targetCampaignName        String?
+  targetAdSetExternalId     String?
+  targetAdSetName           String?
+  externalAdAccountId       String?
+
+  // Resulting Meta entity IDs (filled on success)
+  metaCreativeId   String?
+  metaAdId         String?
+
+  // Execution details
+  executionMode    String    @default("guarded_publish") // manual_publish | guarded_publish
+  payloadJson      String?   // MetaAdCreativePayload as JSON
+  launchMessage    String?   // success/failure message
+  errorCode        String?   // error code on failure
+  errorDetail      String?   // detailed error message
+
+  // Policy/guardrail context
+  policyCheckJson  String?   // JSON: policy gate check results
+  guardrailJson    String?   // JSON: guardrail results at launch time
+
+  // Retry tracking
+  retryCount       Int       @default(0)
+  lastRetryAt      DateTime?
+  retryOfLaunchId  String?   // ID of the original failed launch this retries
+
+  // Timestamps
+  launchedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([clientAccountId])
+  @@index([prepItemId])
+  @@index([experimentId])
+  @@index([status])
+}
+
 // ── Meta sync ─────────────────────────────────────────────────────────────────
 
 // Audit record for each sync run.
