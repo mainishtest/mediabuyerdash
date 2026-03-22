@@ -21,6 +21,7 @@ export async function runMetaSyncAction(): Promise<SyncSummary> {
       errors:            ["Meta credentials not configured (META_APP_ID / META_APP_SECRET missing)"],
       startedAt:         new Date().toISOString(),
       completedAt:       new Date().toISOString(),
+      mode:              "recent",
     };
   }
 

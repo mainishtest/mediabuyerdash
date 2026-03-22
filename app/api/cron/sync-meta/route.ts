@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { runMetaSync } from "../../../../lib/meta/sync";
 import { isMetaConfigured } from "../../../../lib/meta/config";
+import type { SyncMode } from "../../../../lib/meta/sync";
 
 export const maxDuration = 300;
 
+/**
+ * Cron-triggered Meta sync endpoint.
+ *
+ * - Runs every 5 minutes (recent mode, 7-day window)
+ * - Automatically runs daily_full mode (30-day window) once per day
+ *   between 05:00–05:05 UTC to backfill historical accuracy
+ *
+ * Auth: Bearer CRON_SECRET
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -17,6 +27,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const summary = await runMetaSync(null);
+  // Determine sync mode: daily_full during 05:00–05:05 UTC window
+  const hour = new Date().getUTCHours();
+  const minute = new Date().getUTCMinutes();
+  const mode: SyncMode = (hour === 5 && minute < 5) ? "daily_full" : "recent";
+
+  const summary = await runMetaSync(null, mode);
+
+  // Surface token errors as 401 so monitoring can detect them
+  if (summary.status === "token_expired") {
+    return NextResponse.json(summary, { status: 401 });
+  }
+
   return NextResponse.json(summary);
 }

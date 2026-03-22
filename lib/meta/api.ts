@@ -1,6 +1,28 @@
 import { META_GRAPH_BASE } from "./config";
 
-// ── Paged fetcher ─────────────────────────────────────────────────────────────
+// ── Rate limit / retry helpers ───────────────────────────────────────────────
+
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 2_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Detects Meta API errors that indicate an expired or invalid token.
+ * Error codes: 190 (invalid token), 102 (session expired).
+ */
+export function isTokenError(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const err = (body as { error?: { code?: number; type?: string } }).error;
+  if (!err) return false;
+  if (err.code === 190 || err.code === 102) return true;
+  if (err.type === "OAuthException") return true;
+  return false;
+}
+
+// ── Paged fetcher with rate-limit retry ──────────────────────────────────────
 
 async function fetchAllPages<T>(
   url: string,
@@ -13,17 +35,51 @@ async function fetchAllPages<T>(
   let page = 0;
 
   while (nextUrl && page < maxPages) {
-    const res = await fetch(nextUrl, { cache: "no-store" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`Meta API ${res.status}: ${JSON.stringify(body)}`);
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(nextUrl, { cache: "no-store" });
+
+      // Rate-limited — backoff and retry
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        console.warn(`[Meta API] 429 rate limit, retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await sleep(backoff);
+        continue;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(`Meta API ${res.status}: ${JSON.stringify(body)}`);
+
+        // Tag token errors so callers can detect them
+        if (isTokenError(body)) {
+          (err as Error & { isTokenError: boolean }).isTokenError = true;
+        }
+
+        // Retry on 5xx server errors
+        if (res.status >= 500 && attempt < MAX_RETRIES) {
+          const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+          console.warn(`[Meta API] ${res.status} server error, retrying in ${backoff}ms`);
+          await sleep(backoff);
+          lastError = err;
+          continue;
+        }
+
+        throw err;
+      }
+
+      const json = (await res.json()) as {
+        data: T[];
+        paging?: { next?: string };
+      };
+      results.push(...(json.data ?? []));
+      nextUrl = json.paging?.next ?? null;
+      lastError = null;
+      break;
     }
-    const json = (await res.json()) as {
-      data: T[];
-      paging?: { next?: string };
-    };
-    results.push(...(json.data ?? []));
-    nextUrl = json.paging?.next ?? null;
+
+    if (lastError) throw lastError;
     page++;
   }
   return results;
