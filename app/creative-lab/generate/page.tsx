@@ -29,31 +29,70 @@ export const metadata = {
   title: "Creative Generator — Creative Lab",
 };
 
-/** Convert a real CreativePerformanceSnapshot into the CreativeDiagnosisInput the generator expects. */
+/**
+ * Convert a real CreativePerformanceSnapshot into the CreativeDiagnosisInput
+ * the generator expects.
+ *
+ * For standard ads, body = primary text, title = headline.
+ * For dynamic product ads (DPA), body may be empty and name contains
+ * {{product.name}} template variables — we use whatever is available.
+ */
 function snapshotToDiagnosisInput(s: CreativePerformanceSnapshot): CreativeDiagnosisInput {
+  // Resolve the best available ad copy fields.
+  // Meta stores: body = primary text, title = headline, name = creative name.
+  // DPAs may have empty body/title with {{product.name}} in name.
+  const rawBody  = s.adCopy?.trim() || null;
+  const rawTitle = s.adTitle?.trim() || null;
+  const rawName  = s.creativeName?.trim() || null;
+
+  // Check if a string is a Meta template variable (not real copy)
+  const isTemplate = (str: string | null) =>
+    str != null && str.includes("{{");
+
+  // Use real copy values, skip template variables
+  const body  = rawBody && !isTemplate(rawBody) ? rawBody : null;
+  const title = rawTitle && !isTemplate(rawTitle) ? rawTitle : null;
+  const name  = rawName && !isTemplate(rawName) ? rawName : null;
+
+  // Hook: prefer title (headline), fall back to first sentence of body
+  const hook = title
+    ?? body?.split(/[.!?\n]/)?.[0]?.trim()
+    ?? name
+    ?? "(Dynamic product ad — copy varies by product)";
+
+  // Body: use actual body text, fall back to name context
+  const copyBody = body
+    ?? (name ? `Ad: ${name}` : "(Dynamic product ad — copy varies by product)");
+
+  // Display name: prefer non-template name, fall back to ID
+  const adName = name ?? title ?? `Creative ${s.externalCreativeId.slice(-8)}`;
+
+  // Image context: use non-template values
+  const imageHeadline = title ?? name ?? adName;
+
   return {
     adId:          s.externalCreativeId,
-    adName:        s.creativeName ?? `Creative ${s.externalCreativeId.slice(-6)}`,
+    adName,
     campaignId:    s.externalCampaignId,
     campaignName:  s.campaignName,
     actualCpa:     s.campaignCpa ?? 0,
     actualRoas:    s.campaignRoas ?? 0,
     spend:         s.spend,
     conversions:   s.campaignCpa && s.campaignCpa > 0 ? Math.round(s.spend / s.campaignCpa) : 0,
-    cpaGoalValue:  s.campaignCpa ? s.campaignCpa * 0.8 : 25, // 20% improvement target
+    cpaGoalValue:  s.campaignCpa ? s.campaignCpa * 0.8 : 25,
     cpaGoalType:   "low",
     roasGoalValue: s.campaignRoas ? Math.max(s.campaignRoas * 1.2, 2.0) : 3.0,
     roasGoalType:  "high",
     copy: {
-      hook:         s.adCopy?.split(/[.!?\n]/)?.[0]?.trim() ?? "",
-      body:         s.adCopy ?? "",
+      hook,
+      body:         copyBody,
       callToAction: s.callToAction ?? "Shop Now",
     },
     image: {
-      imageHeadline:   s.creativeName ?? "",
-      imageStyle:      s.imageUrl ? "product" : "unknown",
-      dominantMessage: s.creativeName ?? "Product creative",
-      visualTheme:     "synced",
+      imageHeadline,
+      imageStyle:      s.imageUrl || s.thumbnailUrl ? "product" : "unknown",
+      dominantMessage: imageHeadline,
+      visualTheme:     s.imageUrl || s.thumbnailUrl ? "product-photo" : "unknown",
     },
   };
 }

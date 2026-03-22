@@ -31,7 +31,8 @@ export type CreativePerformanceSnapshot = {
   creativeName:        string | null;
   thumbnailUrl:        string | null;  // Meta CDN URL — may expire
   imageUrl:            string | null;
-  adCopy:              string | null;  // MetaSyncedCreative.body
+  adTitle:             string | null;  // MetaSyncedCreative.title (headline)
+  adCopy:              string | null;  // MetaSyncedCreative.body (primary text)
   callToAction:        string | null;
 
   // Campaign context

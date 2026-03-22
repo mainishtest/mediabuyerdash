@@ -83,8 +83,14 @@ export function checkCopyReadiness(entry: CreativeLabEntry): ReadinessCheckResul
 
   const { input, diagnosis } = entry;
 
-  if (!input.copy.hook?.trim()) missing.push("hook");
-  if (!input.copy.body?.trim()) missing.push("body");
+  // For dynamic product ads, hook/body may contain placeholder text — that's OK
+  const isDynamicAd = input.copy.hook?.includes("Dynamic product ad")
+    || input.copy.body?.includes("Dynamic product ad");
+
+  if (!isDynamicAd) {
+    if (!input.copy.hook?.trim()) missing.push("hook");
+    if (!input.copy.body?.trim()) missing.push("body");
+  }
   if (!input.copy.callToAction?.trim()) missing.push("callToAction");
 
   if (input.cpaGoalValue <= 0 && input.roasGoalValue <= 0) {
@@ -95,7 +101,9 @@ export function checkCopyReadiness(entry: CreativeLabEntry): ReadinessCheckResul
     warnings.push("Low spend — diagnosis may be unreliable");
   }
 
-  if (diagnosis.causeType === "unclear" || diagnosis.causeType === "other") {
+  if (isDynamicAd) {
+    warnings.push("Dynamic product ad — copy varies by product catalog. Generation will use performance context instead of source copy.");
+  } else if (diagnosis.causeType === "unclear" || diagnosis.causeType === "other") {
     warnings.push("Diagnosis is unclear — copy generation may be less targeted");
   }
 
@@ -110,9 +118,9 @@ export function checkImageReadiness(entry: CreativeLabEntry): ReadinessCheckResu
   const { input, diagnosis } = entry;
 
   if (!input.image.imageHeadline?.trim()) missing.push("imageHeadline");
-  if (!input.image.imageStyle?.trim()) missing.push("imageStyle");
+  if (!input.image.imageStyle?.trim() || input.image.imageStyle === "unknown") missing.push("imageStyle");
   if (!input.image.dominantMessage?.trim()) missing.push("dominantMessage");
-  if (!input.image.visualTheme?.trim()) missing.push("visualTheme");
+  if (!input.image.visualTheme?.trim() || input.image.visualTheme === "unknown") missing.push("visualTheme");
 
   if (input.cpaGoalValue <= 0 && input.roasGoalValue <= 0) {
     warnings.push("No campaign goals set — generation may lack direction");
@@ -122,7 +130,10 @@ export function checkImageReadiness(entry: CreativeLabEntry): ReadinessCheckResu
     warnings.push("Low spend — diagnosis may be unreliable");
   }
 
-  if (diagnosis.causeType === "unclear" || diagnosis.causeType === "other") {
+  // Don't show confusing "unclear" warnings when it's just a synced ad without image analysis
+  if (input.image.visualTheme === "product-photo" || input.image.visualTheme === "synced") {
+    // Image analysis hasn't been run yet — that's expected for synced ads
+  } else if (diagnosis.causeType === "unclear" || diagnosis.causeType === "other") {
     warnings.push("Diagnosis is unclear — image generation may be less targeted");
   }
 

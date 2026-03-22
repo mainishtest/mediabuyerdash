@@ -84,6 +84,7 @@ export async function loadCreativePerformanceData(workspaceId: string | null) {
       select: {
         externalCreativeId: true,
         name:               true,
+        title:              true,
         body:               true,
         callToAction:       true,
         imageUrl:           true,
@@ -252,6 +253,7 @@ export function buildCreativePerformanceSnapshots(
       creativeName:       creative?.name ?? null,
       thumbnailUrl:       creative?.thumbnailUrl ?? null,
       imageUrl:           creative?.imageUrl ?? null,
+      adTitle:            creative?.title ?? null,
       adCopy:             creative?.body ?? null,
       callToAction:       creative?.callToAction ?? null,
 
