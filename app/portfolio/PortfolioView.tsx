@@ -7,12 +7,14 @@ import type {
   PortfolioPriority,
   PortfolioAutonomyMode,
 } from "../../lib/portfolio/types";
-import { KPISummaryBar }      from "./sections/KPISummaryBar";
-import { HealthBoard }        from "./sections/HealthBoard";
-import { RisksPanel }         from "./sections/RisksPanel";
-import { OpportunitiesPanel } from "./sections/OpportunitiesPanel";
-import { ApprovalsSnapshot }  from "./sections/ApprovalsSnapshot";
-import { AutomationSnapshot } from "./sections/AutomationSnapshot";
+import type { PortfolioIntelligenceSummary } from "../../types/portfolioIntelligence";
+import { KPISummaryBar }       from "./sections/KPISummaryBar";
+import { HealthBoard }         from "./sections/HealthBoard";
+import { RisksPanel }          from "./sections/RisksPanel";
+import { OpportunitiesPanel }  from "./sections/OpportunitiesPanel";
+import { ApprovalsSnapshot }   from "./sections/ApprovalsSnapshot";
+import { AutomationSnapshot }  from "./sections/AutomationSnapshot";
+import { IntelligencePanel }   from "./sections/IntelligencePanel";
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 
@@ -193,7 +195,10 @@ function FilterBar({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export function PortfolioView({ payload }: { payload: PortfolioPayload }) {
+export function PortfolioView({ payload, intelligence }: {
+  payload:      PortfolioPayload;
+  intelligence: PortfolioIntelligenceSummary | null;
+}) {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
@@ -259,10 +264,10 @@ export function PortfolioView({ payload }: { payload: PortfolioPayload }) {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Phase 7 · Portfolio Command Center
+                Portfolio Intelligence
               </p>
               <h1 className="mt-0.5 text-lg font-semibold text-white">
-                Multi-Account Health Board
+                Multi-Account Command Surface
               </h1>
             </div>
             <p className="text-xs text-slate-600">
@@ -289,6 +294,29 @@ export function PortfolioView({ payload }: { payload: PortfolioPayload }) {
 
         {/* KPI summary bar */}
         <KPISummaryBar summary={summary} />
+
+        {/* Portfolio Intelligence — top priorities */}
+        {intelligence && (
+          <Section
+            title="Cross-Account Priorities"
+            count={intelligence.priorities.length}
+            countVariant={
+              intelligence.investigateNowCount > 0 ? "danger" :
+              intelligence.scaleNowCount > 0 ? "success" :
+              "neutral"
+            }
+            action={
+              <a
+                href="/alerts"
+                className="text-xs text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+              >
+                View all alerts
+              </a>
+            }
+          >
+            <IntelligencePanel data={intelligence} />
+          </Section>
+        )}
 
         {/* Health board */}
         <Section
@@ -355,9 +383,10 @@ export function PortfolioView({ payload }: { payload: PortfolioPayload }) {
         {/* Footer */}
         <div className="border-t border-slate-800 pt-4 text-center">
           <p className="text-xs text-slate-700">
-            Portfolio health is derived from reconciliation summaries (CRM source of truth, 7-day
-            attribution), alert events, pending approvals, governance state, and budget pacing.
-            ROAS and CPA use Meta spend against Shopify/CRM revenue. Scores refresh on page load.
+            Portfolio intelligence is derived from daily executive summaries, outcome routing,
+            action history, reconciliation data (CRM source of truth, 7-day attribution),
+            proactive triggers, and budget pacing. Priority scores are explainable — expand
+            any item to see contributing factors.
           </p>
         </div>
       </div>
