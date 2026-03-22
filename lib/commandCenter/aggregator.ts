@@ -7,6 +7,7 @@
 import { prisma }             from "../db";
 import { buildPriorityCards, formatAlertType, formatActionType } from "./priorityEngine";
 import { buildDailyOutcomeSummary } from "../dailyOutcomes/aggregator";
+import { buildActionHistoryTimeline } from "../actionHistory/aggregator";
 import type {
   CommandCenterPayload,
   CommandCenterSummary,
@@ -17,6 +18,8 @@ import type {
   CommandCenterPacingItem,
   CommandCenterOutcomeItem,
   CommandCenterOutcomeSummary,
+  CommandCenterRecentAction,
+  CommandCenterRecentActionsSummary,
   CommandCenterPriority,
 } from "./types";
 
@@ -303,10 +306,44 @@ export async function buildCommandCenterPayload(params: {
     console.warn("[CommandCenter] Failed to load outcome highlights:", err);
   }
 
-  // ── 9. Priority queue ─────────────────────────────────────────────────────
+  // ── 9. Recent actions (from action history) ──────────────────────────────
+  let recentActions: CommandCenterRecentAction[] = [];
+  let recentActionsSummary: CommandCenterRecentActionsSummary = { totalCount: 0, failedCount: 0, blockedCount: 0 };
+
+  try {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const actionEntries = await buildActionHistoryTimeline({
+      workspaceId: null,
+      clientId,
+      dateFrom: yesterday,
+      limit: 15,
+    });
+
+    recentActions = actionEntries.map((e) => ({
+      id:          e.id,
+      eventType:   e.eventType,
+      status:      e.status,
+      title:       e.title,
+      description: e.description,
+      actorLabel:  e.actor.label,
+      clientName:  e.clientName,
+      occurredAt:  e.occurredAt,
+      href:        e.href,
+    }));
+
+    recentActionsSummary = {
+      totalCount:  actionEntries.length,
+      failedCount: actionEntries.filter((e) => e.status === "failed").length,
+      blockedCount: actionEntries.filter((e) => e.status === "blocked").length,
+    };
+  } catch (err) {
+    console.warn("[CommandCenter] Failed to load recent actions:", err);
+  }
+
+  // ── 10. Priority queue ──────────────────────────────────────────────────
   const priorities = buildPriorityCards({ alertItems, approvals, experiments, creativeItems, pacingItems });
 
-  // ── 10. Summary ───────────────────────────────────────────────────────────
+  // ── 11. Summary ───────────────────────────────────────────────────────────
   const summary: CommandCenterSummary = {
     generatedAt:             now.toISOString(),
     dateRange:               { from: dateFrom, to: dateTo },
@@ -335,6 +372,8 @@ export async function buildCommandCenterPayload(params: {
     alertItems,
     outcomeItems,
     outcomeSummary,
+    recentActions,
+    recentActionsSummary,
     clients: clients.map((c) => ({ id: c.id, name: c.name })),
   };
 }

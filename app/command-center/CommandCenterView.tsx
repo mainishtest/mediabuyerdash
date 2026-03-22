@@ -6,14 +6,15 @@ import type {
   CommandCenterPayload,
   CommandCenterPriority,
 } from "../../lib/commandCenter/types";
-import { SummaryBar }      from "./sections/SummaryBar";
-import { PriorityQueue }   from "./sections/PriorityQueue";
-import { ApprovalQueue }   from "./sections/ApprovalQueue";
-import { ExperimentsPanel } from "./sections/ExperimentsPanel";
-import { CreativePanel }   from "./sections/CreativePanel";
-import { PacingPanel }     from "./sections/PacingPanel";
-import { AlertsPanel }     from "./sections/AlertsPanel";
-import { OutcomesPanel }   from "./sections/OutcomesPanel";
+import { SummaryBar }          from "./sections/SummaryBar";
+import { PriorityQueue }      from "./sections/PriorityQueue";
+import { ApprovalQueue }      from "./sections/ApprovalQueue";
+import { ExperimentsPanel }   from "./sections/ExperimentsPanel";
+import { CreativePanel }      from "./sections/CreativePanel";
+import { PacingPanel }        from "./sections/PacingPanel";
+import { AlertsPanel }        from "./sections/AlertsPanel";
+import { OutcomesPanel }      from "./sections/OutcomesPanel";
+import { RecentActionsPanel } from "./sections/RecentActionsPanel";
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
 
@@ -301,6 +302,31 @@ export function CommandCenterView({ payload }: { payload: CommandCenterPayload }
               outcomeItems={outcomeItems}
               outcomeSummary={payload.outcomeSummary}
             />
+          </Section>
+        )}
+
+        {/* Recent Actions */}
+        {payload.recentActions.length > 0 && (
+          <Section
+            title="Recent Actions"
+            count={payload.recentActionsSummary.totalCount}
+            countVariant={
+              payload.recentActionsSummary.failedCount > 0 ? "danger" :
+              payload.recentActionsSummary.blockedCount > 0 ? "warning" : "neutral"
+            }
+            action={
+              <a href="/history" className="text-xs text-slate-400 hover:text-slate-200">
+                Full history →
+              </a>
+            }
+          >
+            <div className="p-4">
+              <RecentActionsPanel
+                actions={payload.recentActions}
+                summary={payload.recentActionsSummary}
+                clientFilter={selectedClientId ? payload.clients.find((c) => c.id === selectedClientId)?.name ?? "" : ""}
+              />
+            </div>
           </Section>
         )}
 

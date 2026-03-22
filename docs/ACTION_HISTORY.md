@@ -13,17 +13,20 @@ The Action History provides a unified, account-level timeline of all important d
 
 ```
 types/actionHistory.ts           — Unified type definitions
-lib/actionHistory/aggregator.ts  — Merges all event sources into timeline
-lib/actionHistory/linker.ts      — Links entries to downstream outcomes
+lib/actionHistory/aggregator.ts  — Server-only: merges all event sources
+lib/actionHistory/utils.ts       — Client-safe: summary, grouping, filtering (NO Prisma)
+lib/actionHistory/linker.ts      — Server-only: links entries to downstream outcomes
 app/api/action-history/route.ts  — API endpoint (GET with filters)
 app/history/page.tsx             — Server page
-app/history/HistoryView.tsx      — Client view with filters
+app/history/HistoryView.tsx      — Client view with filters + detail drawer
 app/history/sections/            — Timeline UI components
 ```
 
-### Key Design Decision
+### Client/Server Boundary
 
-**No new event store.** Instead, the aggregator reads from 5 existing data sources and normalizes them into a unified `ActionHistoryEntry` type. This avoids data duplication and ensures the timeline always reflects the true system state.
+**Critical design decision**: Pure utility functions (`buildActionHistorySummary`, `groupActionHistoryEntries`, `filterActionHistoryEntries`) live in `lib/actionHistory/utils.ts` which has NO Prisma imports. Client components import from `utils.ts`, never from `aggregator.ts`.
+
+The aggregator re-exports from utils for backward compatibility, but `aggregator.ts` also contains server-only functions that use Prisma.
 
 ### Data Sources
 
@@ -72,37 +75,82 @@ app/history/sections/            — Timeline UI components
 | `in_progress` | Currently executing | Blue dot |
 | `skipped` | Skipped (not applicable) | Gray dot |
 
-## Timeline UI
+## Timeline UI (`/history`)
 
-### Layout (`/history`)
+### Layout
 
-1. **Summary bar** — Counts by status, category
-2. **Filters** — Client, event type, status, date range
+1. **Summary bar** — Counts by status and category (always shows Total)
+2. **Filters** — Client, event type, status, actor type, date range
 3. **Grouped timeline** — Entries grouped by date (Today, Yesterday, older dates)
-4. **Entry cards** — Event badge, title, description, entity, actor, outcome link
-5. **Footer links** — Command Center, Morning Brief, Creative Lab, Audit Log
+4. **Entry cards** — Clickable with event badge, title, description, entity, actor, outcome link
+5. **Detail drawer** — Side panel (desktop) or bottom panel (mobile) with full entry details and action buttons
+6. **Footer links** — Command Center, Morning Brief, Creative Lab, Outcome Routing, Alerts, Audit Log
+
+### Entry Detail Drawer
+
+When an entry is selected, the detail drawer shows:
+- Status badge
+- Title and description
+- Timestamp
+- Actor (with type indicator)
+- Entity (linked)
+- Client (linked)
+- Linked outcome (if any)
+- Source
+- Metadata (policy decision, rollback state, lift/confidence, etc.)
+- **Contextual action buttons**
+
+### Action Buttons
+
+The drawer builds contextual action buttons based on the entry:
+
+| Button | When shown |
+|--------|-----------|
+| Open account | Entry has a clientId |
+| Open campaign | Entity is a campaign |
+| Open Creative Lab | Source is creative_lab |
+| Open experiments | Entry is test_launched or test_created |
+| Open scale review | Entry is scale_plan_created or scale_executed |
+| Open approvals | Entry is approval_requested/granted/rejected |
+| View linked outcome | Entry has an outcomeLink |
+| Open audit log | Source is automation_audit/proposed_action/execution_log |
 
 ### Filters
-
-All filters are client-side over server-loaded data (up to 150 entries):
 
 | Filter | Options |
 |--------|---------|
 | Client | All clients in workspace |
-| Event Type | 14 event types |
+| Event Type | 15 event types |
 | Status | success, failed, blocked, pending, skipped |
+| Actor | system, operator, scheduled, API |
 | Date From | Calendar picker |
 | Date To | Calendar picker |
 
+## Deep Linking
+
+Entity hrefs are now context-aware:
+- Budget actions → `/clients/{id}/campaigns`
+- Campaign entities → `/clients/{id}/campaigns`
+- Client entities → `/clients/{id}/decision`
+- Creative lab entries → `/creative-lab`
+- Outcome routes → `/creative-lab/outcomes`
+
 ## Outcome Linking
 
-The `linkActionHistoryToOutcomes()` post-processor attempts to connect action entries to their downstream outcomes by looking up `CreativeOutcomeRouteRecord` by entity ID. When found:
-
-- The entry gets an `outcomeLink` with type (winner, loser, scale_opportunity, etc.)
-- The UI displays an outcome badge on the entry
-- The badge links to `/creative-lab/outcomes`
+`linkActionHistoryToOutcomes()` links action entries to downstream outcomes by matching entity IDs against `CreativeOutcomeRouteRecord.testResultId` and `id`. When found, entries get an `outcomeLink` with type, label, and href.
 
 Linking is best-effort: entries without matching outcomes display normally.
+
+## Integration Points
+
+| System | Integration |
+|--------|------------|
+| **Daily Brief** | `summarizeRecentActions()` feeds recent action counts into morning brief |
+| **Command Center** | RecentActionsPanel shows last-24h actions with status badges |
+| **Automation Audit** | Reuses `loadCombinedAuditHistory()` as primary data source |
+| **Creative Lab** | Includes creative workflow transitions and image generation events |
+| **Outcome Routing** | Outcome route decisions appear with outcome links |
+| **Scale Review** | Scale plan approvals and executions appear in timeline |
 
 ## API
 
@@ -119,34 +167,22 @@ Linking is best-effort: entries without matching outcomes display normally.
 
 Returns: `{ entries: ActionHistoryEntry[], summary: ActionHistorySummary }`
 
-## Integration Points
-
-| System | Integration |
-|--------|------------|
-| **Daily Brief** | `summarizeRecentActions()` feeds recent action counts into morning brief |
-| **Command Center** | Quick link from history; shares approval/experiment data sources |
-| **Automation Audit** | Reuses `loadCombinedAuditHistory()` as primary data source |
-| **Creative Lab** | Includes creative workflow transitions and image generation events |
-| **Outcome Routing** | Outcome route decisions appear as timeline entries with outcome links |
-| **Scale Review** | Scale plan approvals and executions appear in timeline |
-
 ## Safe Handling
 
 | Scenario | Behavior |
 |----------|----------|
 | Missing linked entities | Entry displays without entity link; no crash |
 | Partial event records | Missing fields fall back to safe defaults |
-| Legacy records | Bridged from `AutoExecutionLog` and `ProposedAutomationAction` |
-| Duplicate events | Deduplication in `loadCombinedAuditHistory()` prefers native over bridged |
-| Stale data | Timeline reflects last-loaded state; refresh re-queries all sources |
-| Sparse accounts | Empty state shown with helpful message |
-| Missing tables | Graceful fallback returns empty arrays (try/catch in each loader) |
+| Legacy records | Bridged from AutoExecutionLog and ProposedAutomationAction |
+| Duplicate events | Deduplication in loadCombinedAuditHistory() prefers native over bridged |
+| Stale data | Timeline reflects last-loaded state; refresh re-queries |
+| Sparse accounts | Empty state with helpful message |
+| Missing tables | try/catch in each loader returns empty arrays |
 
 ## Current Limitations
 
 1. **No real-time updates** — Timeline is loaded on page visit, not live-streamed
-2. **Client-side filtering** — Limited to ~150 entries loaded server-side; pagination not yet implemented
+2. **Client-side filtering** — Limited to ~150 entries loaded server-side
 3. **No full-text search** — Filters are structured only (no keyword search)
-4. **Outcome linking is entity-ID based** — Some older entries may not link if entity IDs don't match
-5. **Actor detail limited** — Creative Lab entries show "System" as actor (no user tracking in that table)
-6. **No export** — Timeline data cannot yet be exported as CSV/PDF
+4. **Actor detail limited** — Creative Lab entries show "System" (no user tracking in that table)
+5. **No export** — Timeline data cannot yet be exported

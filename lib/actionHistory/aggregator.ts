@@ -77,70 +77,15 @@ export async function buildActionHistoryTimeline(opts: {
   return combined.slice(0, limit);
 }
 
-// ── Summary ─────────────────────────────────────────────────────────────────
+// ── Re-export pure utilities from utils.ts (client-safe) ────────────────────
+// These are in a separate file so client components can import them
+// without pulling in Prisma.
 
-export function buildActionHistorySummary(entries: ActionHistoryEntry[]): ActionHistorySummary {
-  const dates = entries.map((e) => e.occurredAt).sort();
-
-  return {
-    totalEntries:    entries.length,
-    successCount:    entries.filter((e) => e.status === "success").length,
-    failedCount:     entries.filter((e) => e.status === "failed").length,
-    blockedCount:    entries.filter((e) => e.status === "blocked").length,
-    pendingCount:    entries.filter((e) => e.status === "pending").length,
-    scaleActions:    entries.filter((e) =>
-      e.eventType === "scale_plan_created" || e.eventType === "scale_executed" || e.eventType === "budget_changed"
-    ).length,
-    testActions:     entries.filter((e) =>
-      e.eventType === "test_created" || e.eventType === "test_launched"
-    ).length,
-    creativeActions: entries.filter((e) =>
-      e.eventType === "creative_refresh_sent" || e.eventType === "image_generation_completed" || e.eventType === "creative_status_changed"
-    ).length,
-    outcomeRoutes:   entries.filter((e) => e.eventType === "outcome_routed").length,
-    periodFrom:      dates[0] ?? null,
-    periodTo:        dates[dates.length - 1] ?? null,
-  };
-}
-
-// ── Group by date ───────────────────────────────────────────────────────────
-
-export function groupActionHistoryEntries(entries: ActionHistoryEntry[]): ActionHistoryGroup[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-
-  const groups: Map<string, ActionHistoryTimelineItem[]> = new Map();
-
-  for (const entry of entries) {
-    const dateGroup = entry.occurredAt.slice(0, 10);
-    const timeLabel = new Date(entry.occurredAt).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-
-    const item: ActionHistoryTimelineItem = {
-      ...entry,
-      dateGroup,
-      timeLabel,
-    };
-
-    if (!groups.has(dateGroup)) groups.set(dateGroup, []);
-    groups.get(dateGroup)!.push(item);
-  }
-
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([date, items]) => ({
-      date,
-      label: date === today ? "Today"
-           : date === yesterday ? "Yesterday"
-           : new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {
-               month: "short", day: "numeric", year: "numeric",
-             }),
-      items,
-    }));
-}
+export {
+  buildActionHistorySummary,
+  groupActionHistoryEntries,
+  filterActionHistoryEntries,
+} from "./utils";
 
 // ── Recent actions summary (for daily brief integration) ────────────────────
 
@@ -149,6 +94,7 @@ export async function summarizeRecentActions(opts: {
   clientId?:   string;
   dayCount?:   number;
 }): Promise<ActionHistorySummary> {
+  const { buildActionHistorySummary: summarize } = await import("./utils");
   const dateFrom = new Date(Date.now() - (opts.dayCount ?? 1) * 86_400_000)
     .toISOString().slice(0, 10);
 
@@ -159,7 +105,7 @@ export async function summarizeRecentActions(opts: {
     limit:       200,
   });
 
-  return buildActionHistorySummary(entries);
+  return summarize(entries);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -204,7 +150,7 @@ function mapAuditToActionHistory(e: AutomationAuditEntry): ActionHistoryEntry {
     clientName:  e.clientName ?? e.scope.clientName ?? null,
     source:      mapAuditSource(e.source),
     occurredAt:  e.occurredAt,
-    href:        "/automation/history",
+    href:        buildEntityHref(e),
     metadata: {
       policyDecision: e.policyDecision,
       rollbackState:  e.rollback.state,
@@ -276,6 +222,16 @@ function mapEntityType(t: string): ActionHistoryEntityLink["entityType"] {
 }
 
 function buildEntityHref(e: AutomationAuditEntry): string {
+  // Deep-link based on action type where possible
+  if (e.actionType === "increase_budget" || e.actionType === "reduce_budget") {
+    return e.clientAccountId ? `/clients/${e.clientAccountId}/campaigns` : "/optimization";
+  }
+  if (e.actionType === "pause_campaign") {
+    return e.clientAccountId ? `/clients/${e.clientAccountId}/campaigns` : "/automation/history";
+  }
+  if (e.scope.entityType === "campaign" && e.clientAccountId) {
+    return `/clients/${e.clientAccountId}/campaigns`;
+  }
   if (e.clientAccountId) return `/clients/${e.clientAccountId}/decision`;
   return "/automation/history";
 }

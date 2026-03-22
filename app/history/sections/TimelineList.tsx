@@ -2,8 +2,8 @@
 
 // TimelineList — reverse-chronological timeline of action history entries.
 // Groups by date, shows event type, status, actor, entity, and outcome links.
+// Supports entry selection for detail drawer.
 
-import Link from "next/link";
 import type {
   ActionHistoryGroup,
   ActionHistoryTimelineItem,
@@ -23,35 +23,38 @@ function eventTypeLabel(t: ActionHistoryEventType): string {
     scale_plan_created:         "Scale Plan",
     scale_executed:             "Scale Executed",
     budget_changed:             "Budget Changed",
-    test_created:              "Test Created",
-    test_launched:             "Test Launched",
-    creative_refresh_sent:     "Creative Refresh",
+    test_created:               "Test Created",
+    test_launched:              "Test Launched",
+    creative_refresh_sent:      "Creative Refresh",
     image_generation_completed: "Image Generated",
-    creative_status_changed:   "Creative Update",
-    outcome_routed:            "Outcome Routed",
-    execution_succeeded:       "Executed",
-    execution_failed:          "Failed",
-    launch_failed:             "Launch Failed",
-    action_blocked:            "Blocked",
-    emergency_stopped:         "Emergency Stop",
-    retry_started:             "Retry Started",
-    retry_succeeded:           "Retry Succeeded",
-    digest_delivered:          "Digest Sent",
-    alert_delivered:           "Alert Sent",
+    creative_status_changed:    "Creative Update",
+    outcome_routed:             "Outcome Routed",
+    execution_succeeded:        "Executed",
+    execution_failed:           "Failed",
+    launch_failed:              "Launch Failed",
+    action_blocked:             "Blocked",
+    emergency_stopped:          "Emergency Stop",
+    retry_started:              "Retry Started",
+    retry_succeeded:            "Retry Succeeded",
+    digest_delivered:           "Digest Sent",
+    alert_delivered:            "Alert Sent",
   };
   return map[t] ?? t.replace(/_/g, " ");
 }
 
 function eventTypeBadgeColor(t: ActionHistoryEventType): string {
-  if (t.includes("approved") || t === "approval_granted" || t === "execution_succeeded" || t === "scale_executed" || t === "retry_succeeded") {
+  if (t === "approval_granted" || t === "execution_succeeded" || t === "scale_executed" || t === "retry_succeeded") {
     return "bg-emerald-500/10 text-emerald-400";
   }
-  if (t.includes("failed") || t === "launch_failed") return "bg-rose-500/10 text-rose-400";
-  if (t.includes("blocked") || t === "emergency_stopped") return "bg-rose-500/10 text-rose-400";
-  if (t.includes("rejected")) return "bg-amber-500/10 text-amber-400";
+  if (t === "execution_failed" || t === "launch_failed") return "bg-rose-500/10 text-rose-400";
+  if (t === "action_blocked" || t === "emergency_stopped") return "bg-rose-500/10 text-rose-400";
+  if (t === "approval_rejected") return "bg-amber-500/10 text-amber-400";
   if (t === "outcome_routed") return "bg-indigo-500/10 text-indigo-400";
-  if (t.includes("test") || t.includes("creative") || t.includes("image")) return "bg-cyan-500/10 text-cyan-400";
-  if (t.includes("scale") || t.includes("budget")) return "bg-violet-500/10 text-violet-400";
+  if (t === "test_created" || t === "test_launched" || t === "creative_refresh_sent" || t === "image_generation_completed" || t === "creative_status_changed") {
+    return "bg-cyan-500/10 text-cyan-400";
+  }
+  if (t === "scale_plan_created" || t === "budget_changed") return "bg-violet-500/10 text-violet-400";
+  if (t === "approval_requested" || t === "approval_deferred") return "bg-sky-500/10 text-sky-400";
   return "bg-slate-700/50 text-slate-400";
 }
 
@@ -81,14 +84,26 @@ function sourceLabel(source: string): string {
 
 // ── Timeline entry ──────────────────────────────────────────────────────────
 
-function TimelineEntry({ item }: { item: ActionHistoryTimelineItem }) {
+function TimelineEntry({
+  item,
+  isSelected,
+  onSelect,
+}: {
+  item:       ActionHistoryTimelineItem;
+  isSelected: boolean;
+  onSelect:   () => void;
+}) {
   return (
-    <Link
-      href={item.href}
-      className="group flex gap-3 rounded-lg border border-slate-800 bg-slate-900/50
-                 px-4 py-3 transition-colors hover:border-slate-700 hover:bg-slate-800/50"
+    <button
+      onClick={onSelect}
+      className={`group flex w-full gap-3 rounded-lg border text-left
+                 px-4 py-3 transition-colors
+                 ${isSelected
+                   ? "border-emerald-800/60 bg-emerald-950/20"
+                   : "border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800/50"
+                 }`}
     >
-      {/* Status dot + time */}
+      {/* Status dot + connector line */}
       <div className="flex flex-col items-center pt-0.5">
         <div className={`h-2.5 w-2.5 rounded-full ${statusDot(item.status)}`} />
         <div className="mt-1 h-full w-px bg-slate-800" />
@@ -138,13 +153,21 @@ function TimelineEntry({ item }: { item: ActionHistoryTimelineItem }) {
           <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-    </Link>
+    </button>
   );
 }
 
 // ── Date group ──────────────────────────────────────────────────────────────
 
-function DateGroup({ group }: { group: ActionHistoryGroup }) {
+function DateGroup({
+  group,
+  selectedId,
+  onSelectEntry,
+}: {
+  group:          ActionHistoryGroup;
+  selectedId:     string | null;
+  onSelectEntry:  (id: string) => void;
+}) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
@@ -153,7 +176,12 @@ function DateGroup({ group }: { group: ActionHistoryGroup }) {
       </div>
       <div className="space-y-2">
         {group.items.map((item) => (
-          <TimelineEntry key={item.id} item={item} />
+          <TimelineEntry
+            key={item.id}
+            item={item}
+            isSelected={item.id === selectedId}
+            onSelect={() => onSelectEntry(item.id)}
+          />
         ))}
       </div>
     </div>
@@ -162,7 +190,15 @@ function DateGroup({ group }: { group: ActionHistoryGroup }) {
 
 // ── Main list ───────────────────────────────────────────────────────────────
 
-export function TimelineList({ groups }: { groups: ActionHistoryGroup[] }) {
+export function TimelineList({
+  groups,
+  onSelectEntry,
+  selectedId,
+}: {
+  groups:         ActionHistoryGroup[];
+  onSelectEntry:  (id: string) => void;
+  selectedId:     string | null;
+}) {
   if (groups.length === 0) {
     return (
       <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-6 py-12 text-center">
@@ -177,7 +213,12 @@ export function TimelineList({ groups }: { groups: ActionHistoryGroup[] }) {
   return (
     <div className="space-y-6">
       {groups.map((group) => (
-        <DateGroup key={group.date} group={group} />
+        <DateGroup
+          key={group.date}
+          group={group}
+          selectedId={selectedId}
+          onSelectEntry={onSelectEntry}
+        />
       ))}
     </div>
   );

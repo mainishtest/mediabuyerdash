@@ -134,6 +134,7 @@ export type ActionHistoryFilterState = {
   clientId:   string;           // "" = all
   eventType:  ActionHistoryEventType | "";
   status:     ActionHistoryStatus | "";
+  actor:      string;           // "" = all, "system" | "operator" | "cron" | "api"
   dateFrom:   string;           // YYYY-MM-DD or ""
   dateTo:     string;           // YYYY-MM-DD or ""
 };

@@ -173,6 +173,26 @@ export type CommandCenterOutcomeSummary = {
   pendingActionCount: number;
 };
 
+// ── Recent action item (from action history) ────────────────────────────────
+
+export type CommandCenterRecentAction = {
+  id:          string;
+  eventType:   string;
+  status:      string;
+  title:       string;
+  description: string;
+  actorLabel:  string;
+  clientName:  string | null;
+  occurredAt:  string;
+  href:        string;
+};
+
+export type CommandCenterRecentActionsSummary = {
+  totalCount:   number;
+  failedCount:  number;
+  blockedCount: number;
+};
+
 export type CommandCenterPayload = {
   summary: CommandCenterSummary;
   priorities: CommandCenterPriorityCard[];
@@ -183,5 +203,7 @@ export type CommandCenterPayload = {
   alertItems: CommandCenterAlertItem[];
   outcomeItems: CommandCenterOutcomeItem[];
   outcomeSummary: CommandCenterOutcomeSummary;
+  recentActions: CommandCenterRecentAction[];
+  recentActionsSummary: CommandCenterRecentActionsSummary;
   clients: { id: string; name: string }[];
 };
