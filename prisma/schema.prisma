@@ -1197,6 +1197,13 @@ model ShopifyOrder {
   subtotalPrice       Float    @default(0)
   totalTax            Float    @default(0)
   totalDiscount       Float    @default(0)
+  // Order status fields (v2: refund-aware revenue)
+  financialStatus     String?  // paid | partially_refunded | refunded | pending | voided
+  fulfillmentStatus   String?  // fulfilled | partial | unfulfilled | null
+  cancelledAt         DateTime?
+  cancelReason        String?  // customer | fraud | inventory | declined | other
+  refundTotal         Float    @default(0) // sum of all refund amounts
+  netRevenue          Float    @default(0) // totalPrice - refundTotal (source of truth for ROAS/CPA)
   customerId          String?
   customerEmail       String?
   utmSource           String?
@@ -1212,6 +1219,7 @@ model ShopifyOrder {
   connection    ShopifyConnection    @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
   clientAccount ClientAccount?       @relation(fields: [clientAccountId], references: [id])
   lineItems     ShopifyOrderLineItem[]
+  refunds       ShopifyRefund[]
 
   @@unique([shopifyConnectionId, externalOrderId])
   @@index([shopifyConnectionId, orderCreatedAt])
@@ -1233,6 +1241,24 @@ model ShopifyOrderLineItem {
   updatedAt      DateTime @updatedAt
 
   order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
+}
+
+// Refund records linked to orders. Upserted on each sync.
+// Used for revenue normalization: netRevenue = totalPrice - sum(refunds).
+model ShopifyRefund {
+  id               String   @id @default(cuid())
+  shopifyOrderId   String
+  externalRefundId String   // "gid://shopify/Refund/12345"
+  refundAmount     Float    @default(0) // total refunded amount in shop currency
+  note             String?
+  refundCreatedAt  DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([shopifyOrderId, externalRefundId])
+  @@index([shopifyOrderId])
 }
 
 // ── Reconciliation Engine (v1) ────────────────────────────────────────────────

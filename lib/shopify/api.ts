@@ -34,11 +34,22 @@ export interface RawShopifyLineItem {
   originalUnitPriceSet: RawShopifyMoneyBag;
 }
 
+export interface RawShopifyRefund {
+  id:        string; // "gid://shopify/Refund/12345"
+  createdAt: string;
+  note?:     string | null;
+  totalRefundedSet: RawShopifyMoneyBag;
+}
+
 export interface RawShopifyOrder {
   id:           string; // "gid://shopify/Order/12345"
   name:         string; // "#1001"
   createdAt:    string; // ISO — when the order was created in Shopify
   currencyCode: string;
+  displayFinancialStatus?:  string | null; // PAID | PARTIALLY_REFUNDED | REFUNDED | PENDING | VOIDED
+  displayFulfillmentStatus?: string | null; // FULFILLED | PARTIAL | UNFULFILLED
+  cancelledAt?:  string | null;
+  cancelReason?: string | null;
   totalPriceSet:      RawShopifyMoneyBag;
   subtotalPriceSet:   RawShopifyMoneyBag;
   totalTaxSet:        RawShopifyMoneyBag;
@@ -60,6 +71,7 @@ export interface RawShopifyOrder {
   lineItems: {
     edges: Array<{ node: RawShopifyLineItem }>;
   };
+  refunds?: RawShopifyRefund[];
 }
 
 interface OrdersQueryData {
@@ -80,6 +92,10 @@ const ORDERS_QUERY = `
           name
           createdAt
           currencyCode
+          displayFinancialStatus
+          displayFulfillmentStatus
+          cancelledAt
+          cancelReason
           totalPriceSet      { shopMoney { amount } }
           subtotalPriceSet   { shopMoney { amount } }
           totalTaxSet        { shopMoney { amount } }
@@ -101,6 +117,12 @@ const ORDERS_QUERY = `
                 originalUnitPriceSet { shopMoney { amount } }
               }
             }
+          }
+          refunds(first: 10) {
+            id
+            createdAt
+            note
+            totalRefundedSet { shopMoney { amount } }
           }
         }
       }

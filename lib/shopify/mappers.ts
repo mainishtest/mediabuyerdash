@@ -1,4 +1,4 @@
-import type { RawShopifyOrder, RawShopifyLineItem } from "./api";
+import type { RawShopifyOrder, RawShopifyLineItem, RawShopifyRefund } from "./api";
 
 // ── Mapped (Prisma-ready) types ────────────────────────────────────────────────
 
@@ -14,6 +14,12 @@ export interface MappedOrder {
   subtotalPrice:       number;
   totalTax:            number;
   totalDiscount:       number;
+  financialStatus:     string | null;
+  fulfillmentStatus:   string | null;
+  cancelledAt:         Date | null;
+  cancelReason:        string | null;
+  refundTotal:         number;
+  netRevenue:          number;
   customerId:          string | null;
   customerEmail:       string | null;
   utmSource:           string | null;
@@ -23,6 +29,13 @@ export interface MappedOrder {
   utmTerm:             string | null;
   landingPage:         string | null;
   referringSite:       string | null;
+}
+
+export interface MappedRefund {
+  externalRefundId: string;
+  refundAmount:     number;
+  note:             string | null;
+  refundCreatedAt:  Date;
 }
 
 export interface MappedLineItem {
@@ -41,12 +54,28 @@ function money(bag: { shopMoney: { amount: string } }): number {
   return parseFloat(bag.shopMoney.amount) || 0;
 }
 
+/** Compute total refund amount from raw refund array. */
+function sumRefunds(refunds?: RawShopifyRefund[]): number {
+  if (!refunds || refunds.length === 0) return 0;
+  return refunds.reduce((sum, r) => sum + money(r.totalRefundedSet), 0);
+}
+
+/** Normalize Shopify status enum to lowercase. */
+function normalizeStatus(status?: string | null): string | null {
+  if (!status) return null;
+  return status.toLowerCase().replace(/_/g, "_");
+}
+
 export function mapOrder(
   raw: RawShopifyOrder,
   shopifyConnectionId: string,
   clientAccountId: string | null = null,
   workspaceId: string | null = null
 ): MappedOrder {
+  const totalPrice = money(raw.totalPriceSet);
+  const refundTotal = sumRefunds(raw.refunds);
+  const netRevenue = Math.max(0, totalPrice - refundTotal);
+
   return {
     workspaceId,
     shopifyConnectionId,
@@ -55,10 +84,16 @@ export function mapOrder(
     orderNumber:     raw.name,
     orderCreatedAt:  new Date(raw.createdAt),
     currency:        raw.currencyCode,
-    totalPrice:      money(raw.totalPriceSet),
+    totalPrice,
     subtotalPrice:   money(raw.subtotalPriceSet),
     totalTax:        money(raw.totalTaxSet),
     totalDiscount:   money(raw.totalDiscountsSet),
+    financialStatus:  normalizeStatus(raw.displayFinancialStatus),
+    fulfillmentStatus: normalizeStatus(raw.displayFulfillmentStatus),
+    cancelledAt:     raw.cancelledAt ? new Date(raw.cancelledAt) : null,
+    cancelReason:    raw.cancelReason ?? null,
+    refundTotal,
+    netRevenue,
     customerId:      raw.customer?.id          ?? null,
     customerEmail:   raw.customer?.email       ?? null,
     utmSource:       raw.customerJourneySummary?.firstVisit?.utmParameters?.source   ?? null,
@@ -69,6 +104,16 @@ export function mapOrder(
     landingPage:     raw.customerJourneySummary?.firstVisit?.landingPage  ?? null,
     referringSite:   raw.customerJourneySummary?.firstVisit?.referrerUrl  ?? null,
   };
+}
+
+export function mapRefundsForOrder(raw: RawShopifyOrder): MappedRefund[] {
+  if (!raw.refunds || raw.refunds.length === 0) return [];
+  return raw.refunds.map((r) => ({
+    externalRefundId: r.id,
+    refundAmount:     money(r.totalRefundedSet),
+    note:             r.note ?? null,
+    refundCreatedAt:  new Date(r.createdAt),
+  }));
 }
 
 export function mapLineItemsForOrder(

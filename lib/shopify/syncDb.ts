@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import type { MappedOrder, MappedLineItem } from "./mappers";
+import type { MappedOrder, MappedLineItem, MappedRefund } from "./mappers";
 
 // ── Sync log ───────────────────────────────────────────────────────────────────
 
@@ -61,25 +61,59 @@ export async function upsertOrder(order: MappedOrder) {
     },
     create: order,
     update: {
-      workspaceId:     order.workspaceId,
-      orderNumber:     order.orderNumber,
-      orderCreatedAt:  order.orderCreatedAt,
-      clientAccountId: order.clientAccountId,
-      totalPrice:      order.totalPrice,
-      subtotalPrice:   order.subtotalPrice,
-      totalTax:        order.totalTax,
-      totalDiscount:   order.totalDiscount,
-      customerId:      order.customerId,
-      customerEmail:   order.customerEmail,
-      utmSource:       order.utmSource,
-      utmMedium:       order.utmMedium,
-      utmCampaign:     order.utmCampaign,
-      utmContent:      order.utmContent,
-      utmTerm:         order.utmTerm,
-      landingPage:     order.landingPage,
-      referringSite:   order.referringSite,
+      workspaceId:       order.workspaceId,
+      orderNumber:       order.orderNumber,
+      orderCreatedAt:    order.orderCreatedAt,
+      clientAccountId:   order.clientAccountId,
+      totalPrice:        order.totalPrice,
+      subtotalPrice:     order.subtotalPrice,
+      totalTax:          order.totalTax,
+      totalDiscount:     order.totalDiscount,
+      financialStatus:   order.financialStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      cancelledAt:       order.cancelledAt,
+      cancelReason:      order.cancelReason,
+      refundTotal:       order.refundTotal,
+      netRevenue:        order.netRevenue,
+      customerId:        order.customerId,
+      customerEmail:     order.customerEmail,
+      utmSource:         order.utmSource,
+      utmMedium:         order.utmMedium,
+      utmCampaign:       order.utmCampaign,
+      utmContent:        order.utmContent,
+      utmTerm:           order.utmTerm,
+      landingPage:       order.landingPage,
+      referringSite:     order.referringSite,
     },
   });
+}
+
+/** Upsert refund records for an order. Idempotent by externalRefundId. */
+export async function upsertRefunds(
+  shopifyOrderId: string,
+  refunds: MappedRefund[]
+) {
+  if (refunds.length === 0) return;
+
+  for (const refund of refunds) {
+    await prisma.shopifyRefund.upsert({
+      where: {
+        shopifyOrderId_externalRefundId: {
+          shopifyOrderId,
+          externalRefundId: refund.externalRefundId,
+        },
+      },
+      create: {
+        shopifyOrderId,
+        ...refund,
+      },
+      update: {
+        refundAmount:    refund.refundAmount,
+        note:            refund.note,
+        refundCreatedAt: refund.refundCreatedAt,
+      },
+    });
+  }
 }
 
 /** Delete all existing line items for the order then bulk-insert fresh ones. */

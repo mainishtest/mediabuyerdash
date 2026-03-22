@@ -1,8 +1,9 @@
 import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import { mapOrder, mapLineItemsForOrder } from "../../../../lib/shopify/mappers";
-import { upsertOrder, replaceLineItems } from "../../../../lib/shopify/syncDb";
+import { mapOrder, mapLineItemsForOrder, mapRefundsForOrder } from "../../../../lib/shopify/mappers";
+import { upsertOrder, replaceLineItems, upsertRefunds } from "../../../../lib/shopify/syncDb";
+import { recomputeOrderNetRevenue } from "../../../../lib/shopify/revenueNormalization";
 import type { RawShopifyOrder } from "../../../../lib/shopify/api";
 
 export const maxDuration = 30;
@@ -25,8 +26,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing Shopify headers" }, { status: 400 });
   }
 
-  // Only handle order events
-  if (shopifyTopic !== "orders/create" && shopifyTopic !== "orders/updated") {
+  // Handle order and refund events
+  const supportedTopics = ["orders/create", "orders/updated", "refunds/create"];
+  if (!supportedTopics.includes(shopifyTopic)) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
@@ -68,7 +70,59 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unknown shop" }, { status: 404 });
   }
 
-  // Map webhook payload to our format and upsert
+  // Handle refunds/create separately
+  if (shopifyTopic === "refunds/create") {
+    try {
+      const refundPayload = orderPayload as unknown as WebhookRefundPayload;
+      // Find the order this refund belongs to
+      const externalOrderId = `gid://shopify/Order/${refundPayload.order_id}`;
+      const order = await prisma.shopifyOrder.findFirst({
+        where: { shopifyConnectionId: connection.id, externalOrderId },
+        select: { id: true },
+      });
+
+      if (!order) {
+        console.warn(`[Shopify webhook] Refund for unknown order: ${refundPayload.order_id}`);
+        return NextResponse.json({ ok: true, skipped: true, reason: "order_not_found" });
+      }
+
+      // Upsert the refund record
+      const refundAmount = refundPayload.transactions?.reduce(
+        (sum: number, t: { amount: string }) => sum + (parseFloat(t.amount) || 0), 0
+      ) ?? 0;
+
+      await prisma.shopifyRefund.upsert({
+        where: {
+          shopifyOrderId_externalRefundId: {
+            shopifyOrderId: order.id,
+            externalRefundId: `gid://shopify/Refund/${refundPayload.id}`,
+          },
+        },
+        create: {
+          shopifyOrderId: order.id,
+          externalRefundId: `gid://shopify/Refund/${refundPayload.id}`,
+          refundAmount,
+          note: refundPayload.note ?? null,
+          refundCreatedAt: new Date(refundPayload.created_at),
+        },
+        update: {
+          refundAmount,
+          note: refundPayload.note ?? null,
+        },
+      });
+
+      // Recompute order netRevenue from all refund records
+      await recomputeOrderNetRevenue(order.id);
+
+      console.log(`[Shopify webhook] refunds/create: refund ${refundPayload.id} for order ${refundPayload.order_id} processed`);
+      return NextResponse.json({ ok: true, refundId: refundPayload.id });
+    } catch (err) {
+      console.error("[Shopify webhook] Failed to process refund:", err);
+      return NextResponse.json({ error: "Refund processing failed" }, { status: 500 });
+    }
+  }
+
+  // Map webhook payload to our format and upsert (orders/create, orders/updated)
   try {
     const rawOrder = webhookPayloadToRawOrder(orderPayload);
     const mapped = mapOrder(
@@ -80,6 +134,12 @@ export async function POST(request: Request) {
     const saved = await upsertOrder(mapped);
     const lineItems = mapLineItemsForOrder(rawOrder, saved.id);
     await replaceLineItems(saved.id, lineItems);
+
+    // Process refunds if present in the order payload
+    const refunds = mapRefundsForOrder(rawOrder);
+    if (refunds.length > 0) {
+      await upsertRefunds(saved.id, refunds);
+    }
 
     console.log(`[Shopify webhook] ${shopifyTopic}: order ${orderPayload.name} upserted`);
     return NextResponse.json({ ok: true, orderId: saved.id });
@@ -101,6 +161,10 @@ interface WebhookOrderPayload {
   subtotal_price: string;
   total_tax: string;
   total_discounts: string;
+  financial_status?: string;
+  fulfillment_status?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   customer?: { id: number; email?: string };
   landing_site?: string;
   referring_site?: string;
@@ -110,6 +174,20 @@ interface WebhookOrderPayload {
     quantity: number;
     price: string;
   }>;
+  refunds?: Array<{
+    id: number;
+    created_at: string;
+    note?: string | null;
+    transactions?: Array<{ amount: string }>;
+  }>;
+}
+
+interface WebhookRefundPayload {
+  id: number;
+  order_id: number;
+  created_at: string;
+  note?: string | null;
+  transactions?: Array<{ amount: string }>;
 }
 
 /**
@@ -122,6 +200,10 @@ function webhookPayloadToRawOrder(p: WebhookOrderPayload): RawShopifyOrder {
     name:         p.name,
     createdAt:    p.created_at,
     currencyCode: p.currency,
+    displayFinancialStatus:  p.financial_status?.toUpperCase() ?? null,
+    displayFulfillmentStatus: p.fulfillment_status?.toUpperCase() ?? null,
+    cancelledAt:  p.cancelled_at ?? null,
+    cancelReason: p.cancel_reason ?? null,
     totalPriceSet:     { shopMoney: { amount: p.total_price } },
     subtotalPriceSet:  { shopMoney: { amount: p.subtotal_price } },
     totalTaxSet:       { shopMoney: { amount: p.total_tax } },
@@ -142,5 +224,16 @@ function webhookPayloadToRawOrder(p: WebhookOrderPayload): RawShopifyOrder {
         },
       })),
     },
+    // Map refunds from webhook payload to our format
+    refunds: p.refunds?.map((r) => ({
+      id:        `gid://shopify/Refund/${r.id}`,
+      createdAt: r.created_at,
+      note:      r.note ?? null,
+      totalRefundedSet: {
+        shopMoney: {
+          amount: String(r.transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) ?? 0),
+        },
+      },
+    })),
   };
 }

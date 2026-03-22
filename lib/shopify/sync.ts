@@ -1,8 +1,8 @@
 import { prisma } from "../db";
 import { getShopifyConnectionById, getClientShopifyConnection } from "./db";
 import { streamOrdersSince }        from "./api";
-import { mapOrder, mapLineItemsForOrder } from "./mappers";
-import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems } from "./syncDb";
+import { mapOrder, mapLineItemsForOrder, mapRefundsForOrder } from "./mappers";
+import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems, upsertRefunds } from "./syncDb";
 
 export type ShopifySyncMode = "incremental" | "backfill";
 
@@ -10,6 +10,7 @@ export interface ShopifySyncSummary {
   status:          "completed" | "partial" | "failed" | "token_invalid";
   ordersSynced:    number;
   lineItemsSynced: number;
+  refundsSynced:   number;
   errors:          string[];
   startedAt:       string;
   completedAt:     string;
@@ -79,6 +80,7 @@ function emptySummary(
     status,
     ordersSynced: 0,
     lineItemsSynced: 0,
+    refundsSynced: 0,
     errors,
     startedAt: startedAt.toISOString(),
     completedAt: new Date().toISOString(),
@@ -106,7 +108,7 @@ async function _runSync(
   mode: ShopifySyncMode = "incremental"
 ): Promise<ShopifySyncSummary> {
   const syncLog = await createSyncLog(connection.id);
-  const counts  = { ordersSynced: 0, lineItemsSynced: 0 };
+  const counts  = { ordersSynced: 0, lineItemsSynced: 0, refundsSynced: 0 };
   const errors: string[] = [];
   let hasTokenError = false;
 
@@ -142,6 +144,13 @@ async function _runSync(
             const lineItems = mapLineItemsForOrder(rawOrder, saved.id);
             await replaceLineItems(saved.id, lineItems);
 
+            // Process refunds (upsert, not replace — refunds are append-only)
+            const refunds = mapRefundsForOrder(rawOrder);
+            if (refunds.length > 0) {
+              await upsertRefunds(saved.id, refunds);
+              counts.refundsSynced += refunds.length;
+            }
+
             counts.ordersSynced   += 1;
             counts.lineItemsSynced += lineItems.length;
           } catch (err) {
@@ -175,6 +184,7 @@ async function _runSync(
     status,
     ordersSynced:    counts.ordersSynced,
     lineItemsSynced: counts.lineItemsSynced,
+    refundsSynced:   counts.refundsSynced,
     errors,
     startedAt:       startedAt.toISOString(),
     completedAt:     new Date().toISOString(),
