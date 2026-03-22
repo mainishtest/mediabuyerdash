@@ -231,10 +231,31 @@ export function ReadinessView({ summary }: Props) {
         </div>
       )}
 
+      {/* Data health link */}
+      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Data Health Check</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Validate your synced data before relying on dashboard numbers.
+            </p>
+          </div>
+          <Link
+            href="/health"
+            className="shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+          >
+            View Health Check
+          </Link>
+        </div>
+      </div>
+
       {/* Footer links */}
       <div className="mt-6 flex flex-wrap gap-3 text-xs">
         <Link href="/onboarding" className="text-slate-500 transition-colors hover:text-slate-300">
           Back to Onboarding
+        </Link>
+        <Link href="/health" className="text-slate-500 transition-colors hover:text-slate-300">
+          Data Health
         </Link>
         <Link href="/home" className="text-slate-500 transition-colors hover:text-slate-300">
           Go to Dashboard
