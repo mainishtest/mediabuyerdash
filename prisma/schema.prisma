@@ -1454,16 +1454,23 @@ model UploadedCreativeAnalysis {
 // A generated image iteration concept for a given uploaded creative.
 // v1: deterministic. v2: AI-generated real image edits.
 model GeneratedImageIterationConcept {
-  id                    String   @id @default(cuid())
+  id                      String   @id @default(cuid())
   uploadedCreativeImageId String
-  title                 String
-  conceptSummary        String
-  visualChanges         String
-  goal                  String
-  directResponseAngle   String?  // e.g. "stronger offer clarity"
-  approvalStatus        String   @default("draft") // draft | approved | rejected
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  title                   String
+  conceptSummary          String
+  visualChanges           String
+  goal                    String
+  directResponseAngle     String?  // e.g. "stronger offer clarity"
+  approvalStatus          String   @default("draft") // draft | approved | rejected
+  // Image generation fields (v2: real AI-generated images)
+  generationStatus        String   @default("pending") // pending | generating | completed | failed
+  generatedImagePath      String?  // local storage path: /uploads/generated/[id].png
+  generationProvider      String?  // openai_dalle3 | null
+  generationPrompt        String?  // the prompt sent to the image API
+  generationError         String?  // error message if generation failed
+  generatedAt             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   image UploadedCreativeImage @relation(fields: [uploadedCreativeImageId], references: [id], onDelete: Cascade)
 

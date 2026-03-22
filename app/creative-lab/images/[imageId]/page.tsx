@@ -53,6 +53,9 @@ export default async function ImageDetailPage({
         goal:                c.goal,
         directResponseAngle: c.directResponseAngle,
         approvalStatus:      c.approvalStatus,
+        generationStatus:    c.generationStatus,
+        generatedImagePath:  c.generatedImagePath,
+        generationError:     c.generationError,
       }))}
     />
   );

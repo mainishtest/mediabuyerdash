@@ -65,3 +65,44 @@ function extensionFor(mimeType: string): string {
     default:           return "bin";
   }
 }
+
+// ── Generated image download + storage ─────────────────────────────────────
+
+export interface GeneratedImageStorageResult {
+  storagePath: string;  // URL path: /uploads/generated/[id].png
+  fileSize:    number;
+}
+
+/**
+ * Download an image from a temporary URL (e.g. OpenAI) and persist it locally.
+ * Returns the local storage path for serving via Next.js.
+ */
+export async function downloadAndStoreGeneratedImage(
+  conceptId: string,
+  imageUrl: string
+): Promise<GeneratedImageStorageResult> {
+  const dir = join(process.cwd(), "public", "uploads", "generated");
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const res = await fetch(imageUrl);
+  if (!res.ok) {
+    throw new Error(`Failed to download generated image: HTTP ${res.status}`);
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`Generated image too large: ${buffer.length} bytes`);
+  }
+
+  // DALL-E 3 always returns PNG
+  const filename = `${conceptId}.png`;
+  await writeFile(join(dir, filename), buffer);
+
+  return {
+    storagePath: `/uploads/generated/${filename}`,
+    fileSize:    buffer.length,
+  };
+}

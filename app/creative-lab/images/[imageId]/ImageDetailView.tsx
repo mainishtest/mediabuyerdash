@@ -11,6 +11,8 @@ import {
   analyzeCreativeImageAction,
   generateConceptsAction,
   updateConceptApprovalAction,
+  generateConceptImageAction,
+  generateAllConceptImagesAction,
 } from "../actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -43,6 +45,9 @@ interface ConceptData {
   goal:                string;
   directResponseAngle: string | null;
   approvalStatus:      string;
+  generationStatus:    string;
+  generatedImagePath:  string | null;
+  generationError:     string | null;
 }
 
 interface Props {
@@ -118,16 +123,37 @@ function ScoreGauge({ label, score }: { label: string; score: number | null }) {
 
 // ── Concept card ───────────────────────────────────────────────────────────────
 
+function generationStatusLabel(status: string): string {
+  switch (status) {
+    case "generating": return "Generating…";
+    case "completed":  return "Generated";
+    case "failed":     return "Failed";
+    default:           return "Not generated";
+  }
+}
+
+function generationBadgeVariant(status: string): "success" | "warning" | "danger" | "neutral" {
+  switch (status) {
+    case "generating": return "warning";
+    case "completed":  return "success";
+    case "failed":     return "danger";
+    default:           return "neutral";
+  }
+}
+
 function ConceptCard({
   concept,
   imageId,
   onStatusChange,
+  onConceptUpdate,
 }: {
   concept:        ConceptData;
   imageId:        string;
   onStatusChange: (id: string, status: "approved" | "rejected" | "draft") => void;
+  onConceptUpdate: (id: string, updates: Partial<ConceptData>) => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isGenerating, startGenerateTransition] = useTransition();
 
   function setStatus(status: "approved" | "rejected" | "draft") {
     startTransition(async () => {
@@ -136,8 +162,29 @@ function ConceptCard({
     });
   }
 
+  function handleGenerateImage() {
+    onConceptUpdate(concept.id, { generationStatus: "generating", generationError: null });
+    startGenerateTransition(async () => {
+      const result = await generateConceptImageAction(concept.id, imageId);
+      if (result.success && result.imagePath) {
+        onConceptUpdate(concept.id, {
+          generationStatus: "completed",
+          generatedImagePath: result.imagePath,
+          generationError: null,
+        });
+      } else {
+        onConceptUpdate(concept.id, {
+          generationStatus: "failed",
+          generationError: result.error ?? "Generation failed",
+        });
+      }
+    });
+  }
+
   const approved = concept.approvalStatus === "approved";
   const rejected = concept.approvalStatus === "rejected";
+  const hasImage = concept.generationStatus === "completed" && concept.generatedImagePath;
+  const isGen    = concept.generationStatus === "generating" || isGenerating;
 
   return (
     <div
@@ -155,10 +202,45 @@ function ConceptCard({
             <p className="mt-0.5 text-xs text-slate-500 capitalize">{concept.directResponseAngle}</p>
           )}
         </div>
-        <Badge variant={approvalVariant(concept.approvalStatus)}>
-          {concept.approvalStatus}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={generationBadgeVariant(concept.generationStatus)}>
+            {generationStatusLabel(concept.generationStatus)}
+          </Badge>
+          <Badge variant={approvalVariant(concept.approvalStatus)}>
+            {concept.approvalStatus}
+          </Badge>
+        </div>
       </div>
+
+      {/* Generated image preview */}
+      {hasImage && (
+        <div className="relative h-48 overflow-hidden rounded-lg bg-slate-800">
+          <Image
+            src={concept.generatedImagePath!}
+            alt={concept.title}
+            fill
+            className="object-contain"
+            unoptimized
+          />
+        </div>
+      )}
+
+      {/* Generating spinner */}
+      {isGen && (
+        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-800/50">
+          <div className="text-center">
+            <div className="mx-auto mb-2 h-6 w-6 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400" />
+            <p className="text-xs text-slate-400">Generating image…</p>
+          </div>
+        </div>
+      )}
+
+      {/* Generation error */}
+      {concept.generationStatus === "failed" && concept.generationError && (
+        <div className="rounded-lg border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-xs text-rose-400">
+          {concept.generationError}
+        </div>
+      )}
 
       {/* Body */}
       <div className="space-y-3 text-sm">
@@ -178,6 +260,17 @@ function ConceptCard({
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2 pt-1">
+        {/* Generate / regenerate image */}
+        {!isGen && (
+          <ActionButton
+            size="sm"
+            variant={hasImage ? "ghost" : "secondary"}
+            disabled={isPending || isGenerating}
+            onClick={handleGenerateImage}
+          >
+            {hasImage ? "Regenerate Image" : concept.generationStatus === "failed" ? "Retry Image" : "Generate Image"}
+          </ActionButton>
+        )}
         {!approved && (
           <ActionButton
             size="sm"
@@ -301,6 +394,27 @@ export function ImageDetailView({ image, analysis: initialAnalysis, concepts: in
     setConcepts((prev) =>
       prev.map((c) => (c.id === id ? { ...c, approvalStatus: status } : c))
     );
+  }
+
+  function handleConceptUpdate(id: string, updates: Partial<ConceptData>) {
+    setConcepts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
+    );
+  }
+
+  const [genAllPending, startGenAllTransition] = useTransition();
+
+  function handleGenerateAllImages() {
+    setError(null);
+    startGenAllTransition(async () => {
+      const result = await generateAllConceptImagesAction(image.id);
+      if (!result.success) {
+        setError(result.error ?? "Batch generation failed.");
+      }
+      if (result.generated > 0 || result.failed > 0) {
+        window.location.reload();
+      }
+    });
   }
 
   const hasAnalysis  = analysis !== null && analysis.analysisStatus === "completed";
@@ -435,9 +549,21 @@ export function ImageDetailView({ image, analysis: initialAnalysis, concepts: in
             <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
               Iteration Concepts
             </h2>
-            {approvedCount > 0 && (
-              <Badge variant="success">{approvedCount} approved</Badge>
-            )}
+            <div className="flex items-center gap-3">
+              {concepts.some((c) => c.generationStatus === "pending" || c.generationStatus === "failed") && (
+                <ActionButton
+                  size="sm"
+                  variant="secondary"
+                  disabled={genAllPending}
+                  onClick={handleGenerateAllImages}
+                >
+                  {genAllPending ? "Generating…" : "Generate All Images"}
+                </ActionButton>
+              )}
+              {approvedCount > 0 && (
+                <Badge variant="success">{approvedCount} approved</Badge>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {concepts.map((concept) => (
@@ -446,6 +572,7 @@ export function ImageDetailView({ image, analysis: initialAnalysis, concepts: in
                 concept={concept}
                 imageId={image.id}
                 onStatusChange={handleConceptStatusChange}
+                onConceptUpdate={handleConceptUpdate}
               />
             ))}
           </div>
