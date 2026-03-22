@@ -15,15 +15,24 @@ import type { AlertEventRow, AlertSummary, AlertType, AlertSeverity, AlertStatus
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ALERT_TYPE_LABELS: Record<AlertType, string> = {
-  roas_drop:           "ROAS Drop",
-  cpa_spike:           "CPA Spike",
-  spend_drop:          "Spend Drop",
-  spend_spike:         "Spend Spike",
-  stale_sync:          "Stale Sync",
-  no_data:             "No Data",
-  campaign_below_goal: "Below Goal",
-  campaign_above_goal: "Above Goal",
-  integration_failure: "Integration Failure",
+  roas_drop:                  "ROAS Drop",
+  cpa_spike:                  "CPA Spike",
+  spend_drop:                 "Spend Drop",
+  spend_spike:                "Spend Spike",
+  stale_sync:                 "Stale Sync",
+  no_data:                    "No Data",
+  campaign_below_goal:        "Below Goal",
+  campaign_above_goal:        "Above Goal",
+  integration_failure:        "Integration Failure",
+  // Proactive triggers
+  scale_ready:                "Scale Ready",
+  winner_detected:            "Winner Detected",
+  loser_detected:             "Loser Detected",
+  creative_fatigue_detected:  "Creative Fatigue",
+  follow_up_test_needed:      "Follow-Up Test",
+  action_blocked:             "Action Blocked",
+  trust_state_warning:        "Trust Warning",
+  sync_health_issue:          "Sync Issue",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
