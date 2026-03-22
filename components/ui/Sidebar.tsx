@@ -53,6 +53,11 @@ const NAV: NavEntry[] = [
   },
   {
     kind:  "leaf",
+    href:  "/briefs",
+    label: "Morning Brief",
+  },
+  {
+    kind:  "leaf",
     href:  "/command-center",
     label: "Command Center",
   },

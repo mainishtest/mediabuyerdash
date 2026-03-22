@@ -1937,3 +1937,25 @@ model AutomationOverride {
   @@index([scope, scopeId, isActive])
   @@index([actionId])
 }
+
+// ─── Daily Morning Brief ──────────────────────────────────────────────────────
+// Persists generated daily briefs for in-app viewing and delivery tracking.
+// briefJson stores the full DailyMorningBrief as serialised JSON.
+// deliveryState tracks the delivery pipeline: pending → generated → delivered_in_app / delivered_email / failed / skipped.
+model DailyBriefRecord {
+  id            String    @id @default(cuid())
+  workspaceId   String?
+  briefDate     String    // YYYY-MM-DD — the date being reported (yesterday)
+  timezone      String    @default("America/New_York")
+  deliveryState String    @default("pending") // pending | generated | delivered_in_app | delivered_email | failed | skipped
+  briefJson     String    @db.Text            // Full DailyMorningBrief serialised as JSON
+  retryCount    Int       @default(0)
+  lastError     String?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([workspaceId, briefDate])
+  @@index([deliveryState])
+  @@unique([workspaceId, briefDate], name: "unique_workspace_briefdate")
+}
