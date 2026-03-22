@@ -24,6 +24,7 @@ import type {
   CreativeOverviewFilters,
 } from "../../types/creativeWorkflow";
 import { QUICK_GENERATE_MODES } from "../../types/creativeWorkflow";
+import type { CreativeSourceAsset } from "../../types/creativeSourceAsset";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -33,6 +34,7 @@ type Props = {
   items: CreativeOverviewItem[];
   clients: Array<{ id: string; name: string }>;
   selectedClientId: string | null;
+  sourceAssets?: CreativeSourceAsset[];
 };
 
 // ---------------------------------------------------------------------------
@@ -51,7 +53,8 @@ const STATUS_COLORS: Record<CreativeHealthStatus, string> = {
 // Component
 // ---------------------------------------------------------------------------
 
-export function CreativeWorkflow({ items, clients, selectedClientId }: Props) {
+export function CreativeWorkflow({ items, clients, selectedClientId, sourceAssets = [] }: Props) {
+  const [activeTab, setActiveTab] = useState<"ads" | "uploads">("ads");
   // ── State ────────────────────────────────────────────────────────────────
   const [filters, setFilters] = useState<CreativeOverviewFilters>({
     clientId:   selectedClientId,
@@ -236,6 +239,40 @@ export function CreativeWorkflow({ items, clients, selectedClientId }: Props) {
     [],
   );
 
+  // ── Generate from uploaded asset ──────────────────────────────────────
+  const handleGenerateFromAsset = useCallback(
+    (asset: CreativeSourceAsset, mode: QuickGenerateMode) => {
+      // Convert source asset into a CreativeOverviewItem-like shape for handleGenerate
+      const item: CreativeOverviewItem = {
+        id:                  asset.id,
+        externalCreativeId:  asset.id,
+        externalCampaignId:  "uploaded",
+        clientAccountId:     asset.clientAccountId ?? "",
+        clientName:          asset.clientName ?? "Unknown",
+        creativeName:        asset.fileName,
+        campaignName:        "Uploaded Creative",
+        thumbnailUrl:        asset.storagePath,
+        imageUrl:            asset.storagePath,
+        adCopy:              asset.sourceCopy,
+        callToAction:        asset.sourceCallToAction,
+        spend:               0,
+        impressions:         0,
+        clicks:              0,
+        ctr:                 0,
+        frequency:           null,
+        roas:                null,
+        cpa:                 null,
+        status:              "insufficient_data",
+        statusLabel:         "Uploaded",
+        canGenerateCopy:     asset.sourceCopy != null && asset.sourceCopy.length > 0,
+        canGenerateImage:    asset.storagePath != null,
+        canLaunchTest:       false,
+      };
+      handleGenerate(item, mode);
+    },
+    [handleGenerate],
+  );
+
   // ── Quick Launch ─────────────────────────────────────────────────────────
   const handleLaunch = useCallback(async () => {
     if (!selectedItem || !selectedVariant) return;
@@ -300,6 +337,12 @@ export function CreativeWorkflow({ items, clients, selectedClientId }: Props) {
         </div>
         <div className="flex gap-2">
           <Link
+            href="/creative-lab/images"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
+          >
+            Upload Image
+          </Link>
+          <Link
             href="/creative-lab/generate"
             className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
           >
@@ -307,6 +350,32 @@ export function CreativeWorkflow({ items, clients, selectedClientId }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* Tabs — only visible on overview */}
+      {step === "overview" && !generating && (
+        <div className="flex gap-1 rounded-lg border border-slate-800 bg-slate-900/40 p-1">
+          <button
+            onClick={() => setActiveTab("ads")}
+            className={`rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === "ads"
+                ? "bg-slate-700 text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Synced Ads {items.length > 0 && `(${items.length})`}
+          </button>
+          <button
+            onClick={() => setActiveTab("uploads")}
+            className={`rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === "uploads"
+                ? "bg-slate-700 text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Uploaded Assets {sourceAssets.length > 0 && `(${sourceAssets.length})`}
+          </button>
+        </div>
+      )}
 
       {/* Generating overlay */}
       {step === "generating" && generating && (
@@ -479,8 +548,41 @@ export function CreativeWorkflow({ items, clients, selectedClientId }: Props) {
         </div>
       )}
 
-      {/* ── Surface 1: Creative Overview ────────────────────────────────── */}
-      {step === "overview" && !generating && (
+      {/* ── Surface 1a: Uploaded Assets ───────────────────────────────── */}
+      {step === "overview" && !generating && activeTab === "uploads" && (
+        <>
+          {sourceAssets.length === 0 ? (
+            <SectionCard>
+              <EmptyState
+                icon="◇"
+                title="No uploaded assets yet"
+                description="Upload an image with optional source copy to use as the basis for variation generation."
+                action={
+                  <Link
+                    href="/creative-lab/images"
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                  >
+                    Upload Image
+                  </Link>
+                }
+              />
+            </SectionCard>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {sourceAssets.map((asset) => (
+                <SourceAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  onGenerate={handleGenerateFromAsset}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Surface 1b: Creative Overview (synced ads) ──────────────────── */}
+      {step === "overview" && !generating && activeTab === "ads" && (
         <>
           {/* Filters */}
           <SectionCard>
@@ -714,6 +816,110 @@ function FilterSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Source Asset Card — one uploaded asset in the uploads grid
+// ---------------------------------------------------------------------------
+
+function SourceAssetCard({
+  asset,
+  onGenerate,
+}: {
+  asset: CreativeSourceAsset;
+  onGenerate: (asset: CreativeSourceAsset, mode: QuickGenerateMode) => void;
+}) {
+  const fileSizeLabel = asset.fileSize
+    ? asset.fileSize < 1024 * 1024
+      ? `${(asset.fileSize / 1024).toFixed(0)} KB`
+      : `${(asset.fileSize / 1024 / 1024).toFixed(1)} MB`
+    : null;
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700">
+      {/* Header */}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-white">
+            {asset.fileName ?? "Uploaded Asset"}
+          </p>
+          <p className="truncate text-xs text-slate-500">
+            {asset.clientName ?? "No client"} · Uploaded
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-indigo-800/50 bg-indigo-900/30 px-2 py-0.5 text-[10px] font-medium text-indigo-400">
+          {asset.type === "uploaded_image_and_copy" ? "Image + Copy" : "Image"}
+        </span>
+      </div>
+
+      {/* Thumbnail */}
+      {asset.storagePath && (
+        <div className="mb-3 h-28 overflow-hidden rounded-lg border border-slate-800 bg-slate-800/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={asset.storagePath}
+            alt={asset.fileName ?? "Uploaded creative"}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* Copy preview */}
+      {asset.sourceCopy && (
+        <p className="mb-3 text-xs leading-relaxed text-slate-400 line-clamp-2">
+          {asset.sourceCopy}
+        </p>
+      )}
+
+      {/* Metadata */}
+      <div className="mb-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        {fileSizeLabel && <span>{fileSizeLabel}</span>}
+        {asset.detectedStyle && <span className="capitalize">{asset.detectedStyle.replace("-", " ")}</span>}
+        {asset.analysisStatus === "completed" && (
+          <>
+            {asset.clarityScore != null && <span>Clarity {asset.clarityScore}/10</span>}
+            {asset.attentionScore != null && <span>Attention {asset.attentionScore}/10</span>}
+          </>
+        )}
+        {asset.iterationCount > 0 && <span>{asset.iterationCount} concepts</span>}
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-1.5">
+        {asset.sourceCopy && (
+          <button
+            onClick={() => onGenerate(asset, "copy_variations")}
+            className="flex-1 rounded-lg bg-violet-600/80 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-600"
+          >
+            Copy Tests
+          </button>
+        )}
+        {asset.storagePath && (
+          <button
+            onClick={() => onGenerate(asset, "image_brief_variations")}
+            className="flex-1 rounded-lg bg-cyan-600/80 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-cyan-600"
+          >
+            Image Vars
+          </button>
+        )}
+        <button
+          onClick={() => onGenerate(asset, "full_refresh_package")}
+          className="flex-1 rounded-lg border border-indigo-700/50 bg-indigo-950/30 px-2.5 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-900/30"
+        >
+          Full Refresh
+        </button>
+      </div>
+
+      {/* Link to detail */}
+      <Link
+        href={`/creative-lab/images/${asset.id}`}
+        className="mt-2 block text-center text-[10px] text-slate-500 hover:text-slate-300"
+      >
+        View details →
+      </Link>
     </div>
   );
 }

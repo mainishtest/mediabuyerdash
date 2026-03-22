@@ -20,6 +20,7 @@ import { getServerSession } from "next-auth";
 import { authOptions }      from "../../lib/auth";
 import { prisma }           from "../../lib/db";
 import { buildCreativeOverviewItems } from "../../lib/creativelab/overview";
+import { loadSourceAssets }           from "../../lib/creativelab/sourceAsset";
 import { CreativeWorkflow }           from "./CreativeWorkflow";
 
 export const metadata = {
@@ -36,7 +37,7 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
 
   const selectedClientId = searchParams?.clientId ?? null;
 
-  const [clients, items] = await Promise.all([
+  const [clients, items, sourceAssets] = await Promise.all([
     prisma.clientAccount
       .findMany({
         select:  { id: true, name: true },
@@ -45,6 +46,7 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
       })
       .catch(() => []),
     buildCreativeOverviewItems(workspaceId).catch(() => []),
+    loadSourceAssets(workspaceId).catch(() => []),
   ]);
 
   return (
@@ -52,6 +54,7 @@ export default async function CreativeLabPage({ searchParams }: PageProps) {
       items={items}
       clients={clients}
       selectedClientId={selectedClientId}
+      sourceAssets={sourceAssets}
     />
   );
 }

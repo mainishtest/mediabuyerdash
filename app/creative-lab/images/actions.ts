@@ -22,8 +22,10 @@ export interface UploadResult {
 export async function uploadCreativeImageAction(
   formData: FormData
 ): Promise<UploadResult> {
-  const file     = formData.get("image");
-  const clientId = formData.get("clientAccountId");
+  const file              = formData.get("image");
+  const clientId          = formData.get("clientAccountId");
+  const sourceCopy        = formData.get("sourceCopy");
+  const sourceCallToAction = formData.get("sourceCallToAction");
 
   if (!(file instanceof File) || !file.name) {
     return { success: false, error: "No file provided." };
@@ -48,17 +50,20 @@ export async function uploadCreativeImageAction(
 
     await prisma.uploadedCreativeImage.create({
       data: {
-        id:              imageId,
-        workspaceId:     workspaceId ?? undefined,
-        clientAccountId: typeof clientId === "string" && clientId ? clientId : undefined,
-        fileName:        stored.fileName,
-        mimeType:        stored.mimeType,
-        fileSize:        stored.fileSize,
-        storagePath:     stored.storagePath,
+        id:                 imageId,
+        workspaceId:        workspaceId ?? undefined,
+        clientAccountId:    typeof clientId === "string" && clientId ? clientId : undefined,
+        fileName:           stored.fileName,
+        mimeType:           stored.mimeType,
+        fileSize:           stored.fileSize,
+        storagePath:        stored.storagePath,
+        sourceCopy:         typeof sourceCopy === "string" && sourceCopy.trim() ? sourceCopy.trim() : undefined,
+        sourceCallToAction: typeof sourceCallToAction === "string" && sourceCallToAction.trim() ? sourceCallToAction.trim() : undefined,
       },
     });
 
     revalidatePath("/creative-lab/images");
+    revalidatePath("/creative-lab");
     return { success: true, imageId };
   } catch (err) {
     console.error("[uploadCreativeImageAction]", err);

@@ -181,6 +181,7 @@ model ClientAccount {
   goalDefaults            ClientGoalDefaults?
   budgetPacingTargets     BudgetPacingTarget[]
   autoExecutionSettings   AutoExecutionSettings?
+  uploadedCreativeImages  UploadedCreativeImage[]
 }
 
 model Campaign {
@@ -1508,12 +1509,16 @@ model UploadedCreativeImage {
   mimeType         String
   fileSize         Int      // bytes
   storagePath      String   // relative path, e.g. "/uploads/creatives/[id].jpg"
+  // Source copy (optional) — user-provided ad copy to use for variation generation
+  sourceCopy           String?  // primary text / body copy
+  sourceCallToAction   String?  // CTA text (e.g. "Shop Now", "Learn More")
   uploadedAt       DateTime @default(now())
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  analysis   UploadedCreativeAnalysis?
-  iterations GeneratedImageIterationConcept[]
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id])
+  analysis      UploadedCreativeAnalysis?
+  iterations    GeneratedImageIterationConcept[]
 
   @@index([workspaceId])
   @@index([clientAccountId])
