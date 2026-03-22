@@ -30,6 +30,7 @@ import type {
   AccountDefaults,
 } from "../../lib/onboarding-types";
 import type { MetaSetupChecklistItem } from "../../lib/meta/types";
+import type { ShopifySetupChecklistItem } from "../../lib/shopify/types";
 import { VISIBLE_ONBOARDING_STEPS, type OnboardingStepId } from "../../lib/onboarding-types";
 
 type Props = {
@@ -41,6 +42,7 @@ type Props = {
   accountDefaults: AccountDefaults;
   metaChecklist: MetaSetupChecklistItem[];
   metaConfigured: boolean;
+  shopifyChecklist: ShopifySetupChecklistItem[];
 };
 
 export function OnboardingWizard({
@@ -52,6 +54,7 @@ export function OnboardingWizard({
   accountDefaults,
   metaChecklist,
   metaConfigured,
+  shopifyChecklist,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -319,6 +322,7 @@ export function OnboardingWizard({
           {currentStep === "connect_shopify_placeholder" && (
             <ConnectShopifyStep
               integrations={integrations}
+              shopifyChecklist={shopifyChecklist}
               onContinue={handleConnectShopifyContinue}
               onBack={() => goTo("connect_meta_placeholder")}
               isPending={isPending}

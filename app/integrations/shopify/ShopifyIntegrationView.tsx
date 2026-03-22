@@ -10,7 +10,9 @@ import {
   startShopifyOAuthAction,
   disconnectShopifyAction,
   connectShopifyClientCredentialsAction,
+  triggerShopifySyncAction,
 } from "./actions";
+import type { ShopifyReconnectState, ShopifySyncSetupState, ShopifyRevenueSyncStatus } from "../../../lib/shopify/types";
 
 // ── Error label map ────────────────────────────────────────────────────────────
 
@@ -45,12 +47,15 @@ interface SyncLog {
 }
 
 interface Props {
-  isConfigured:  boolean;
-  connection:    Connection | null;
-  syncLog:       SyncLog | null;
-  orderCount:    number;
-  errorMessage:  string | null;
-  justConnected: boolean;
+  isConfigured:      boolean;
+  connection:        Connection | null;
+  syncLog:           SyncLog | null;
+  orderCount:        number;
+  errorMessage:      string | null;
+  justConnected:     boolean;
+  reconnectState:    ShopifyReconnectState;
+  syncSetupState:    ShopifySyncSetupState;
+  revenueSyncStatus: ShopifyRevenueSyncStatus;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -62,14 +67,27 @@ export function ShopifyIntegrationView({
   orderCount,
   errorMessage,
   justConnected,
+  reconnectState,
+  syncSetupState,
+  revenueSyncStatus,
 }: Props) {
   const [shopInput,      setShopInput]      = useState("");
   const [clientIdInput,  setClientIdInput]  = useState("");
   const [clientSecInput, setClientSecInput] = useState("");
   const [connectMode,    setConnectMode]    = useState<"credentials" | "oauth">("credentials");
   const [credsError,     setCredsError]     = useState<string | null>(null);
+  const [syncMessage,    setSyncMessage]    = useState<string | null>(null);
   const [isPending,      startTransition]   = useTransition();
   const [credsPending,   startCreds]        = useTransition();
+  const [isSyncing,      startSync]         = useTransition();
+
+  function handleSync() {
+    setSyncMessage(null);
+    startSync(async () => {
+      const result = await triggerShopifySyncAction();
+      setSyncMessage(result.message);
+    });
+  }
 
   const humanError = errorMessage ? (ERROR_LABELS[errorMessage] ?? errorMessage) : null;
 
@@ -84,6 +102,45 @@ export function ShopifyIntegrationView({
             : <Badge variant="neutral">Not Connected</Badge>
         }
       />
+
+      {/* Reconnect banner */}
+      {reconnectState.needsReconnect && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-300">Reconnection needed</p>
+              <p className="mt-0.5 text-xs text-amber-400/80">{reconnectState.message}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revenue sync health banner */}
+      {connection && (revenueSyncStatus.state === "stale" || revenueSyncStatus.state === "failed") && (
+        <div className={`rounded-lg border px-4 py-3 ${
+          revenueSyncStatus.state === "failed"
+            ? "border-rose-800/50 bg-rose-950/30"
+            : "border-amber-800/50 bg-amber-950/30"
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className={`text-sm font-medium ${revenueSyncStatus.state === "failed" ? "text-rose-300" : "text-amber-300"}`}>
+                {revenueSyncStatus.state === "failed" ? "Sync failed" : "Sync data is stale"}
+              </p>
+              <p className={`mt-0.5 text-xs ${revenueSyncStatus.state === "failed" ? "text-rose-400/80" : "text-amber-400/80"}`}>
+                {revenueSyncStatus.message}
+              </p>
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {isSyncing ? "Syncing…" : "Retry Sync"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Status banners */}
       {justConnected && (
@@ -381,6 +438,58 @@ export function ShopifyIntegrationView({
                 {new Date(syncLog.completedAt).toLocaleString()}
               </span>
             )}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Sync trigger — shown when connected */}
+      {connection && (
+        <SectionCard
+          title="Revenue Sync"
+          description="Sync Shopify orders to populate CRM revenue data for ROAS and CPA calculations."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              {syncMessage && (
+                <span className="text-xs text-slate-300">{syncMessage}</span>
+              )}
+              <ActionButton
+                variant="primary"
+                size="sm"
+                disabled={isSyncing}
+                onClick={handleSync}
+              >
+                {isSyncing ? "Syncing…" : syncSetupState.status === "failed" ? "Retry Sync" : "Run Sync Now"}
+              </ActionButton>
+            </div>
+          }
+        >
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Status", value: revenueSyncStatus.state.replace(/_/g, " ") },
+                { label: "Orders", value: String(revenueSyncStatus.orderCount) },
+                { label: "Last sync", value: syncSetupState.lastSyncAt ? new Date(syncSetupState.lastSyncAt).toLocaleString() : "Never" },
+                { label: "Health", value: revenueSyncStatus.state === "healthy" ? "Healthy" : revenueSyncStatus.state === "stale" ? "Stale" : revenueSyncStatus.state },
+              ].map((s) => (
+                <div key={s.label} className="rounded-lg bg-slate-800/40 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{s.label}</p>
+                  <p className="mt-1 text-sm font-medium capitalize text-white">{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {syncSetupState.errorMessage && (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+                {syncSetupState.errorMessage}
+              </div>
+            )}
+
+            <a
+              href="/integrations/shopify/sync"
+              className="inline-block text-xs text-slate-400 transition-colors hover:text-white"
+            >
+              View detailed sync log →
+            </a>
           </div>
         </SectionCard>
       )}

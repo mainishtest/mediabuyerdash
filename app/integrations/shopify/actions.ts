@@ -162,6 +162,15 @@ export async function connectShopifyClientCredentialsAction(
   redirect("/integrations/shopify?connected=1");
 }
 
+/** Trigger a Shopify sync for the latest connection. */
+export async function triggerShopifySyncAction(): Promise<{ success: boolean; message: string }> {
+  const { initializeShopifyRevenueSync } = await import("../../../lib/shopify/integrationState");
+  const result = await initializeShopifyRevenueSync();
+  revalidatePath("/integrations/shopify");
+  revalidatePath("/integrations/shopify/sync");
+  return result;
+}
+
 /** Remove a Shopify connection from the database. */
 export async function disconnectShopifyAction(formData: FormData) {
   const id = formData.get("connectionId");

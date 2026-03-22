@@ -15,6 +15,7 @@ import {
   getOnboardingBlockers,
 } from "../../lib/onboarding";
 import { buildMetaSetupChecklist } from "../../lib/meta/integrationState";
+import { buildShopifySetupChecklist } from "../../lib/shopify/integrationState";
 import { isMetaConfigured } from "../../lib/meta/config";
 import type { AccountDefaults } from "../../lib/onboarding-types";
 import { OnboardingWizard } from "./OnboardingWizard";
@@ -33,12 +34,13 @@ export default async function OnboardingPage() {
   if (progress.completedAt) redirect("/home");
 
   // Load data for all steps in parallel
-  const [workspace, integrations, checklist, blockers, metaChecklist] = await Promise.all([
+  const [workspace, integrations, checklist, blockers, metaChecklist, shopifyChecklist] = await Promise.all([
     getWorkspaceAccount(workspaceId),
     getIntegrationSetupState(workspaceId),
     buildAccountSetupChecklist(workspaceId),
     getOnboardingBlockers(workspaceId),
     buildMetaSetupChecklist().catch(() => []),
+    buildShopifySetupChecklist().catch(() => []),
   ]);
 
   // Compute account defaults from workspace
@@ -58,6 +60,7 @@ export default async function OnboardingPage() {
       accountDefaults={accountDefaults}
       metaChecklist={metaChecklist}
       metaConfigured={isMetaConfigured()}
+      shopifyChecklist={shopifyChecklist}
     />
   );
 }
