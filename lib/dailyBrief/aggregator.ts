@@ -11,6 +11,7 @@
 import { buildDailyExecutiveSummary } from "../dailySummary/aggregator";
 import { buildDailyOutcomeSummary }   from "../dailyOutcomes/aggregator";
 import { buildDigestContent }         from "../notifications/generator";
+import { summarizeRecentActions }     from "../actionHistory/aggregator";
 import type {
   DailyMorningBrief,
   DailyBriefSummary,
@@ -31,11 +32,16 @@ export async function buildDailyMorningBrief(opts: {
 }): Promise<DailyMorningBrief> {
   const { workspaceId, timezone, briefDate } = opts;
 
-  // Run all three aggregators in parallel
-  const [execSummary, outcomeSummary, digestContent] = await Promise.all([
+  // Run all four aggregators in parallel
+  const [execSummary, outcomeSummary, digestContent, recentActions] = await Promise.all([
     buildDailyExecutiveSummary({ workspaceId }),
     buildDailyOutcomeSummary({ limit: 30 }),
     buildDigestContent(workspaceId),
+    summarizeRecentActions({ workspaceId, dayCount: 1 }).catch(() => ({
+      totalEntries: 0, successCount: 0, failedCount: 0, blockedCount: 0,
+      pendingCount: 0, scaleActions: 0, testActions: 0, creativeActions: 0,
+      outcomeRoutes: 0, periodFrom: null, periodTo: null,
+    })),
   ]);
 
   // ── Build account summaries ───────────────────────────────────────────
@@ -80,6 +86,9 @@ export async function buildDailyMorningBrief(opts: {
     hasPartialCrm:  execSummary.hasPartialCrm,
     hasStaleSyncs:  execSummary.hasStaleSync,
     hasMissingGoals: execSummary.hasMissingGoals,
+    recentActionsCount:   recentActions.totalEntries,
+    recentActionsFailed:  recentActions.failedCount,
+    recentActionsBlocked: recentActions.blockedCount,
     workspaceId,
   };
 }

@@ -155,6 +155,10 @@ export type DailyMorningBrief = {
   hasPartialCrm:    boolean;
   hasStaleSyncs:    boolean;
   hasMissingGoals:  boolean;
+  // Recent actions (from action history)
+  recentActionsCount: number;
+  recentActionsFailed: number;
+  recentActionsBlocked: number;
   // Workspace
   workspaceId:      string | null;
 };
