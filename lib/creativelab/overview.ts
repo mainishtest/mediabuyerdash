@@ -31,8 +31,29 @@ export async function buildCreativeOverviewItems(
 // Mapper
 // ---------------------------------------------------------------------------
 
+// Meta DPA ads use template variables like {{product.name}} in names/copy.
+// These aren't real copy — resolve them to a readable fallback.
+function isTemplateVar(str: string | null | undefined): boolean {
+  return str != null && str.includes("{{");
+}
+
+function cleanDpaName(name: string, creativeId: string): string {
+  if (!isTemplateVar(name)) return name;
+  // Strip template vars, keep any surrounding text
+  const cleaned = name.replace(/\{\{[^}]+\}\}/g, "").trim();
+  if (cleaned.length > 5) return cleaned;
+  // Fallback: use last 8 chars of creative ID
+  return `Creative ${creativeId.slice(-8)}`;
+}
+
 function snapshotToOverviewItem(s: CreativePerformanceSnapshot): CreativeOverviewItem {
   const status = s.evaluationStatus as CreativeHealthStatus;
+  const isDpa  = isTemplateVar(s.creativeName) || isTemplateVar(s.adCopy);
+
+  // Clean up DPA template variables in display name
+  const creativeName = s.creativeName ? cleanDpaName(s.creativeName, s.externalCreativeId) : `Creative ${s.externalCreativeId.slice(-8)}`;
+  // Use real copy for generation; skip template vars
+  const adCopy = isDpa && isTemplateVar(s.adCopy) ? null : s.adCopy;
 
   return {
     id: `co_${s.clientAccountId}_${s.externalCreativeId}_${s.externalCampaignId}`,
@@ -41,13 +62,13 @@ function snapshotToOverviewItem(s: CreativePerformanceSnapshot): CreativeOvervie
     externalCampaignId: s.externalCampaignId,
     clientAccountId:    s.clientAccountId,
     clientName:         s.clientName,
-    creativeName:       s.creativeName,
+    creativeName,
     campaignName:       s.campaignName,
 
     thumbnailUrl: s.thumbnailUrl,
     imageUrl:     s.imageUrl,
 
-    adCopy:       s.adCopy,
+    adCopy,
     callToAction: s.callToAction,
 
     spend:       s.spend,
@@ -59,9 +80,9 @@ function snapshotToOverviewItem(s: CreativePerformanceSnapshot): CreativeOvervie
     cpa:         s.campaignCpa,
 
     status,
-    statusLabel: STATUS_LABELS[status],
+    statusLabel: isDpa ? `${STATUS_LABELS[status]} (DPA)` : STATUS_LABELS[status],
 
-    canGenerateCopy:  s.adCopy != null && s.adCopy.length > 0,
+    canGenerateCopy:  adCopy != null && adCopy.length > 0,
     canGenerateImage: s.imageUrl != null || s.thumbnailUrl != null,
     canLaunchTest:    s.spend >= 50, // need baseline performance to test against
   };

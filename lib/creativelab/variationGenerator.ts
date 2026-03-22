@@ -112,7 +112,33 @@ async function generateImageVariations(
   });
 
   // Generate concepts (which include image briefs)
-  const concepts = await generateCreativeConcepts(context);
+  let concepts = await generateCreativeConcepts(context);
+
+  // If concepts came back without image briefs (e.g. the AI only returned
+  // copy variants for the full_refresh_package), fall back to generating
+  // image_brief_variations directly and wrapping them as concepts.
+  const hasAnyImageBrief = concepts.some((c) => c.imageBrief != null);
+  if (concepts.length === 0 || !hasAnyImageBrief) {
+    const { generateCreativeVariants } = await import("../creativeGeneration/concepts");
+    const imageVariants = await generateCreativeVariants(context, "image_brief_variations");
+    if (imageVariants.length > 0) {
+      concepts = imageVariants.map((v) => ({
+        id:                   v.id,
+        title:                v.title,
+        angle:                { id: v.id, name: v.angle ?? "Direct", type: "outcome" as const, rationale: "", performanceSignal: "" },
+        copyBlock:            { id: v.id, hook: { id: v.id, text: "", type: "outcome_led" as const, angle: "", wordCount: 0, charCount: 0 }, body: "", callToAction: "", angle: { id: v.id, name: "", type: "outcome" as const, rationale: "", performanceSignal: "" }, wordCount: 0, platformReady: true },
+        imageBrief:           {
+          conceptSummary:      v.conceptSummary      ?? "",
+          visualChanges:       v.visualChanges        ?? "",
+          goal:                v.goal                 ?? "",
+          directResponseAngle: v.directResponseAngle  ?? "",
+        },
+        performanceRationale: v.performanceRationale ?? "",
+        triggerLink:          "",
+        estimatedScore:       50,
+      }));
+    }
+  }
 
   const candidates: ImageVariationCandidate[] = [];
 
