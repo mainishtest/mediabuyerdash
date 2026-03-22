@@ -58,6 +58,11 @@ const NAV: NavEntry[] = [
   },
   {
     kind:  "leaf",
+    href:  "/weekly",
+    label: "Weekly Rollup",
+  },
+  {
+    kind:  "leaf",
     href:  "/command-center",
     label: "Command Center",
   },
