@@ -258,9 +258,9 @@ async function loadCreativeLabAsActionHistory(
         item: {
           select: {
             id: true,
-            title: true,
             clientAccountId: true,
             status: true,
+            notes: true,
           },
         },
       },
@@ -274,13 +274,13 @@ async function loadCreativeLabAsActionHistory(
           id:          `creative_${r.id}`,
           eventType,
           status:      mapCreativeStatus(r.toStatus),
-          title:       buildCreativeTitle(r.action, r.item?.title ?? "Creative", r.toStatus),
+          title:       buildCreativeTitle(r.action, r.item?.notes ?? r.itemId, r.toStatus),
           description: r.note ?? `${r.action}: ${r.fromStatus ?? "—"} → ${r.toStatus ?? "—"}`,
           actor:       SYSTEM_ACTOR,
           entity: {
             entityType: "creative",
             entityId:   r.itemId,
-            entityName: r.item?.title ?? "Creative item",
+            entityName: r.item?.notes ?? "Creative item",
             href:       "/creative-lab",
           },
           outcomeLink: null,
