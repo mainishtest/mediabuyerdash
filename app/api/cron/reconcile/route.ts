@@ -12,8 +12,10 @@ import { runClientReconciliation } from "../../../../lib/reconciliation/runForCl
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Vercel Cron sends the secret via x-vercel-cron-auth-token header (not Authorization)
+  const cronToken = request.headers.get("authorization")?.replace("Bearer ", "")
+    ?? request.headers.get("x-vercel-cron-auth-token");
+  if (!cronToken || cronToken !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
