@@ -4,6 +4,7 @@ import { useState }                        from "react";
 import { useRouter, useSearchParams }       from "next/navigation";
 import type { ExecutiveSummary }            from "../../../lib/executiveReporting/types";
 import { KpiSection }         from "./sections/KpiSection";
+import { QuickViewSection }   from "./sections/QuickViewSection";
 import { NarrativeSection }   from "./sections/NarrativeSection";
 import { TrendSection }       from "./sections/TrendSection";
 import { ExperimentsSection } from "./sections/ExperimentsSection";
@@ -187,6 +188,9 @@ export function ExecutiveReportView({ summary }: { summary: ExecutiveSummary }) 
 
       {/* Content */}
       <div className="mx-auto max-w-screen-xl space-y-5 px-4 py-5 sm:px-6">
+
+        {/* Quick view — Yesterday/Today/Custom toggle with 5 core KPIs */}
+        <QuickViewSection clientId={summary.clientId ?? undefined} />
 
         {/* KPI cards — always shown */}
         <KpiSection cards={summary.kpiCards} />

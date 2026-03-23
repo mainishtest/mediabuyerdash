@@ -179,7 +179,16 @@ export async function buildCampaignPerformanceSnapshots(
     // Phase 3: build ResolvedGoal via new goal system for evaluation engine.
     const rawCampaignGoal = explicitGoalsById.get(mc.externalCampaignId) ?? null;
     const newGoal = mergeGoalFields(
-      rawCampaignGoal ? mapCampaignGoal(rawCampaignGoal) : null,
+      rawCampaignGoal ? mapCampaignGoal({
+        externalCampaignId: rawCampaignGoal.externalCampaignId,
+        targetRoas:         null,
+        targetCpa:          null,
+        targetCtr:          null,
+        targetCvr:          null,
+        maxDailySpend:      null,
+        roasGoalValue:      rawCampaignGoal.roasGoalValue,
+        cpaGoalValue:       rawCampaignGoal.cpaGoalValue,
+      }) : null,
       clientDefaults  ? mapClientGoal(clientDefaults)    : null
     );
 
