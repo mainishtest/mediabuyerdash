@@ -193,12 +193,12 @@ export function CreativeLabItemDetail({ item, onStatusChange, onNotesSave, onClo
 
             {/* Thumbnail */}
             {hasThumbnail ? (
-              <div className="mb-3 overflow-hidden rounded-xl border border-slate-800">
+              <div className="mb-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={pc!.thumbnailUrl!}
                   alt={item.creativeName ?? "Creative preview"}
-                  className="w-full max-h-52 object-cover"
+                  className="w-full max-h-52 object-contain"
                   loading="lazy"
                 />
               </div>

@@ -766,12 +766,12 @@ function AdCard({
 
       {/* Thumbnail */}
       {(item.thumbnailUrl || item.imageUrl) && (
-        <div className="mb-3 h-28 overflow-hidden rounded-lg border border-slate-800 bg-slate-800/50">
+        <div className="mb-3 aspect-video overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.thumbnailUrl ?? item.imageUrl ?? ""}
             alt={item.creativeName ?? "Creative thumbnail"}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             loading="lazy"
           />
         </div>
@@ -916,12 +916,12 @@ function SourceAssetCard({
 
       {/* Thumbnail */}
       {asset.storagePath && (
-        <div className="mb-3 h-28 overflow-hidden rounded-lg border border-slate-800 bg-slate-800/50">
+        <div className="mb-3 aspect-video overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={asset.storagePath}
             alt={asset.fileName ?? "Uploaded creative"}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             loading="lazy"
           />
         </div>
