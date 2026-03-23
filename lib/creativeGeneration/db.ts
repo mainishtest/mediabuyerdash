@@ -52,7 +52,6 @@ export async function completeGenerationJob(
         briefId,
         variantType:     v.variantType,
         title:           v.title,
-        generationJobId: output.jobId,
         contentJson: JSON.stringify({
           hook:                v.hook,
           body:                v.body,

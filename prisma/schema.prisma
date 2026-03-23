@@ -43,16 +43,23 @@ model PasswordResetToken {
 
 // An agency workspace groups clients and users.
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  brandName       String?
+  website         String?
+  industry        String?
+  timezone        String?
+  monthlyAdSpend  Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   memberships          WorkspaceMembership[]
   clientAccounts       ClientAccount[]
   actionSafetyPolicies ActionSafetyPolicy[]
   governanceStops      GovernanceStop[]
   automationOverrides  AutomationOverride[]
+  dailyBriefs          DailyBriefRecord[]
+  onboardingState      OnboardingState?
 }
 
 // User ↔ Workspace with role. v1 roles: owner | manager.
@@ -1009,13 +1016,6 @@ model MetaCampaignGoal {
   roasGoalValue      Float
   cpaGoalType        String   // "high" | "low"
   cpaGoalValue       Float
-  // Extended goal fields (Phase 3 goals system).
-  // null = not set at this level; resolution falls through to client or system default.
-  targetRoas         Float?
-  targetCpa          Float?
-  targetCtr          Float?   // percentage, e.g. 1.5 means 1.5%
-  targetCvr          Float?   // percentage, e.g. 2.0 means 2.0%
-  maxDailySpend      Float?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -1175,9 +1175,18 @@ model ShopifyOrder {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  // Cancellation & fulfilment status (synced from Shopify)
+  cancelReason      String?
+  cancelledAt       DateTime?
+  financialStatus   String?
+  fulfillmentStatus String?
+  netRevenue        Float?
+  refundTotal       Float?
+
   connection    ShopifyConnection    @relation(fields: [shopifyConnectionId], references: [id], onDelete: Cascade)
   clientAccount ClientAccount?       @relation(fields: [clientAccountId], references: [id])
   lineItems     ShopifyOrderLineItem[]
+  refunds       ShopifyRefund[]
 
   @@unique([shopifyConnectionId, externalOrderId])
   @@index([shopifyConnectionId, orderCreatedAt])
@@ -1389,6 +1398,9 @@ model UploadedCreativeImage {
   uploadedAt       DateTime @default(now())
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  sourceCallToAction String?
+  sourceCopy         String?
 
   analysis   UploadedCreativeAnalysis?
   iterations GeneratedImageIterationConcept[]
@@ -1627,7 +1639,6 @@ model CreativeBriefRecord {
 }
 
 // One row per generated draft variant. reviewDecision is set by the buyer.
-// generationJobId links AI-generated variants back to the job that created them.
 model CreativeDraftVariantRecord {
   id              String              @id @default(cuid())
   briefId         String
@@ -1638,12 +1649,10 @@ model CreativeDraftVariantRecord {
   reviewDecision  String?
   reviewNote      String?
   reviewedAt      DateTime?
-  generationJobId String?             // null for brief-scaffolded variants; set for AI-generated
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
   @@index([briefId])
-  @@index([generationJobId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1807,4 +1816,59 @@ model AutomationOverride {
   @@index([workspaceId, isActive])
   @@index([scope, scopeId, isActive])
   @@index([actionId])
+}
+
+// ── Daily Brief ─────────────────────────────────────────────────────────────
+
+// Workspace-level daily brief/summary record.
+// Tracks delivery state for automated daily digest emails.
+model DailyBriefRecord {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  briefDate     String   // ISO date (YYYY-MM-DD)
+  deliveryState String   @default("pending") // pending | delivered | failed | skipped
+  contentJson   String?  // JSON: assembled brief content
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, briefDate])
+  @@index([deliveryState])
+  @@index([workspaceId, briefDate])
+}
+
+// ── Onboarding State ────────────────────────────────────────────────────────
+
+// Tracks workspace onboarding progress through setup steps.
+model OnboardingState {
+  id              String   @id @default(cuid())
+  workspaceId     String   @unique
+  currentStep     String   @default("create_client") // create_client | connect_meta | connect_shopify | complete
+  completedSteps  String   @default("[]") // JSON array of completed step names
+  isComplete      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// ── Shopify Refunds ─────────────────────────────────────────────────────────
+
+// Individual refunds for a Shopify order. Synced alongside orders.
+model ShopifyRefund {
+  id               String   @id @default(cuid())
+  shopifyOrderId   String
+  externalRefundId String   // Shopify GID for the refund
+  amount           Float    @default(0)
+  reason           String?
+  note             String?
+  processedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  order ShopifyOrder @relation(fields: [shopifyOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([shopifyOrderId, externalRefundId])
+  @@index([shopifyOrderId])
 }

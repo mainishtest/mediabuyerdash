@@ -29,6 +29,11 @@ CREATE TABLE "PasswordResetToken" (
 CREATE TABLE "Workspace" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "brandName" TEXT,
+    "website" TEXT,
+    "industry" TEXT,
+    "timezone" TEXT,
+    "monthlyAdSpend" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -797,11 +802,6 @@ CREATE TABLE "MetaCampaignGoal" (
     "roasGoalValue" DOUBLE PRECISION NOT NULL,
     "cpaGoalType" TEXT NOT NULL,
     "cpaGoalValue" DOUBLE PRECISION NOT NULL,
-    "targetRoas" DOUBLE PRECISION,
-    "targetCpa" DOUBLE PRECISION,
-    "targetCtr" DOUBLE PRECISION,
-    "targetCvr" DOUBLE PRECISION,
-    "maxDailySpend" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -944,6 +944,12 @@ CREATE TABLE "ShopifyOrder" (
     "referringSite" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "cancelReason" TEXT,
+    "cancelledAt" TIMESTAMP(3),
+    "financialStatus" TEXT,
+    "fulfillmentStatus" TEXT,
+    "netRevenue" DOUBLE PRECISION,
+    "refundTotal" DOUBLE PRECISION,
 
     CONSTRAINT "ShopifyOrder_pkey" PRIMARY KEY ("id")
 );
@@ -1114,6 +1120,8 @@ CREATE TABLE "UploadedCreativeImage" (
     "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "sourceCallToAction" TEXT,
+    "sourceCopy" TEXT,
 
     CONSTRAINT "UploadedCreativeImage_pkey" PRIMARY KEY ("id")
 );
@@ -1303,7 +1311,6 @@ CREATE TABLE "CreativeDraftVariantRecord" (
     "reviewDecision" TEXT,
     "reviewNote" TEXT,
     "reviewedAt" TIMESTAMP(3),
-    "generationJobId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -1408,6 +1415,47 @@ CREATE TABLE "AutomationOverride" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "AutomationOverride_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DailyBriefRecord" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "briefDate" TEXT NOT NULL,
+    "deliveryState" TEXT NOT NULL DEFAULT 'pending',
+    "contentJson" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DailyBriefRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OnboardingState" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "currentStep" TEXT NOT NULL DEFAULT 'create_client',
+    "completedSteps" TEXT NOT NULL DEFAULT '[]',
+    "isComplete" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "OnboardingState_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShopifyRefund" (
+    "id" TEXT NOT NULL,
+    "shopifyOrderId" TEXT NOT NULL,
+    "externalRefundId" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "reason" TEXT,
+    "note" TEXT,
+    "processedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopifyRefund_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -1711,9 +1759,6 @@ CREATE INDEX "CreativeBriefRecord_sourceItemId_idx" ON "CreativeBriefRecord"("so
 CREATE INDEX "CreativeDraftVariantRecord_briefId_idx" ON "CreativeDraftVariantRecord"("briefId");
 
 -- CreateIndex
-CREATE INDEX "CreativeDraftVariantRecord_generationJobId_idx" ON "CreativeDraftVariantRecord"("generationJobId");
-
--- CreateIndex
 CREATE INDEX "CreativeGenerationJobRecord_briefId_idx" ON "CreativeGenerationJobRecord"("briefId");
 
 -- CreateIndex
@@ -1757,6 +1802,24 @@ CREATE INDEX "AutomationOverride_scope_scopeId_isActive_idx" ON "AutomationOverr
 
 -- CreateIndex
 CREATE INDEX "AutomationOverride_actionId_idx" ON "AutomationOverride"("actionId");
+
+-- CreateIndex
+CREATE INDEX "DailyBriefRecord_deliveryState_idx" ON "DailyBriefRecord"("deliveryState");
+
+-- CreateIndex
+CREATE INDEX "DailyBriefRecord_workspaceId_briefDate_idx" ON "DailyBriefRecord"("workspaceId", "briefDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DailyBriefRecord_workspaceId_briefDate_key" ON "DailyBriefRecord"("workspaceId", "briefDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OnboardingState_workspaceId_key" ON "OnboardingState"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ShopifyRefund_shopifyOrderId_idx" ON "ShopifyRefund"("shopifyOrderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyRefund_shopifyOrderId_externalRefundId_key" ON "ShopifyRefund"("shopifyOrderId", "externalRefundId");
 
 -- AddForeignKey
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1922,4 +1985,13 @@ ALTER TABLE "GovernanceStop" ADD CONSTRAINT "GovernanceStop_workspaceId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "AutomationOverride" ADD CONSTRAINT "AutomationOverride_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyBriefRecord" ADD CONSTRAINT "DailyBriefRecord_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OnboardingState" ADD CONSTRAINT "OnboardingState_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyRefund" ADD CONSTRAINT "ShopifyRefund_shopifyOrderId_fkey" FOREIGN KEY ("shopifyOrderId") REFERENCES "ShopifyOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
