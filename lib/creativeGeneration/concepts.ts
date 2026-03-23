@@ -198,7 +198,8 @@ export async function generateCreativeVariants(
 
     const conceptId = result.output.jobId;
     return result.output.variants.map((v) => draftToVariant(v, conceptId, context));
-  } catch {
+  } catch (err) {
+    console.error("[generateCreativeVariants] Failed:", err);
     return [];
   }
 }
@@ -258,7 +259,8 @@ export async function generateCreativeConcepts(
         estimatedScore:       estimateConceptScore(hook, copyBlock, context),
       };
     });
-  } catch {
+  } catch (err) {
+    console.error("[generateCreativeConcepts] Failed:", err);
     return [];
   }
 }
@@ -285,7 +287,8 @@ export async function generateCreativeCopyBlocks(
     return result.output.variants
       .filter((v) => v.variantType === "copy")
       .map((v, idx) => buildCopyBlock(v, idx, context));
-  } catch {
+  } catch (err) {
+    console.error("[generateCreativeCopyBlocks] Failed:", err);
     return [];
   }
 }

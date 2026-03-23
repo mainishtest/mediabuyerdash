@@ -10,8 +10,8 @@ CREATE TABLE "GenerationRun" (
     "provider" TEXT NOT NULL,
     "mode" TEXT NOT NULL,
     "status" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt" DATETIME
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP
 );
 
 -- CreateTable
@@ -22,7 +22,7 @@ CREATE TABLE "GenerationPromptSnapshot" (
     "templateVersion" TEXT NOT NULL,
     "renderedPrompt" TEXT NOT NULL,
     "contextSnapshotJson" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "GenerationPromptSnapshot_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -32,7 +32,7 @@ CREATE TABLE "GenerationProviderRequest" (
     "generationRunId" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "requestPayloadJson" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "GenerationProviderRequest_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -44,7 +44,7 @@ CREATE TABLE "GenerationProviderResponse" (
     "responsePayloadJson" TEXT NOT NULL,
     "executionStatus" TEXT NOT NULL,
     "errorMessage" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "GenerationProviderResponse_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -57,8 +57,8 @@ CREATE TABLE "GeneratedCopyVariation" (
     "body" TEXT NOT NULL,
     "callToAction" TEXT NOT NULL,
     "approvalStatus" TEXT NOT NULL DEFAULT 'draft',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "GeneratedCopyVariation_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -71,8 +71,8 @@ CREATE TABLE "GeneratedImageVariation" (
     "visualChanges" TEXT NOT NULL,
     "goal" TEXT NOT NULL,
     "approvalStatus" TEXT NOT NULL DEFAULT 'draft',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "GeneratedImageVariation_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -84,8 +84,8 @@ CREATE TABLE "GenerationApprovalDecision" (
     "variationId" TEXT NOT NULL,
     "decision" TEXT NOT NULL,
     "notes" TEXT,
-    "decidedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "decidedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "GenerationApprovalDecision_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -95,8 +95,8 @@ CREATE TABLE "SelectedCreativeVariant" (
     "generationRunId" TEXT NOT NULL,
     "variationType" TEXT NOT NULL,
     "variationId" TEXT NOT NULL,
-    "selectedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "selectedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "SelectedCreativeVariant_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

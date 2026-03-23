@@ -13,8 +13,8 @@ CREATE TABLE "LaunchDraft" (
     "objectiveMetric" TEXT,
     "source"          TEXT NOT NULL,
     "status"          TEXT NOT NULL DEFAULT 'draft',
-    "createdAt"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt"       DATETIME NOT NULL
+    "createdAt"       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP NOT NULL
 );
 
 CREATE TABLE "LaunchDraftVariant" (
@@ -29,7 +29,7 @@ CREATE TABLE "LaunchDraftVariant" (
     "imageConceptTitle"   TEXT,
     "imageConceptSummary" TEXT,
     "selectedForLaunch"   BOOLEAN NOT NULL DEFAULT true,
-    "createdAt"           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt"           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "LaunchDraftVariant_launchDraftId_fkey"
         FOREIGN KEY ("launchDraftId")
         REFERENCES "LaunchDraft" ("id")

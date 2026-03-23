@@ -7,11 +7,11 @@ CREATE TABLE "ClientSyncRun" (
     "clientAccountId" TEXT NOT NULL,
     "syncType"        TEXT NOT NULL,
     "status"          TEXT NOT NULL,
-    "startedAt"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt"     DATETIME,
+    "startedAt"       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt"     TIMESTAMP,
     "errorMessage"    TEXT,
-    "createdAt"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt"       DATETIME NOT NULL,
+    "createdAt"       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP NOT NULL,
     CONSTRAINT "ClientSyncRun_clientAccountId_fkey"
         FOREIGN KEY ("clientAccountId")
         REFERENCES "ClientAccount" ("id")
@@ -29,8 +29,8 @@ CREATE TABLE "ClientSyncRunStep" (
     "status"          TEXT NOT NULL,
     "summaryJson"     TEXT,
     "errorMessage"    TEXT,
-    "startedAt"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt"     DATETIME,
+    "startedAt"       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt"     TIMESTAMP,
     CONSTRAINT "ClientSyncRunStep_clientSyncRunId_fkey"
         FOREIGN KEY ("clientSyncRunId")
         REFERENCES "ClientSyncRun" ("id")
