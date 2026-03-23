@@ -1,13 +1,17 @@
 // lib/creativelab/storage.ts
-// Handles writing uploaded image files to the local public/ directory.
+// Handles writing uploaded image files to a writable directory.
 //
-// v1: stores to public/uploads/creatives/[id].[ext]
+// In development, writes to public/uploads/creatives/ (served by Next.js).
+// In production/serverless (read-only filesystem), writes to /tmp/uploads/
+// and serves via an API route.
+//
 // Production upgrade path: swap writeImageFile() for an S3/R2/Cloudinary upload
 // without changing any callers.
 
 import { writeFile } from "fs/promises";
 import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
+import { tmpdir } from "os";
 
 export const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -19,10 +23,43 @@ export const ALLOWED_MIME_TYPES = [
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export interface StorageResult {
-  storagePath: string;  // URL path served by Next.js: /uploads/creatives/[id].[ext]
+  storagePath: string;  // URL path served by Next.js or API route
   fileName:    string;  // original file name from the upload
   mimeType:    string;
   fileSize:    number;  // bytes
+}
+
+/**
+ * Resolve a writable base directory for uploads.
+ * Tries public/ first (works in dev). Falls back to /tmp (works in serverless).
+ */
+function resolveUploadDir(subdir: string): string {
+  const publicDir = join(process.cwd(), "public", "uploads", subdir);
+  try {
+    if (!existsSync(publicDir)) {
+      mkdirSync(publicDir, { recursive: true });
+    }
+    return publicDir;
+  } catch {
+    // Filesystem is read-only (serverless/container) — use temp directory
+    const tmpDir = join(tmpdir(), "uploads", subdir);
+    if (!existsSync(tmpDir)) {
+      mkdirSync(tmpDir, { recursive: true });
+    }
+    return tmpDir;
+  }
+}
+
+/**
+ * Build the URL path for a stored file.
+ * If stored in public/, returns /uploads/... (direct static serve).
+ * If stored in /tmp/, returns /api/uploads/... (served via API route).
+ */
+function buildStoragePath(dir: string, subdir: string, filename: string): string {
+  if (dir.includes(join("public", "uploads"))) {
+    return `/uploads/${subdir}/${filename}`;
+  }
+  return `/api/uploads/${subdir}/${filename}`;
 }
 
 /** Persist a File/Blob to disk and return storage metadata. */
@@ -39,17 +76,13 @@ export async function writeImageFile(
 
   const ext = extensionFor(file.type);
   const filename = `${imageId}.${ext}`;
-  const dir = join(process.cwd(), "public", "uploads", "creatives");
-
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  const dir = resolveUploadDir("creatives");
 
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(join(dir, filename), buffer);
 
   return {
-    storagePath: `/uploads/creatives/${filename}`,
+    storagePath: buildStoragePath(dir, "creatives", filename),
     fileName:    file.name,
     mimeType:    file.type,
     fileSize:    file.size,
@@ -81,10 +114,7 @@ export async function downloadAndStoreGeneratedImage(
   conceptId: string,
   imageUrl: string
 ): Promise<GeneratedImageStorageResult> {
-  const dir = join(process.cwd(), "public", "uploads", "generated");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  const dir = resolveUploadDir("generated");
 
   const res = await fetch(imageUrl);
   if (!res.ok) {
@@ -102,7 +132,7 @@ export async function downloadAndStoreGeneratedImage(
   await writeFile(join(dir, filename), buffer);
 
   return {
-    storagePath: `/uploads/generated/${filename}`,
+    storagePath: buildStoragePath(dir, "generated", filename),
     fileSize:    buffer.length,
   };
 }
