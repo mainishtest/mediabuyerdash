@@ -99,6 +99,22 @@ function extensionFor(mimeType: string): string {
   }
 }
 
+// ── Resolve storage path → absolute filesystem path ──────────────────────
+
+/**
+ * Convert a storagePath (URL path from DB) back to an absolute filesystem path.
+ * Handles both dev (/uploads/...) and serverless (/api/uploads/...) paths.
+ */
+export function resolveStoragePathToFile(storagePath: string): string {
+  if (storagePath.startsWith("/api/uploads/")) {
+    // Serverless: stored in /tmp/uploads/...
+    const relativePart = storagePath.replace("/api/uploads/", "");
+    return join(tmpdir(), "uploads", relativePart);
+  }
+  // Dev: stored in public/uploads/...
+  return join(process.cwd(), "public", storagePath);
+}
+
 // ── Generated image download + storage ─────────────────────────────────────
 
 export interface GeneratedImageStorageResult {

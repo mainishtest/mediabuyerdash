@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db";
+import { resolveStoragePathToFile } from "./storage";
 
 // ── Anthropic client ───────────────────────────────────────────────────────────
 
@@ -102,8 +103,11 @@ export async function analyzeCreativeImage(imageId: string): Promise<void> {
     update: { analysisStatus: "pending" },
   });
 
-  // Read image from disk (storagePath is relative to project root, e.g. /uploads/creatives/abc.jpg)
-  const absolutePath = path.join(process.cwd(), "public", image.storagePath);
+  // Read image from disk (handles both dev and serverless storage paths).
+  const absolutePath = resolveStoragePathToFile(image.storagePath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`Image file not found at ${absolutePath}`);
+  }
   const imageBuffer  = fs.readFileSync(absolutePath);
   const base64Data   = imageBuffer.toString("base64");
   const mediaType    = toAnthropicMediaType(image.mimeType);

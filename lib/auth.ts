@@ -39,17 +39,23 @@ export const authOptions: NextAuthOptions = {
         // Ensure the user has a workspace (safety net for edge cases).
         let membership = await prisma.workspaceMembership.findFirst({
           where: { userId: user.id },
-          include: { workspace: true },
+          select: {
+            workspaceId: true,
+            workspace:   { select: { name: true } },
+          },
         });
 
         if (!membership) {
           const workspace = await prisma.workspace.create({
             data: { name: "My Workspace" },
           });
-          membership = await prisma.workspaceMembership.create({
+          await prisma.workspaceMembership.create({
             data: { userId: user.id, workspaceId: workspace.id, role: "owner" },
-            include: { workspace: true },
           });
+          membership = {
+            workspaceId: workspace.id,
+            workspace:   { name: workspace.name },
+          };
         }
 
         return {
