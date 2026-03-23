@@ -6,6 +6,7 @@
 
 import { useState }          from "react";
 import Link                  from "next/link";
+import { useRouter }         from "next/navigation";
 import type { DailyMorningBrief } from "../../types/dailyBrief";
 import { BriefSummaryBar }   from "./sections/BriefSummaryBar";
 import { BriefActionList }   from "./sections/BriefActionList";
@@ -79,19 +80,21 @@ function NoDataState() {
 // ── Main view ───────────────────────────────────────────────────────────────
 
 export function BriefView({ latestBrief, archive }: Props) {
+  const router = useRouter();
   const [selectedBriefId, setSelectedBriefId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState<string | null>(null);
+  const [generatedBrief, setGeneratedBrief] = useState<DailyMorningBrief | null>(null);
 
   // Determine which brief to display
-  let brief: DailyMorningBrief | null = latestBrief;
+  let brief: DailyMorningBrief | null = generatedBrief ?? latestBrief;
   if (selectedBriefId) {
     const entry = archive.find((a) => a.id === selectedBriefId);
     if (entry) {
       try {
         brief = JSON.parse(entry.briefJson) as DailyMorningBrief;
       } catch {
-        brief = latestBrief;
+        brief = generatedBrief ?? latestBrief;
       }
     }
   }
@@ -107,13 +110,20 @@ export function BriefView({ latestBrief, archive }: Props) {
       });
       const data = await res.json();
       if (data.status === "generated") {
-        setGenMessage("Brief generated. Reload to see it.");
+        if (data.brief) {
+          setGeneratedBrief(data.brief);
+          setSelectedBriefId(null);
+          setGenMessage(null);
+        } else {
+          setGenMessage("Brief generated.");
+          router.refresh();
+        }
       } else if (data.status === "skipped") {
         setGenMessage("Brief already exists for today.");
       } else {
         setGenMessage(data.error ?? "Failed to generate brief.");
       }
-    } catch (err) {
+    } catch {
       setGenMessage("Network error. Please try again.");
     } finally {
       setGenerating(false);

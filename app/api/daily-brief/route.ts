@@ -47,10 +47,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Return the full brief so the client can render it immediately
   return NextResponse.json({
     status: "generated",
     briefId: result.brief?.id,
     briefDate: result.brief?.briefDate,
+    brief: result.brief ?? null,
   });
 }
 
