@@ -19,15 +19,33 @@ import type {
 export async function loadSourceAssets(
   workspaceId: string | null,
 ): Promise<CreativeSourceAsset[]> {
-  const images = await prisma.uploadedCreativeImage.findMany({
-    where:   workspaceId ? { workspaceId } : undefined,
-    include: {
-      analysis:   true,
-      _count:     { select: { iterations: true } },
-      clientAccount: { select: { name: true } },
-    },
-    orderBy: { uploadedAt: "desc" },
-  });
+  let images;
+  try {
+    images = await prisma.uploadedCreativeImage.findMany({
+      where:   workspaceId ? { workspaceId } : undefined,
+      include: {
+        analysis:   true,
+        _count:     { select: { iterations: true } },
+        clientAccount: { select: { name: true } },
+      },
+      orderBy: { uploadedAt: "desc" },
+    });
+  } catch (err) {
+    // Fallback: query without sourceCopy/sourceCallToAction if columns don't exist yet
+    console.warn("[sourceAsset] findMany failed, retrying with select:", err instanceof Error ? err.message : err);
+    images = await prisma.uploadedCreativeImage.findMany({
+      where:   workspaceId ? { workspaceId } : undefined,
+      select: {
+        id: true, workspaceId: true, clientAccountId: true,
+        fileName: true, mimeType: true, fileSize: true,
+        storagePath: true, uploadedAt: true, createdAt: true, updatedAt: true,
+        analysis: true,
+        _count: { select: { iterations: true } },
+        clientAccount: { select: { name: true } },
+      },
+      orderBy: { uploadedAt: "desc" },
+    });
+  }
 
   return images.map((img) => {
     const hasCopy  = !!(img as Record<string, unknown>).sourceCopy;

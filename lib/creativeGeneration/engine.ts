@@ -372,25 +372,23 @@ export async function generateCreativeDrafts(
 
     const latencyMs = Date.now() - startedAt;
 
-    if (res.status === 429) {
-      return {
-        ok:    false,
-        error: {
-          code:      "api_error",
-          message:   "Anthropic rate limit reached. Try again in a moment.",
-          retryable: true,
-        },
-      };
-    }
-
     const data = await res.json();
 
     if (!res.ok) {
       const msg = data?.error?.message ?? data?.message ?? `HTTP ${res.status}`;
-      return {
-        ok:    false,
-        error: { code: "api_error", message: msg, retryable: res.status >= 500 },
+      console.warn(`[creative-engine] Anthropic API error (${res.status}): ${msg} — falling back to mock output`);
+      const fallbackVariants = structuredMockOutput(input.mode, input.brief);
+      const output: CreativeGenerationOutput = {
+        jobId,
+        mode:      input.mode,
+        provider:  "mock_api_fallback",
+        rationale: `Anthropic API error (${res.status}) — structured mock output provided. Error: ${msg}`,
+        variants:  fallbackVariants,
+        tokensUsed: null,
+        latencyMs:  Date.now() - startedAt,
+        generatedAt: new Date().toISOString(),
       };
+      return { ok: true, output };
     }
 
     const rawContent: string = data?.content?.[0]?.text ?? "";

@@ -93,15 +93,31 @@ export async function upsertWorkflowItemNotes(opts: {
 }
 
 export async function getUploadedImages(workspaceId?: string | null) {
-  return prisma.uploadedCreativeImage.findMany({
-    where:   workspaceId ? { workspaceId } : undefined,
-    include: {
-      analysis:   true,
-      iterations: { orderBy: { createdAt: "asc" } },
-      _count:     { select: { iterations: true } },
-    },
-    orderBy: { uploadedAt: "desc" },
-  });
+  try {
+    return await prisma.uploadedCreativeImage.findMany({
+      where:   workspaceId ? { workspaceId } : undefined,
+      include: {
+        analysis:   true,
+        iterations: { orderBy: { createdAt: "asc" } },
+        _count:     { select: { iterations: true } },
+      },
+      orderBy: { uploadedAt: "desc" },
+    });
+  } catch (err) {
+    console.warn("[creativelab/db] getUploadedImages failed, retrying with select:", err instanceof Error ? err.message : err);
+    return prisma.uploadedCreativeImage.findMany({
+      where:   workspaceId ? { workspaceId } : undefined,
+      select: {
+        id: true, workspaceId: true, clientAccountId: true,
+        fileName: true, mimeType: true, fileSize: true,
+        storagePath: true, uploadedAt: true, createdAt: true, updatedAt: true,
+        analysis: true,
+        iterations: { orderBy: { createdAt: "asc" as const } },
+        _count: { select: { iterations: true } },
+      },
+      orderBy: { uploadedAt: "desc" },
+    });
+  }
 }
 
 export async function getUploadedImageById(id: string) {

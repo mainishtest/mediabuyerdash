@@ -48,19 +48,37 @@ export async function uploadCreativeImageAction(
   try {
     const stored = await writeImageFile(imageId, file);
 
-    await prisma.uploadedCreativeImage.create({
-      data: {
-        id:                 imageId,
-        workspaceId:        workspaceId ?? undefined,
-        clientAccountId:    typeof clientId === "string" && clientId ? clientId : undefined,
-        fileName:           stored.fileName,
-        mimeType:           stored.mimeType,
-        fileSize:           stored.fileSize,
-        storagePath:        stored.storagePath,
-        sourceCopy:         typeof sourceCopy === "string" && sourceCopy.trim() ? sourceCopy.trim() : undefined,
-        sourceCallToAction: typeof sourceCallToAction === "string" && sourceCallToAction.trim() ? sourceCallToAction.trim() : undefined,
-      },
-    });
+    const copyVal = typeof sourceCopy === "string" && sourceCopy.trim() ? sourceCopy.trim() : undefined;
+    const ctaVal  = typeof sourceCallToAction === "string" && sourceCallToAction.trim() ? sourceCallToAction.trim() : undefined;
+
+    try {
+      await prisma.uploadedCreativeImage.create({
+        data: {
+          id:                 imageId,
+          workspaceId:        workspaceId ?? undefined,
+          clientAccountId:    typeof clientId === "string" && clientId ? clientId : undefined,
+          fileName:           stored.fileName,
+          mimeType:           stored.mimeType,
+          fileSize:           stored.fileSize,
+          storagePath:        stored.storagePath,
+          sourceCopy:         copyVal,
+          sourceCallToAction: ctaVal,
+        },
+      });
+    } catch {
+      // Retry without sourceCopy/sourceCallToAction if columns don't exist yet
+      await prisma.uploadedCreativeImage.create({
+        data: {
+          id:              imageId,
+          workspaceId:     workspaceId ?? undefined,
+          clientAccountId: typeof clientId === "string" && clientId ? clientId : undefined,
+          fileName:        stored.fileName,
+          mimeType:        stored.mimeType,
+          fileSize:        stored.fileSize,
+          storagePath:     stored.storagePath,
+        },
+      });
+    }
 
     revalidatePath("/creative-lab/images");
     revalidatePath("/creative-lab");

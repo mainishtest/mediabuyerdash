@@ -477,3 +477,24 @@ BEGIN
     END IF;
 END
 $$;
+
+
+-- ─── 9. UploadedCreativeImage: sourceCopy + sourceCallToAction ──────────────
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UploadedCreativeImage' AND column_name = 'sourceCopy'
+    ) THEN
+        ALTER TABLE "UploadedCreativeImage" ADD COLUMN "sourceCopy" TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'UploadedCreativeImage' AND column_name = 'sourceCallToAction'
+    ) THEN
+        ALTER TABLE "UploadedCreativeImage" ADD COLUMN "sourceCallToAction" TEXT;
+    END IF;
+END
+$$;
