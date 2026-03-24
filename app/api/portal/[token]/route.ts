@@ -105,18 +105,23 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
     const adNameMap       = new Map(ads.map((a) => [a.externalAdId, a.name]));
 
-    rows = reconMatches.map((m) => ({
-      date:         m.date,
-      campaignId:   m.metaCampaignId ?? "",
-      campaignName: campaignNameMap.get(m.metaCampaignId ?? "") ?? m.utmCampaign ?? "",
-      adId:         m.metaAdId ?? "",
-      adName:       adNameMap.get(m.metaAdId ?? "") ?? m.metaAdId ?? "",
-      spend:        m.metaSpend,
-      impressions:  m.metaImpressions ?? 0,
-      clicks:       m.metaClicks ?? 0,
-      conversions:  m.crmOrders,
-      revenue:      m.crmRevenue,
-    }));
+    // Only take delivery metrics from recon; revenue/orders come from
+    // direct Shopify query below to avoid double-counting when recon
+    // has both matched and unmatched_crm rows for the same orders.
+    rows = reconMatches
+      .filter((m) => m.metaCampaignId)          // skip unmatched_crm rows (no Meta side)
+      .map((m) => ({
+        date:         m.date,
+        campaignId:   m.metaCampaignId ?? "",
+        campaignName: campaignNameMap.get(m.metaCampaignId ?? "") ?? m.utmCampaign ?? "",
+        adId:         m.metaAdId ?? "",
+        adName:       adNameMap.get(m.metaAdId ?? "") ?? m.metaAdId ?? "",
+        spend:        m.metaSpend,
+        impressions:  m.metaImpressions ?? 0,
+        clicks:       m.metaClicks ?? 0,
+        conversions:  0,
+        revenue:      0,
+      }));
   } else {
     // ── 2. Try UTM performance rows ─────────────────────────────────────────
     const utmRows = await prisma.uTMPerformanceRow.findMany({
@@ -143,8 +148,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         spend:        r.spend,
         impressions:  r.impressions,
         clicks:       r.clicks,
-        conversions:  r.conversions,
-        revenue:      r.revenue,
+        conversions:  0,   // revenue/orders come from direct Shopify query below
+        revenue:      0,
       }));
     } else {
       // ── 3. Fallback: MetaSyncedInsight (raw Meta data) ──────────────────
@@ -266,13 +271,13 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     dailyMap.set(row.date, d);
   }
 
-  // Merge direct Shopify revenue for dates where the primary source had none
+  // Shopify is the single source of truth for revenue/orders
   for (const [date, shopify] of shopifyByDate) {
     const existing = dailyMap.get(date);
-    if (existing && existing.revenue === 0 && existing.orders === 0) {
+    if (existing) {
       existing.revenue = shopify.revenue;
       existing.orders  = shopify.orders;
-    } else if (!existing) {
+    } else {
       dailyMap.set(date, {
         date, spend: 0, revenue: shopify.revenue, orders: shopify.orders,
         impressions: 0, clicks: 0,
@@ -308,7 +313,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }
 
   // Merge Shopify CRM revenue into campaigns by matching utmCampaign → campaign name
-  if (dataSource === "meta_insights") {
+  {
     const shopifyCrmByCampaign = new Map<string, { revenue: number; orders: number }>();
     for (const o of shopifyOrders) {
       const key = (o.utmCampaign ?? "").toLowerCase().trim();
@@ -319,7 +324,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       shopifyCrmByCampaign.set(key, entry);
     }
     for (const [, campaign] of campaignMap) {
-      if (campaign.revenue > 0) continue;
       const crm = shopifyCrmByCampaign.get(campaign.campaignName.toLowerCase().trim());
       if (crm) {
         campaign.revenue = crm.revenue;
