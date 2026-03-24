@@ -56,7 +56,7 @@ type Summary = {
 type PortalData = {
   client: { name: string; brandName: string; currency: string };
   dateRange: { from: string; to: string };
-  dataSource?: "utm_reconciled" | "meta_insights";
+  dataSource?: "reconciled" | "utm_reconciled" | "meta_insights";
   summary: Summary;
   dailyRows: DailyRow[];
   campaignRows: CampaignRow[];
@@ -721,6 +721,8 @@ export default function ClientPortalPage({ params }: PageProps) {
           <p className="text-xs text-slate-600">
             {data.dataSource === "meta_insights"
               ? "Data reflects Meta ad spend and delivery metrics. Revenue figures will appear once Shopify reconciliation is complete."
+              : data.dataSource === "reconciled"
+              ? "Data reflects Meta ad spend reconciled against Shopify orders. Revenue and orders are sourced from Shopify (7-day attribution window)."
               : "Data reflects Meta ad spend reconciled against Shopify attributed revenue. Revenue figures use a 7-day attribution window."
             }
           </p>

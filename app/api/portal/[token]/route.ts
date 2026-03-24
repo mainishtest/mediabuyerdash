@@ -12,9 +12,10 @@ type RouteContext = { params: { token: string } };
  * request does not carry a valid auth cookie.
  *
  * Data sources (in priority order):
- *   1. UTMPerformanceRow  — reconciled Meta + Shopify (spend + revenue + orders)
- *   2. MetaSyncedInsight  — raw Meta sync data (spend + impressions + clicks)
- *      Used as fallback when UTMPerformanceRow is empty for the date range.
+ *   1. ReconciliationMatch — Meta spend + Shopify revenue/orders (best)
+ *   2. UTMPerformanceRow   — legacy reconciled rows
+ *   3. MetaSyncedInsight   — raw Meta sync data (spend + impressions + clicks)
+ *      Used as fallback when neither reconciled source has data.
  */
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { token } = params;
@@ -46,24 +47,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const to            = url.searchParams.get("to")   ?? today;
   const clientId      = account.id;
 
-  // ── 1. Try UTM performance rows (reconciled data) ─────────────────────────
-  const utmRows = await prisma.uTMPerformanceRow.findMany({
-    where: {
-      clientAccountId: clientId,
-      date: { gte: from, lte: to },
-    },
-    select: {
-      date: true, campaignId: true, campaignName: true,
-      adId: true, adName: true,
-      spend: true, impressions: true, clicks: true, conversions: true, revenue: true,
-    },
-    orderBy: { date: "asc" },
-  });
-
-  // ── 2. Fallback: MetaSyncedInsight (raw Meta data) ────────────────────────
-  // Used when no UTM rows exist — provides spend/impressions/clicks at minimum.
-  let usingFallback = false;
-
   type NormRow = {
     date: string; campaignId: string; campaignName: string;
     adId: string; adName: string;
@@ -72,86 +55,154 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   };
 
   let rows: NormRow[];
+  let dataSource: "reconciled" | "utm_reconciled" | "meta_insights" = "meta_insights";
 
-  if (utmRows.length === 0) {
-    usingFallback = true;
+  // ── 1. Try ReconciliationMatch (Meta spend + Shopify revenue/orders) ────
+  const reconMatches = await prisma.reconciliationMatch.findMany({
+    where: {
+      clientAccountId: clientId,
+      date: { gte: from, lte: to },
+    },
+    select: {
+      date: true,
+      metaCampaignId: true, metaAdId: true,
+      utmCampaign: true,
+      metaSpend: true, metaClicks: true, metaImpressions: true,
+      crmOrders: true, crmRevenue: true,
+    },
+    orderBy: { date: "asc" },
+  });
 
-    // Find the ad account IDs linked to this client
-    const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
-      where:  { clientAccountId: clientId },
-      select: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+  if (reconMatches.length > 0) {
+    dataSource = "reconciled";
+
+    // Resolve campaign and ad names for display
+    const campaignIds = [...new Set(reconMatches.map((m) => m.metaCampaignId).filter(Boolean))] as string[];
+    const adIds       = [...new Set(reconMatches.map((m) => m.metaAdId).filter(Boolean))] as string[];
+
+    const [campaigns, ads] = await Promise.all([
+      campaignIds.length > 0
+        ? prisma.metaSyncedCampaign.findMany({
+            where:  { externalCampaignId: { in: campaignIds } },
+            select: { externalCampaignId: true, name: true },
+          })
+        : [],
+      adIds.length > 0
+        ? prisma.metaSyncedAd.findMany({
+            where:  { externalAdId: { in: adIds } },
+            select: { externalAdId: true, name: true },
+          })
+        : [],
+    ]);
+
+    const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
+    const adNameMap       = new Map(ads.map((a) => [a.externalAdId, a.name]));
+
+    rows = reconMatches.map((m) => ({
+      date:         m.date,
+      campaignId:   m.metaCampaignId ?? "",
+      campaignName: campaignNameMap.get(m.metaCampaignId ?? "") ?? m.utmCampaign ?? "",
+      adId:         m.metaAdId ?? "",
+      adName:       adNameMap.get(m.metaAdId ?? "") ?? m.metaAdId ?? "",
+      spend:        m.metaSpend,
+      impressions:  m.metaImpressions ?? 0,
+      clicks:       m.metaClicks ?? 0,
+      conversions:  m.crmOrders,
+      revenue:      m.crmRevenue,
+    }));
+  } else {
+    // ── 2. Try UTM performance rows ─────────────────────────────────────────
+    const utmRows = await prisma.uTMPerformanceRow.findMany({
+      where: {
+        clientAccountId: clientId,
+        date: { gte: from, lte: to },
+      },
+      select: {
+        date: true, campaignId: true, campaignName: true,
+        adId: true, adName: true,
+        spend: true, impressions: true, clicks: true, conversions: true, revenue: true,
+      },
+      orderBy: { date: "asc" },
     });
 
-    const adAccountIds = selectedAccounts
-      .map((s) => s.accessibleAdAccount.externalAdAccountId)
-      .filter(Boolean);
-
-    if (adAccountIds.length > 0) {
-      const insights = await prisma.metaSyncedInsight.findMany({
-        where: {
-          externalAdAccountId: { in: adAccountIds },
-          dateStart: { gte: from, lte: to },
-          level: "ad",
-        },
-        select: {
-          dateStart: true,
-          externalCampaignId: true,
-          externalAdId: true,
-          spend: true, impressions: true, clicks: true,
-        },
-        orderBy: { dateStart: "asc" },
-      });
-
-      // Pull campaign and ad names for display
-      const campaignIds = [...new Set(insights.map((i) => i.externalCampaignId).filter(Boolean))];
-      const adIds       = [...new Set(insights.map((i) => i.externalAdId).filter(Boolean))];
-
-      const [campaigns, ads] = await Promise.all([
-        campaignIds.length > 0
-          ? prisma.metaSyncedCampaign.findMany({
-              where:  { externalCampaignId: { in: campaignIds } },
-              select: { externalCampaignId: true, name: true },
-            })
-          : [],
-        adIds.length > 0
-          ? prisma.metaSyncedAd.findMany({
-              where:  { externalAdId: { in: adIds } },
-              select: { externalAdId: true, name: true },
-            })
-          : [],
-      ]);
-
-      const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
-      const adNameMap       = new Map(ads.map((a) => [a.externalAdId, a.name]));
-
-      rows = insights.map((i) => ({
-        date:         i.dateStart,
-        campaignId:   i.externalCampaignId,
-        campaignName: campaignNameMap.get(i.externalCampaignId) ?? i.externalCampaignId,
-        adId:         i.externalAdId,
-        adName:       adNameMap.get(i.externalAdId) ?? i.externalAdId,
-        spend:        i.spend,
-        impressions:  i.impressions,
-        clicks:       i.clicks,
-        conversions:  0,
-        revenue:      0,
+    if (utmRows.length > 0) {
+      dataSource = "utm_reconciled";
+      rows = utmRows.map((r) => ({
+        date:         r.date,
+        campaignId:   r.campaignId   ?? "",
+        campaignName: r.campaignName ?? "",
+        adId:         r.adId         ?? "",
+        adName:       r.adName       ?? "",
+        spend:        r.spend,
+        impressions:  r.impressions,
+        clicks:       r.clicks,
+        conversions:  r.conversions,
+        revenue:      r.revenue,
       }));
     } else {
-      rows = [];
+      // ── 3. Fallback: MetaSyncedInsight (raw Meta data) ──────────────────
+      const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
+        where:  { clientAccountId: clientId },
+        select: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+      });
+
+      const adAccountIds = selectedAccounts
+        .map((s) => s.accessibleAdAccount.externalAdAccountId)
+        .filter(Boolean);
+
+      if (adAccountIds.length > 0) {
+        const insights = await prisma.metaSyncedInsight.findMany({
+          where: {
+            externalAdAccountId: { in: adAccountIds },
+            dateStart: { gte: from, lte: to },
+            level: "ad",
+          },
+          select: {
+            dateStart: true,
+            externalCampaignId: true,
+            externalAdId: true,
+            spend: true, impressions: true, clicks: true,
+          },
+          orderBy: { dateStart: "asc" },
+        });
+
+        const campaignIds = [...new Set(insights.map((i) => i.externalCampaignId).filter(Boolean))];
+        const adIds       = [...new Set(insights.map((i) => i.externalAdId).filter(Boolean))];
+
+        const [campaigns, ads] = await Promise.all([
+          campaignIds.length > 0
+            ? prisma.metaSyncedCampaign.findMany({
+                where:  { externalCampaignId: { in: campaignIds } },
+                select: { externalCampaignId: true, name: true },
+              })
+            : [],
+          adIds.length > 0
+            ? prisma.metaSyncedAd.findMany({
+                where:  { externalAdId: { in: adIds } },
+                select: { externalAdId: true, name: true },
+              })
+            : [],
+        ]);
+
+        const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
+        const adNameMap       = new Map(ads.map((a) => [a.externalAdId, a.name]));
+
+        rows = insights.map((i) => ({
+          date:         i.dateStart,
+          campaignId:   i.externalCampaignId,
+          campaignName: campaignNameMap.get(i.externalCampaignId) ?? i.externalCampaignId,
+          adId:         i.externalAdId,
+          adName:       adNameMap.get(i.externalAdId) ?? i.externalAdId,
+          spend:        i.spend,
+          impressions:  i.impressions,
+          clicks:       i.clicks,
+          conversions:  0,
+          revenue:      0,
+        }));
+      } else {
+        rows = [];
+      }
     }
-  } else {
-    rows = utmRows.map((r) => ({
-      date:         r.date,
-      campaignId:   r.campaignId   ?? "",
-      campaignName: r.campaignName ?? "",
-      adId:         r.adId         ?? "",
-      adName:       r.adName       ?? "",
-      spend:        r.spend,
-      impressions:  r.impressions,
-      clicks:       r.clicks,
-      conversions:  r.conversions,
-      revenue:      r.revenue,
-    }));
   }
 
   // ── Daily totals ──────────────────────────────────────────────────────────
@@ -213,22 +264,21 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     spend: number; revenue: number; orders: number; impressions: number; clicks: number;
   }>();
 
-  if (!usingFallback) {
-    for (const row of rows) {
-      const key      = row.adId || row.adName || "unknown";
-      const existing = adMap.get(key) ?? {
-        adId:         row.adId,
-        adName:       row.adName || "Unknown Ad",
-        campaignName: row.campaignName ?? "",
-        spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
-      };
-      existing.spend       += row.spend;
-      existing.revenue     += row.revenue;
-      existing.orders      += row.conversions;
-      existing.impressions += row.impressions;
-      existing.clicks      += row.clicks;
-      adMap.set(key, existing);
-    }
+  for (const row of rows) {
+    if (!row.adId && !row.adName) continue; // skip rows without ad-level data
+    const key      = row.adId || row.adName || "unknown";
+    const existing = adMap.get(key) ?? {
+      adId:         row.adId,
+      adName:       row.adName || "Unknown Ad",
+      campaignName: row.campaignName ?? "",
+      spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0,
+    };
+    existing.spend       += row.spend;
+    existing.revenue     += row.revenue;
+    existing.orders      += row.conversions;
+    existing.impressions += row.impressions;
+    existing.clicks      += row.clicks;
+    adMap.set(key, existing);
   }
 
   const adRows = Array.from(adMap.values())
@@ -253,7 +303,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       currency:  account.currency,
     },
     dateRange:    { from, to },
-    dataSource:   usingFallback ? "meta_insights" : "utm_reconciled",
+    dataSource,
     summary: {
       totalSpend,
       totalRevenue,
