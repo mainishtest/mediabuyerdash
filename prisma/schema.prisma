@@ -154,6 +154,7 @@ model ClientAccount {
   goalDefaults            ClientGoalDefaults?
   budgetPacingTargets     BudgetPacingTarget[]
   autoExecutionSettings   AutoExecutionSettings?
+  brandContext            BrandContext?
 }
 
 model Campaign {
@@ -1871,4 +1872,20 @@ model ShopifyRefund {
 
   @@unique([shopifyOrderId, externalRefundId])
   @@index([shopifyOrderId])
+}
+
+// ── Brand Intelligence ────────────────────────────────────────────────────────
+
+// Persisted brand context and memory per client account.
+// One record per client — upserted on each save.
+model BrandContext {
+  id              String   @id @default(cuid())
+  clientAccountId String   @unique
+  data            String   // JSON blob: BrandMemoryData
+  landingPageUrl  String?
+  landingPageData String?  // JSON blob: LandingPageExtraction
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
 }
