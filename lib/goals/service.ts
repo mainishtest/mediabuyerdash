@@ -207,5 +207,14 @@ export async function getCampaignGoalsForCampaigns(
   const rows = await prisma.metaCampaignGoal.findMany({
     where: { externalCampaignId: { in: externalCampaignIds } },
   });
-  return new Map(rows.map(r => [r.externalCampaignId, mapCampaignGoal(r)]));
+  return new Map(rows.map(r => [r.externalCampaignId, mapCampaignGoal({
+    externalCampaignId: r.externalCampaignId,
+    targetRoas:         null,
+    targetCpa:          null,
+    targetCtr:          null,
+    targetCvr:          null,
+    maxDailySpend:      null,
+    roasGoalValue:      r.roasGoalValue,
+    cpaGoalValue:       r.cpaGoalValue,
+  })]));
 }
