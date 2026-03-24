@@ -437,15 +437,15 @@ function PasswordGate({ token, onSuccess }: { token: string; onSuccess: () => vo
 type PageProps = { params: { token: string } };
 
 const PRESETS = [
-  { label: "Last 7 days",  from: () => daysAgo(7),  to: today },
-  { label: "Last 14 days", from: () => daysAgo(14), to: today },
-  { label: "Last 30 days", from: () => daysAgo(30), to: today },
+  { label: "Today",       from: today,              to: today },
+  { label: "Yesterday",   from: () => daysAgo(1),   to: () => daysAgo(1) },
+  { label: "Last 7 days", from: () => daysAgo(7),   to: today },
 ];
 
 export default function ClientPortalPage({ params }: PageProps) {
   const { token } = params;
 
-  const [fromDate,       setFromDate]       = useState(daysAgo(30));
+  const [fromDate,       setFromDate]       = useState(daysAgo(7));
   const [toDate,         setToDate]         = useState(today());
   const [data,           setData]           = useState<PortalData | null>(null);
   const [loading,        setLoading]        = useState(true);
