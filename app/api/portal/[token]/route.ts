@@ -212,6 +212,42 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  // ── Shopify orders (direct) ───────────────────────────────────────────────
+  // Always query Shopify orders so revenue/orders appear even when
+  // reconciliation hasn't run yet (e.g. today / yesterday).
+  function startOfDayInTz(dateStr: string, tzId: string): Date {
+    const noon = new Date(dateStr + "T12:00:00.000Z");
+    const localStr = noon.toLocaleString("en-US", { timeZone: tzId });
+    const localDate = new Date(localStr);
+    const offsetMs = noon.getTime() - localDate.getTime();
+    const midnight = new Date(dateStr + "T00:00:00.000Z");
+    return new Date(midnight.getTime() + offsetMs);
+  }
+  function endOfDayInTz(dateStr: string, tzId: string): Date {
+    return new Date(startOfDayInTz(dateStr, tzId).getTime() + 24 * 60 * 60 * 1000 - 1);
+  }
+
+  const shopifyOrders = await prisma.shopifyOrder.findMany({
+    where: {
+      clientAccountId: clientId,
+      orderCreatedAt: {
+        gte: startOfDayInTz(from, tz),
+        lte: endOfDayInTz(to, tz),
+      },
+    },
+    select: { orderCreatedAt: true, totalPrice: true, utmCampaign: true },
+  });
+
+  // Bucket Shopify orders by date in the client's timezone
+  const shopifyByDate = new Map<string, { revenue: number; orders: number }>();
+  for (const o of shopifyOrders) {
+    const d = dateInTz(o.orderCreatedAt);
+    const entry = shopifyByDate.get(d) ?? { revenue: 0, orders: 0 };
+    entry.revenue += o.totalPrice;
+    entry.orders  += 1;
+    shopifyByDate.set(d, entry);
+  }
+
   // ── Daily totals ──────────────────────────────────────────────────────────
   const dailyMap = new Map<string, {
     date: string; spend: number; revenue: number; orders: number;
@@ -228,6 +264,20 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     d.impressions += row.impressions;
     d.clicks      += row.clicks;
     dailyMap.set(row.date, d);
+  }
+
+  // Merge direct Shopify revenue for dates where the primary source had none
+  for (const [date, shopify] of shopifyByDate) {
+    const existing = dailyMap.get(date);
+    if (existing && existing.revenue === 0 && existing.orders === 0) {
+      existing.revenue = shopify.revenue;
+      existing.orders  = shopify.orders;
+    } else if (!existing) {
+      dailyMap.set(date, {
+        date, spend: 0, revenue: shopify.revenue, orders: shopify.orders,
+        impressions: 0, clicks: 0,
+      });
+    }
   }
 
   const dailyRows = Array.from(dailyMap.values()).map((d) => ({
@@ -255,6 +305,27 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     existing.impressions += row.impressions;
     existing.clicks      += row.clicks;
     campaignMap.set(key, existing);
+  }
+
+  // Merge Shopify CRM revenue into campaigns by matching utmCampaign → campaign name
+  if (dataSource === "meta_insights") {
+    const shopifyCrmByCampaign = new Map<string, { revenue: number; orders: number }>();
+    for (const o of shopifyOrders) {
+      const key = (o.utmCampaign ?? "").toLowerCase().trim();
+      if (!key) continue;
+      const entry = shopifyCrmByCampaign.get(key) ?? { revenue: 0, orders: 0 };
+      entry.revenue += o.totalPrice;
+      entry.orders  += 1;
+      shopifyCrmByCampaign.set(key, entry);
+    }
+    for (const [, campaign] of campaignMap) {
+      if (campaign.revenue > 0) continue;
+      const crm = shopifyCrmByCampaign.get(campaign.campaignName.toLowerCase().trim());
+      if (crm) {
+        campaign.revenue = crm.revenue;
+        campaign.orders  = crm.orders;
+      }
+    }
   }
 
   const campaignRows = Array.from(campaignMap.values())
