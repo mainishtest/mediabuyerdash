@@ -91,32 +91,45 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         where: {
           externalAdAccountId: { in: adAccountIds },
           dateStart: { gte: from, lte: to },
-          level: "campaign",
+          level: "ad",
         },
         select: {
           dateStart: true,
           externalCampaignId: true,
+          externalAdId: true,
           spend: true, impressions: true, clicks: true,
         },
         orderBy: { dateStart: "asc" },
       });
 
-      // Also pull campaign names from MetaSyncedCampaign
+      // Pull campaign and ad names for display
       const campaignIds = [...new Set(insights.map((i) => i.externalCampaignId).filter(Boolean))];
-      const campaigns = campaignIds.length > 0
-        ? await prisma.metaSyncedCampaign.findMany({
-            where:  { externalCampaignId: { in: campaignIds } },
-            select: { externalCampaignId: true, name: true },
-          })
-        : [];
+      const adIds       = [...new Set(insights.map((i) => i.externalAdId).filter(Boolean))];
+
+      const [campaigns, ads] = await Promise.all([
+        campaignIds.length > 0
+          ? prisma.metaSyncedCampaign.findMany({
+              where:  { externalCampaignId: { in: campaignIds } },
+              select: { externalCampaignId: true, name: true },
+            })
+          : [],
+        adIds.length > 0
+          ? prisma.metaSyncedAd.findMany({
+              where:  { externalAdId: { in: adIds } },
+              select: { externalAdId: true, name: true },
+            })
+          : [],
+      ]);
+
       const campaignNameMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
+      const adNameMap       = new Map(ads.map((a) => [a.externalAdId, a.name]));
 
       rows = insights.map((i) => ({
         date:         i.dateStart,
         campaignId:   i.externalCampaignId,
         campaignName: campaignNameMap.get(i.externalCampaignId) ?? i.externalCampaignId,
-        adId:         "",
-        adName:       "",
+        adId:         i.externalAdId,
+        adName:       adNameMap.get(i.externalAdId) ?? i.externalAdId,
         spend:        i.spend,
         impressions:  i.impressions,
         clicks:       i.clicks,
