@@ -417,7 +417,7 @@ export default function BrandIntelligencePage() {
                     <div>
                       <span className="text-xs text-slate-500">Testimonials:</span>
                       {lpData.testimonials.map((t, i) => (
-                        <p key={i} className="mt-1 text-sm italic text-slate-400">"{t}"</p>
+                        <p key={i} className="mt-1 text-sm italic text-slate-400">&ldquo;{t}&rdquo;</p>
                       ))}
                     </div>
                   )}
