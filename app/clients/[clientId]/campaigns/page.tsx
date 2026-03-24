@@ -34,7 +34,7 @@ export default async function CampaignPerformancePage({ params }: PageProps) {
 
   const tz = account.timezone || "America/New_York";
   const [snapshots, sparklines, clientDaily] = await Promise.all([
-    buildCampaignPerformanceSnapshots(clientId),
+    buildCampaignPerformanceSnapshots(clientId, undefined, undefined, tz),
     getCampaignSparklines(clientId, 30, undefined, undefined, tz),
     getClientDailyMetrics(clientId, 30, undefined, undefined, tz),
   ]);

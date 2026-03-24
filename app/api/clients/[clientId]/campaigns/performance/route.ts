@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const tz = account?.timezone || "America/New_York";
 
     const [snapshots, sparklines, clientDaily] = await Promise.all([
-      buildCampaignPerformanceSnapshots(clientId, startDate, endDate),
+      buildCampaignPerformanceSnapshots(clientId, startDate, endDate, tz),
       getCampaignSparklines(clientId, 30, startDate, endDate, tz),
       getClientDailyMetrics(clientId, 30, startDate, endDate, tz),
     ]);

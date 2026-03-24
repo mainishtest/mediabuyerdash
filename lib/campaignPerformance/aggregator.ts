@@ -18,10 +18,27 @@ import { mergeGoalFields } from "../goals/resolve";
 import { evaluatePerformance } from "../evaluation/evaluate";
 import type { CampaignPerformanceSnapshot, CampaignHealthStatus } from "./types";
 
+// ── Timezone-aware date helpers ──────────────────────────────────────────────
+
+function startOfDayInTz(dateStr: string, tz: string): Date {
+  const noon = new Date(dateStr + "T12:00:00.000Z");
+  const localStr = noon.toLocaleString("en-US", { timeZone: tz });
+  const localDate = new Date(localStr);
+  const offsetMs = noon.getTime() - localDate.getTime();
+  const midnight = new Date(dateStr + "T00:00:00.000Z");
+  return new Date(midnight.getTime() + offsetMs);
+}
+
+function endOfDayInTz(dateStr: string, tz: string): Date {
+  const start = startOfDayInTz(dateStr, tz);
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+}
+
 export async function buildCampaignPerformanceSnapshots(
   clientId:  string,
   startDate?: string,   // YYYY-MM-DD inclusive; defaults to all-time
   endDate?:   string,   // YYYY-MM-DD inclusive; defaults to today
+  timezone?:  string,   // IANA timezone for Shopify order boundaries
 ): Promise<CampaignPerformanceSnapshot[]> {
   // ── 1. Client's mapped Meta ad account IDs ───────────────────────────────────
   const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
@@ -54,10 +71,11 @@ export async function buildCampaignPerformanceSnapshots(
       }
     : undefined;
 
+  const tz = timezone || "America/New_York";
   const orderDateFilter = startDate || endDate
     ? {
-        ...(startDate ? { gte: new Date(startDate + "T00:00:00.000Z") } : {}),
-        ...(endDate   ? { lte: new Date(endDate   + "T23:59:59.999Z") } : {}),
+        ...(startDate ? { gte: startOfDayInTz(startDate, tz) } : {}),
+        ...(endDate   ? { lte: endOfDayInTz(endDate, tz) } : {}),
       }
     : undefined;
 
