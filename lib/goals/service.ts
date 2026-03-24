@@ -77,7 +77,16 @@ export async function getCampaignGoal(
     where: { externalCampaignId },
   });
   if (!row) return null;
-  return mapCampaignGoal(row);
+  return mapCampaignGoal({
+    externalCampaignId: row.externalCampaignId,
+    targetRoas:         null,
+    targetCpa:          null,
+    targetCtr:          null,
+    targetCvr:          null,
+    maxDailySpend:      null,
+    roasGoalValue:      row.roasGoalValue,
+    cpaGoalValue:       row.cpaGoalValue,
+  });
 }
 
 // ---------------------------------------------------------------------------
