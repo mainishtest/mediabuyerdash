@@ -13,6 +13,7 @@
 //   { snapshots: CampaignPerformanceSnapshot[], sparklines: Record<string, SparkPoint[]>, clientDaily: DailyPoint[] }
 
 import { NextRequest, NextResponse }           from "next/server";
+import { prisma }                              from "../../../../../../lib/db";
 import { buildCampaignPerformanceSnapshots }   from "../../../../../../lib/campaignPerformance/aggregator";
 import { getCampaignSparklines,
          getClientDailyMetrics }               from "../../../../../../lib/charts/dataService";
@@ -46,10 +47,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // Look up client timezone so date ranges align with the user's calendar
+    const account = await prisma.clientAccount.findUnique({
+      where: { id: clientId }, select: { timezone: true },
+    });
+    const tz = account?.timezone || "America/New_York";
+
     const [snapshots, sparklines, clientDaily] = await Promise.all([
       buildCampaignPerformanceSnapshots(clientId, startDate, endDate),
-      getCampaignSparklines(clientId, 30, startDate, endDate),
-      getClientDailyMetrics(clientId, 30, startDate, endDate),
+      getCampaignSparklines(clientId, 30, startDate, endDate, tz),
+      getClientDailyMetrics(clientId, 30, startDate, endDate, tz),
     ]);
 
     return NextResponse.json({ snapshots, sparklines, clientDaily });

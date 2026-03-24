@@ -129,14 +129,23 @@ export async function fetchAds(
 export async function fetchInsights(
   externalAdAccountId: string,
   accessToken: string,
-  dayRange = 7
+  dayRange = 7,
+  timezone = "America/New_York"
 ): Promise<{ rows: RawMetaInsight[]; since: string; until: string }> {
+  // Use the client's timezone so "today" matches the ad account's local date.
+  // Meta API interprets time_range dates in the ad account's timezone, so
+  // sending UTC dates when the server runs at a different offset causes
+  // misalignment (e.g. requesting "tomorrow" in the ad account's timezone).
+  const dateInTz = (d: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+
   const untilDate = new Date();
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dayRange);
 
-  const since = sinceDate.toISOString().slice(0, 10);
-  const until = untilDate.toISOString().slice(0, 10);
+  const since = dateInTz(sinceDate);
+  const until = dateInTz(untilDate);
 
   const params = new URLSearchParams({
     fields:         INSIGHT_FIELDS,

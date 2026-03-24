@@ -29,9 +29,11 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
   // Verify client exists
   const account = await prisma.clientAccount.findUnique({
     where:  { id: clientId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, timezone: true },
   });
   if (!account) notFound();
+
+  const tz = account.timezone || "America/New_York";
 
   // Campaign info
   const campaign = await prisma.metaSyncedCampaign.findUnique({
@@ -39,9 +41,14 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
   });
   if (!campaign) notFound();
 
+  // Use the client's timezone so "today" and date ranges match the user's calendar.
+  const dateInTz = (d: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const since = thirtyDaysAgo.toISOString().slice(0, 10);
+  const since = dateInTz(thirtyDaysAgo);
 
   // Ad sets, ads, insights, goal, and daily chart data in parallel
   const [adSets, ads, adSetInsights, adInsights, goalRecord, dailyMetrics] = await Promise.all([
@@ -78,7 +85,7 @@ export default async function CampaignDrillDownPage({ params }: PageProps) {
     // Current goal for this campaign
     getCampaignGoal(campaignId),
     // 30-day daily spend + CRM revenue for the trend chart
-    getCampaignDailyMetrics(campaignId, clientId, 30),
+    getCampaignDailyMetrics(campaignId, clientId, 30, undefined, undefined, tz),
   ]);
 
   // Build insight maps

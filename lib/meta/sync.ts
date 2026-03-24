@@ -38,7 +38,8 @@ async function syncAccount(
     adsSynced:         number;
     creativesSynced:   number;
     insightRowsSynced: number;
-  }
+  },
+  timezone = "America/New_York"
 ): Promise<void> {
   // Campaigns
   const rawCampaigns = await fetchCampaigns(externalAdAccountId, accessToken);
@@ -70,7 +71,8 @@ async function syncAccount(
   const { rows: rawInsights, since, until } = await fetchInsights(
     externalAdAccountId,
     accessToken,
-    7
+    7,
+    timezone
   );
   const mappedInsights = rawInsights.map((r) =>
     mapInsight(r, externalAdAccountId, workspaceId)
@@ -93,7 +95,8 @@ async function syncAccount(
 export async function runMetaSyncForAccounts(
   adAccounts: Array<{ externalAdAccountId: string; accessToken: string }>,
   connectionId: string,
-  workspaceId: string | null = null
+  workspaceId: string | null = null,
+  timezone = "America/New_York"
 ): Promise<SyncSummary> {
   const startedAt = new Date();
 
@@ -129,7 +132,8 @@ export async function runMetaSyncForAccounts(
         account.externalAdAccountId,
         account.accessToken,
         workspaceId,
-        counts
+        counts,
+        timezone
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
