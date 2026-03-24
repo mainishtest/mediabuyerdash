@@ -91,11 +91,15 @@ function roasColor(r: number | null) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC offset shifting "today" to tomorrow
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function daysAgo(n: number) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // ─── Insights generator ───────────────────────────────────────────────────────

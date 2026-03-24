@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       name:                    true,
       brandName:               true,
       currency:                true,
+      timezone:                true,
       clientPortalPasswordHash: true,
     },
   });
@@ -40,9 +41,15 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ requiresPassword: true }, { status: 401 });
   }
 
-  const url           = new URL(req.url);
-  const today         = new Date().toISOString().slice(0, 10);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const url = new URL(req.url);
+
+  // Use the client's timezone so "today" matches the user's local calendar
+  const tz = account.timezone || "America/New_York";
+  const dateInTz = (d: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+  const today         = dateInTz(new Date());
+  const thirtyDaysAgo = dateInTz(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const from          = url.searchParams.get("from") ?? thirtyDaysAgo;
   const to            = url.searchParams.get("to")   ?? today;
   const clientId      = account.id;
