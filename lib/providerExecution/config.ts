@@ -33,7 +33,7 @@ export function getOpenAIConfig(): ProviderConfigStatus {
 
 export function getAnthropicConfig(): ProviderConfigStatus {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-3-5-haiku-20241022";
+  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 
   if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
     return {

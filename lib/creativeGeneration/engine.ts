@@ -72,10 +72,17 @@ export function normalizeCreativeOutput(
     const cleaned = rawContent
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
+      .replace(/\s*```\s*$/i, "")
       .trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
+    // Also handle case where JSON is embedded in other text
+    const jsonStart = cleaned.indexOf("[");
+    const jsonEnd   = cleaned.lastIndexOf("]");
+    const jsonStr   = jsonStart >= 0 && jsonEnd > jsonStart
+      ? cleaned.slice(jsonStart, jsonEnd + 1)
+      : cleaned;
+    parsed = JSON.parse(jsonStr);
+  } catch (err) {
+    console.error("[normalizeCreativeOutput] JSON parse failed:", err, "raw:", rawContent.slice(0, 200));
     return [];
   }
 
@@ -352,7 +359,7 @@ export async function generateCreativeDrafts(
 
   // ── Anthropic generation ───────────────────────────────────────────────────
   const { system, user } = buildPromptForMode(input);
-  const model = config.model ?? "claude-3-5-haiku-20241022";
+  const model = config.model ?? "claude-haiku-4-5-20251001";
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
