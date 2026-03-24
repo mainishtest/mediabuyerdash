@@ -57,7 +57,9 @@ type GenerationResult = {
 type Props = {
   clients:   ClientOption[];
   snapshots: CreativePerformanceSnapshot[];
-  selectedClientId: string | null;
+  selectedClientId:  string | null;
+  initialCreativeId?: string | null;
+  initialCampaignId?: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -193,14 +195,26 @@ function RunSummaryBar({ summary, warnings }: { summary: CreativeGenerationRunSu
 // Main view
 // ---------------------------------------------------------------------------
 
-export function CreativeEngineView({ clients, snapshots, selectedClientId }: Props) {
-  const [clientId,       setClientId]       = useState(selectedClientId ?? clients[0]?.id ?? "");
-  const [selectedSnap,   setSelectedSnap]   = useState<CreativePerformanceSnapshot | null>(null);
+export function CreativeEngineView({ clients, snapshots, selectedClientId, initialCreativeId, initialCampaignId }: Props) {
+  // Auto-select snapshot if creativeId or campaignId provided (from Creative Lab approval flow)
+  const autoSnap = useMemo(() => {
+    if (!initialCreativeId && !initialCampaignId) return null;
+    return snapshots.find((s) =>
+      (initialCreativeId && s.externalCreativeId === initialCreativeId) ||
+      (initialCampaignId && s.externalCampaignId === initialCampaignId)
+    ) ?? null;
+  }, [snapshots, initialCreativeId, initialCampaignId]);
+
+  const [clientId,       setClientId]       = useState(
+    autoSnap?.clientAccountId ?? selectedClientId ?? clients[0]?.id ?? ""
+  );
+  const [selectedSnap,   setSelectedSnap]   = useState<CreativePerformanceSnapshot | null>(autoSnap);
   const [generating,     setGenerating]     = useState(false);
   const [genError,       setGenError]       = useState<string | null>(null);
   const [result,         setResult]         = useState<GenerationResult | null>(null);
   const [activeTab,      setActiveTab]      = useState<"concepts" | "variants">("concepts");
   const [variantActions, setVariantActions] = useState<Record<string, CreativeVariant["status"]>>({});
+  const fromApproval = !!(initialCreativeId || initialCampaignId);
 
   // Filter snapshots by selected client
   const clientSnapshots = useMemo(
@@ -285,6 +299,25 @@ export function CreativeEngineView({ clients, snapshots, selectedClientId }: Pro
 
   return (
     <div className="space-y-6">
+
+      {/* ── Workflow stepper (when coming from approval) ── */}
+      {fromApproval && (
+        <div className="flex items-center gap-2 rounded-xl border border-indigo-800/40 bg-indigo-950/20 px-4 py-3 text-xs">
+          <Link href="/creative-lab" className="text-slate-500 hover:text-slate-300">Approve</Link>
+          <span className="text-slate-600">→</span>
+          <span className={`rounded-full px-2 py-0.5 font-medium ${
+            !result ? "border border-indigo-500 bg-indigo-950/40 text-indigo-300" : "text-emerald-400"
+          }`}>
+            {result ? "✓ Generated" : "Generate Concepts"}
+          </span>
+          <span className="text-slate-600">→</span>
+          <span className={`${result ? "rounded-full border border-indigo-500 bg-indigo-950/40 px-2 py-0.5 font-medium text-indigo-300" : "text-slate-600"}`}>
+            Create Test
+          </span>
+          <span className="text-slate-600">→</span>
+          <span className="text-slate-600">Launch</span>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <PageHeader
@@ -491,6 +524,30 @@ export function CreativeEngineView({ clients, snapshots, selectedClientId }: Pro
                 </div>
               )}
             </>
+          )}
+
+          {/* ── Create A/B Test CTA — after concepts generated ── */}
+          {result && result.concepts.length > 0 && (
+            <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-emerald-200">Ready to test these concepts?</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Create an A/B test to run the best concept against your current creative on Meta.
+                    You&apos;ll set the control, budget, and success metrics in the next step.
+                  </p>
+                </div>
+                <Link
+                  href={`/creative-lab/launch?clientId=${encodeURIComponent(clientId)}${
+                    selectedSnap ? `&creativeId=${encodeURIComponent(selectedSnap.externalCreativeId)}&campaignId=${encodeURIComponent(selectedSnap.externalCampaignId ?? "")}` : ""
+                  }`}
+                  className="shrink-0 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold
+                    text-white transition-colors hover:bg-emerald-500 active:scale-95"
+                >
+                  Create A/B Test →
+                </Link>
+              </div>
+            </div>
           )}
 
           {/* Empty state — before generation */}

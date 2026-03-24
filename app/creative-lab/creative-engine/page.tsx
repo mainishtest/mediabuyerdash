@@ -26,13 +26,15 @@ export const metadata = {
 };
 
 type PageProps = {
-  searchParams: { clientId?: string };
+  searchParams: { clientId?: string; creativeId?: string; campaignId?: string };
 };
 
 export default async function CreativeEnginePage({ searchParams }: PageProps) {
   const session      = await getServerSession(authOptions);
   const workspaceId  = session?.user?.workspaceId ?? null;
-  const selectedClientId = searchParams?.clientId ?? null;
+  const selectedClientId  = searchParams?.clientId  ?? null;
+  const initialCreativeId = searchParams?.creativeId ?? null;
+  const initialCampaignId = searchParams?.campaignId ?? null;
 
   // Load clients for selector
   const clients = await prisma.clientAccount
@@ -56,6 +58,8 @@ export default async function CreativeEnginePage({ searchParams }: PageProps) {
       clients={clients}
       snapshots={snapshots}
       selectedClientId={selectedClientId}
+      initialCreativeId={initialCreativeId}
+      initialCampaignId={initialCampaignId}
     />
   );
 }
