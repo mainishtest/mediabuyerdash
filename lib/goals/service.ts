@@ -167,24 +167,23 @@ export async function upsertCampaignGoal(
       roasGoalValue: legacyRoas,
       cpaGoalType:   "low",
       cpaGoalValue:  legacyCpa,
-      targetRoas:    input.targetRoas    ?? null,
-      targetCpa:     input.targetCpa     ?? null,
-      targetCtr:     input.targetCtr     ?? null,
-      targetCvr:     input.targetCvr     ?? null,
-      maxDailySpend: input.maxDailySpend ?? null,
     },
     update: {
-      targetRoas:    input.targetRoas    !== undefined ? input.targetRoas    : existing?.targetRoas    ?? null,
-      targetCpa:     input.targetCpa     !== undefined ? input.targetCpa     : existing?.targetCpa     ?? null,
-      targetCtr:     input.targetCtr     !== undefined ? input.targetCtr     : existing?.targetCtr     ?? null,
-      targetCvr:     input.targetCvr     !== undefined ? input.targetCvr     : existing?.targetCvr     ?? null,
-      maxDailySpend: input.maxDailySpend !== undefined ? input.maxDailySpend : existing?.maxDailySpend ?? null,
       ...(input.targetRoas != null && { roasGoalValue: input.targetRoas }),
       ...(input.targetCpa  != null && { cpaGoalValue:  input.targetCpa }),
       updatedAt: new Date(),
     },
   });
-  return mapCampaignGoal(row);
+  return mapCampaignGoal({
+    externalCampaignId: row.externalCampaignId,
+    targetRoas:         input.targetRoas    ?? null,
+    targetCpa:          input.targetCpa     ?? null,
+    targetCtr:          input.targetCtr     ?? null,
+    targetCvr:          input.targetCvr     ?? null,
+    maxDailySpend:      input.maxDailySpend ?? null,
+    roasGoalValue:      row.roasGoalValue,
+    cpaGoalValue:       row.cpaGoalValue,
+  });
 }
 
 // ---------------------------------------------------------------------------
