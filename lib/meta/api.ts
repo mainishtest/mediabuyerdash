@@ -58,6 +58,11 @@ export interface RawMetaCreativeEmbedded {
   call_to_action_type?: string;
   image_url?:           string;
   thumbnail_url?:       string;
+  object_story_spec?:   {
+    link_data?: { message?: string };
+    video_data?: { message?: string };
+    photo_data?: { message?: string };
+  };
 }
 
 export interface RawMetaAd {
@@ -93,7 +98,8 @@ const ADSET_FIELDS =
   "id,name,status,campaign_id,created_time,updated_time";
 const AD_FIELDS =
   "id,name,status,adset_id,campaign_id,created_time,updated_time," +
-  "creative{id,name,title,body,call_to_action_type,image_url,thumbnail_url}";
+  "creative{id,name,title,body,call_to_action_type,image_url,thumbnail_url," +
+  "object_story_spec}";
 const INSIGHT_FIELDS =
   "campaign_id,adset_id,ad_id,spend,impressions,clicks,ctr,cpm,frequency";
 

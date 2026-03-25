@@ -132,12 +132,20 @@ export function mapCreative(
   raw: RawMetaCreativeEmbedded,
   workspaceId: string | null = null
 ): MappedCreative {
+  // body is the primary text. Fallback: extract from object_story_spec.*.message
+  // (Meta stores the ad copy in different places depending on ad type)
+  const body = raw.body
+    ?? raw.object_story_spec?.link_data?.message
+    ?? raw.object_story_spec?.video_data?.message
+    ?? raw.object_story_spec?.photo_data?.message
+    ?? null;
+
   return {
     workspaceId,
     externalCreativeId: raw.id,
     name:               raw.name               ?? null,
     title:              raw.title              ?? null,
-    body:               raw.body               ?? null,
+    body,
     callToAction:       raw.call_to_action_type ?? null,
     imageUrl:           raw.image_url          ?? null,
     thumbnailUrl:       raw.thumbnail_url      ?? null,

@@ -116,9 +116,29 @@ export function parseOpenAICopyResponse(raw: unknown): ProviderParseResult {
     };
   }
 
-  const parsed = safeJsonParse<{ variations?: unknown[] }>(content, {});
-  const variationsArr = parsed?.variations;
-  if (!Array.isArray(variationsArr)) {
+  const parsed = safeJsonParse<unknown>(content, null);
+
+  // The prompt asks for a raw JSON array [...], but also handle { variations: [...] }
+  let variationsArr: unknown[] | undefined;
+  if (Array.isArray(parsed)) {
+    variationsArr = parsed;
+  } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).variations)) {
+    variationsArr = (parsed as Record<string, unknown>).variations as unknown[];
+  }
+
+  if (!variationsArr) {
+    // Try to extract array from the text directly (model may have added wrapper text)
+    const arrStart = content.indexOf("[");
+    const arrEnd   = content.lastIndexOf("]");
+    if (arrStart >= 0 && arrEnd > arrStart) {
+      const extracted = safeJsonParse<unknown>(content.slice(arrStart, arrEnd + 1), null);
+      if (Array.isArray(extracted)) {
+        variationsArr = extracted;
+      }
+    }
+  }
+
+  if (!variationsArr) {
     errors.push("Content does not contain variations array");
     return {
       provider:     "openai_text_response",
@@ -202,9 +222,29 @@ export function parseAnthropicCopyResponse(raw: unknown): ProviderParseResult {
     };
   }
 
-  const parsed = safeJsonParse<{ variations?: unknown[] }>(text, {});
-  const variationsArr = parsed?.variations;
-  if (!Array.isArray(variationsArr)) {
+  const parsed = safeJsonParse<unknown>(text, null);
+
+  // The prompt asks for a raw JSON array [...], but also handle { variations: [...] }
+  let variationsArr: unknown[] | undefined;
+  if (Array.isArray(parsed)) {
+    variationsArr = parsed;
+  } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).variations)) {
+    variationsArr = (parsed as Record<string, unknown>).variations as unknown[];
+  }
+
+  if (!variationsArr) {
+    // Try to extract array from the text directly (model may have added wrapper text)
+    const arrStart = text.indexOf("[");
+    const arrEnd   = text.lastIndexOf("]");
+    if (arrStart >= 0 && arrEnd > arrStart) {
+      const extracted = safeJsonParse<unknown>(text.slice(arrStart, arrEnd + 1), null);
+      if (Array.isArray(extracted)) {
+        variationsArr = extracted;
+      }
+    }
+  }
+
+  if (!variationsArr) {
     errors.push("Content does not contain variations array");
     return {
       provider:     "anthropic_text_response",
