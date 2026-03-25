@@ -63,13 +63,14 @@ export function ShopifyIntegrationView({
   errorMessage,
   justConnected,
 }: Props) {
-  const [shopInput,      setShopInput]      = useState("");
+  const [shopInput,      setShopInput]      = useState(connection?.shopDomain ?? "");
   const [clientIdInput,  setClientIdInput]  = useState("");
   const [clientSecInput, setClientSecInput] = useState("");
   const [connectMode,    setConnectMode]    = useState<"credentials" | "oauth">("credentials");
   const [credsError,     setCredsError]     = useState<string | null>(null);
   const [isPending,      startTransition]   = useTransition();
   const [credsPending,   startCreds]        = useTransition();
+  const [showReconnect,  setShowReconnect]  = useState(false);
 
   const humanError = errorMessage ? (ERROR_LABELS[errorMessage] ?? errorMessage) : null;
 
@@ -195,13 +196,21 @@ export function ShopifyIntegrationView({
             )}
           </dl>
 
-          <div className="mt-5 flex items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <a
               href="/integrations/shopify/sync"
               className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
             >
               Go to Sync →
             </a>
+            <button
+              type="button"
+              onClick={() => setShowReconnect((v) => !v)}
+              className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 px-4 py-2
+                text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+            >
+              {showReconnect ? "Cancel Reconnect" : "Reconnect"}
+            </button>
             <form action={disconnectShopifyAction}>
               <input type="hidden" name="connectionId" value={connection.id} />
               <ActionButton type="submit" variant="danger" size="sm">
@@ -209,6 +218,146 @@ export function ShopifyIntegrationView({
               </ActionButton>
             </form>
           </div>
+          <p className="mt-2 text-xs text-slate-600">
+            Reconnect updates the access token without losing synced orders.
+            Disconnect removes the connection and all synced data.
+          </p>
+
+          {/* Reconnect form — same as connect form but preserves existing connection */}
+          {showReconnect && (
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-4">
+              <p className="text-sm font-medium text-slate-200">
+                Re-authenticate with Shopify
+              </p>
+              <p className="text-xs text-slate-500">
+                This will update your access token without deleting existing order data.
+                Enter the same store domain with fresh credentials.
+              </p>
+
+              {credsError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+                  {credsError}
+                </div>
+              )}
+
+              {/* Method tabs */}
+              <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/50 p-1 w-fit">
+                {(["credentials", "oauth"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => { setConnectMode(mode); setCredsError(null); }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      connectMode === mode
+                        ? "bg-slate-700 text-slate-100"
+                        : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {mode === "credentials" ? "Client Credentials" : "OAuth"}
+                  </button>
+                ))}
+              </div>
+
+              {connectMode === "credentials" ? (
+                <form
+                  action={async (fd) => {
+                    setCredsError(null);
+                    startCreds(async () => {
+                      const result = await connectShopifyClientCredentialsAction(fd);
+                      if (result?.error) setCredsError(result.error);
+                      else setShowReconnect(false);
+                    });
+                  }}
+                  className="flex flex-col gap-3"
+                >
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-400">Shop domain</label>
+                    <input
+                      name="shopDomain"
+                      type="text"
+                      placeholder="your-store.myshopify.com"
+                      value={shopInput}
+                      onChange={(e) => setShopInput(e.target.value)}
+                      disabled={credsPending}
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                        text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                        disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-400">Client ID</label>
+                      <input
+                        name="clientId"
+                        type="text"
+                        placeholder="5e78fcc4c4e4f43c…"
+                        value={clientIdInput}
+                        onChange={(e) => setClientIdInput(e.target.value)}
+                        disabled={credsPending}
+                        required
+                        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                          text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                          disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-400">Client Secret</label>
+                      <input
+                        name="clientSecret"
+                        type="password"
+                        placeholder="shpss_xxxxxxxxxxxx…"
+                        value={clientSecInput}
+                        onChange={(e) => setClientSecInput(e.target.value)}
+                        disabled={credsPending}
+                        required
+                        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                          text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                          disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+                  <ActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={credsPending || !shopInput.trim() || !clientIdInput.trim() || !clientSecInput.trim()}
+                  >
+                    {credsPending ? "Reconnecting…" : "Reconnect Shopify"}
+                  </ActionButton>
+                </form>
+              ) : (
+                <form
+                  action={(formData) => {
+                    startTransition(() => { startShopifyOAuthAction(formData); });
+                  }}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                >
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-slate-400">Shop domain</label>
+                    <input
+                      name="shopDomain"
+                      type="text"
+                      placeholder="your-store.myshopify.com"
+                      value={shopInput}
+                      onChange={(e) => setShopInput(e.target.value)}
+                      disabled={isPending}
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                        text-slate-100 placeholder-slate-500 focus:border-emerald-600 focus:outline-none
+                        disabled:opacity-50"
+                    />
+                  </div>
+                  <ActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={isPending || !shopInput.trim()}
+                  >
+                    {isPending ? "Redirecting…" : "Reconnect via OAuth"}
+                  </ActionButton>
+                </form>
+              )}
+            </div>
+          )}
         </SectionCard>
       ) : (
         <SectionCard title="Connect a Shopify Store">
