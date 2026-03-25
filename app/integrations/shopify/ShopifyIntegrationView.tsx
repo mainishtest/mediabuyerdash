@@ -112,10 +112,14 @@ export function ShopifyIntegrationView({
       )}
 
       {/* Summary strip */}
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-4">
         <StatCard
           label="Connection Status"
-          value={connection ? "Connected" : "Not Connected"}
+          value={
+            connection
+              ? connection.connectionStatus === "active" ? "Connected" : "Error"
+              : "Not Connected"
+          }
         />
         <StatCard
           label="Orders Synced"
@@ -125,17 +129,35 @@ export function ShopifyIntegrationView({
           label="Last Sync"
           value={
             syncLog?.completedAt
-              ? new Date(syncLog.completedAt).toLocaleDateString()
+              ? new Date(syncLog.completedAt).toLocaleString()
               : "Never"
           }
         />
+        <StatCard
+          label="Auto-Sync"
+          value="Every 5 min"
+          sub={connection ? "Active on Vercel cron" : "Requires connection"}
+        />
       </section>
+
+      {/* Connection error banner */}
+      {connection && connection.connectionStatus === "error" && (
+        <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+          <strong className="font-semibold">Connection error:</strong> Shopify rejected
+          the access token. The store may have revoked access or the app was uninstalled.
+          Please reconnect below. Auto-sync is paused until the connection is restored.
+        </div>
+      )}
 
       {/* Connection management */}
       {connection ? (
         <SectionCard
           title="Connected Store"
-          actions={<Badge variant="success">Active</Badge>}
+          actions={
+            <Badge variant={connection.connectionStatus === "active" ? "success" : "danger"}>
+              {connection.connectionStatus === "active" ? "Active" : "Connection Error"}
+            </Badge>
+          }
         >
           <dl className="space-y-3 text-sm">
             <div className="flex items-baseline gap-2">

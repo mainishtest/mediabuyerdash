@@ -1,4 +1,4 @@
-import { getShopifyConnectionById, getClientShopifyConnection } from "./db";
+import { getShopifyConnectionById, getClientShopifyConnection, updateConnectionStatus } from "./db";
 import { streamOrdersSince }        from "./api";
 import { mapOrder, mapLineItemsForOrder } from "./mappers";
 import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems } from "./syncDb";
@@ -85,6 +85,8 @@ async function _runSync(
     ? new Date(latestOrderDate.getTime() - 24 * 60 * 60 * 1000)
     : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+  let isAuthError = false;
+
   try {
     await streamOrdersSince(
       connection.shopDomain,
@@ -115,12 +117,25 @@ async function _runSync(
       }
     );
   } catch (err) {
-    errors.push(
-      `Order fetch failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Order fetch failed: ${msg}`);
+
+    // Detect auth/token errors so we can mark the connection unhealthy
+    const lower = msg.toLowerCase();
+    if (lower.includes("401") || lower.includes("403") || lower.includes("unauthorized") || lower.includes("forbidden")) {
+      isAuthError = true;
+    }
   }
 
   await completeSyncLog(syncLog.id, counts, errors);
+
+  // Update connection health status
+  if (isAuthError) {
+    await updateConnectionStatus(connection.id, "error").catch(() => {});
+  } else if (counts.ordersSynced > 0 || errors.length === 0) {
+    // Successful sync — ensure status is active (repairs previously errored connections)
+    await updateConnectionStatus(connection.id, "active").catch(() => {});
+  }
 
   return {
     status:

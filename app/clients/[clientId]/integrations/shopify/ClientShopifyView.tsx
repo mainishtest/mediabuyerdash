@@ -251,9 +251,10 @@ export function ClientShopifyView({
           label="Last Sync"
           value={
             activeSyncLog?.completedAt
-              ? new Date(activeSyncLog.completedAt).toLocaleDateString()
+              ? new Date(activeSyncLog.completedAt).toLocaleString()
               : "Never"
           }
+          sub="Auto-syncs every 5 min"
         />
       </section>
 

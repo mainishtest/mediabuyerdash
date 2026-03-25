@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllShopifyConnections } from "../../../../lib/shopify/db";
+import { prisma }      from "../../../../lib/db";
 import { runShopifySync } from "../../../../lib/shopify/sync";
 
 export const maxDuration = 300;
@@ -10,20 +10,42 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const connections = await getAllShopifyConnections();
-  if (connections.length === 0) {
-    return NextResponse.json({ message: "No Shopify connections found" });
+  // Sync all active connections
+  const activeConnections = await prisma.shopifyConnection.findMany({
+    where:   { connectionStatus: "active" },
+    select:  { id: true, shopDomain: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Also retry errored connections once per hour (check if last sync was > 1hr ago)
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const erroredConnections = await prisma.shopifyConnection.findMany({
+    where: {
+      connectionStatus: "error",
+      updatedAt: { lt: oneHourAgo },
+    },
+    select: { id: true, shopDomain: true },
+  });
+
+  const allConnections = [...activeConnections, ...erroredConnections];
+
+  if (allConnections.length === 0) {
+    return NextResponse.json({ message: "No Shopify connections to sync" });
   }
 
   const results = await Promise.allSettled(
-    connections.map((c: { id: string }) => runShopifySync(c.id))
+    allConnections.map((c) => runShopifySync(c.id))
   );
 
   const summaries = results.map((r, i) =>
     r.status === "fulfilled"
-      ? { connectionId: connections[i].id, ...r.value }
-      : { connectionId: connections[i].id, status: "failed", error: String((r as PromiseRejectedResult).reason) }
+      ? { connectionId: allConnections[i].id, domain: allConnections[i].shopDomain, ...r.value }
+      : { connectionId: allConnections[i].id, domain: allConnections[i].shopDomain, status: "failed", error: String((r as PromiseRejectedResult).reason) }
   );
 
-  return NextResponse.json({ synced: connections.length, results: summaries });
+  return NextResponse.json({
+    synced:  activeConnections.length,
+    retried: erroredConnections.length,
+    results: summaries,
+  });
 }
