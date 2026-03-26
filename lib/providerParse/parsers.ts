@@ -116,7 +116,14 @@ export function parseOpenAICopyResponse(raw: unknown): ProviderParseResult {
     };
   }
 
-  const parsed = safeJsonParse<unknown>(content, null);
+  // Strip markdown fences that the model sometimes adds
+  const cleanedContent = content
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  const parsed = safeJsonParse<unknown>(cleanedContent, null);
 
   // The prompt asks for a raw JSON array [...], but also handle { variations: [...] }
   let variationsArr: unknown[] | undefined;
@@ -127,11 +134,11 @@ export function parseOpenAICopyResponse(raw: unknown): ProviderParseResult {
   }
 
   if (!variationsArr) {
-    // Try to extract array from the text directly (model may have added wrapper text)
-    const arrStart = content.indexOf("[");
-    const arrEnd   = content.lastIndexOf("]");
+    // Try to extract array from cleaned text (model may have added wrapper text)
+    const arrStart = cleanedContent.indexOf("[");
+    const arrEnd   = cleanedContent.lastIndexOf("]");
     if (arrStart >= 0 && arrEnd > arrStart) {
-      const extracted = safeJsonParse<unknown>(content.slice(arrStart, arrEnd + 1), null);
+      const extracted = safeJsonParse<unknown>(cleanedContent.slice(arrStart, arrEnd + 1), null);
       if (Array.isArray(extracted)) {
         variationsArr = extracted;
       }
@@ -222,7 +229,14 @@ export function parseAnthropicCopyResponse(raw: unknown): ProviderParseResult {
     };
   }
 
-  const parsed = safeJsonParse<unknown>(text, null);
+  // Strip markdown fences that Claude sometimes adds despite instructions
+  const cleaned = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  const parsed = safeJsonParse<unknown>(cleaned, null);
 
   // The prompt asks for a raw JSON array [...], but also handle { variations: [...] }
   let variationsArr: unknown[] | undefined;
@@ -233,11 +247,11 @@ export function parseAnthropicCopyResponse(raw: unknown): ProviderParseResult {
   }
 
   if (!variationsArr) {
-    // Try to extract array from the text directly (model may have added wrapper text)
-    const arrStart = text.indexOf("[");
-    const arrEnd   = text.lastIndexOf("]");
+    // Try to extract array from cleaned text (model may have added wrapper text)
+    const arrStart = cleaned.indexOf("[");
+    const arrEnd   = cleaned.lastIndexOf("]");
     if (arrStart >= 0 && arrEnd > arrStart) {
-      const extracted = safeJsonParse<unknown>(text.slice(arrStart, arrEnd + 1), null);
+      const extracted = safeJsonParse<unknown>(cleaned.slice(arrStart, arrEnd + 1), null);
       if (Array.isArray(extracted)) {
         variationsArr = extracted;
       }
