@@ -1,5 +1,5 @@
 import { getConnectionForSync }                    from "./db";
-import { fetchCampaigns, fetchAdSets, fetchAds, fetchInsights } from "./api";
+import { fetchCampaigns, fetchAdSets, fetchAds, fetchAdCreatives, fetchInsights } from "./api";
 import { mapCampaign, mapAdSet, mapAd, mapCreative, mapInsight } from "./mappers";
 import {
   createSyncLog,
@@ -60,11 +60,40 @@ async function syncAccount(
   const mappedAds = rawAds.map((a) => mapAd(a, externalAdAccountId, workspaceId));
   counts.adsSynced += await upsertAds(mappedAds);
 
-  // Creatives extracted from ad responses
-  const rawCreatives = rawAds
+  // Fetch creatives directly from the adcreatives endpoint.
+  // The embedded creative{body,...} on ads often returns null for body/object_story_spec.
+  // The direct endpoint reliably returns the full ad text and image data.
+  const rawDirectCreatives = await fetchAdCreatives(externalAdAccountId, accessToken);
+  const directCreativeMap = new Map(rawDirectCreatives.map((c) => [c.id, c]));
+
+  // Merge: use direct fetch data, fall back to embedded creative data from ads
+  const embeddedCreatives = rawAds
     .filter((a) => a.creative?.id)
     .map((a) => a.creative!);
-  const mappedCreatives = rawCreatives.map((c) => mapCreative(c, workspaceId));
+
+  const mergedCreatives = embeddedCreatives.map((embedded) => {
+    const direct = directCreativeMap.get(embedded.id);
+    if (!direct) return embedded;
+    // Prefer direct fetch fields (they're more complete), fall back to embedded
+    return {
+      ...embedded,
+      body:               direct.body               ?? embedded.body,
+      title:              direct.title              ?? embedded.title,
+      call_to_action_type: direct.call_to_action_type ?? embedded.call_to_action_type,
+      image_url:          direct.image_url          ?? embedded.image_url,
+      thumbnail_url:      direct.thumbnail_url      ?? embedded.thumbnail_url,
+      object_story_spec:  direct.object_story_spec  ?? embedded.object_story_spec,
+    };
+  });
+
+  // Also include creatives from direct fetch that weren't in any ad (rare but possible)
+  for (const direct of rawDirectCreatives) {
+    if (!embeddedCreatives.some((e) => e.id === direct.id)) {
+      mergedCreatives.push(direct);
+    }
+  }
+
+  const mappedCreatives = mergedCreatives.map((c) => mapCreative(c, workspaceId));
   counts.creativesSynced += await upsertCreatives(mappedCreatives);
 
   // Insights — last 7 days at ad level
