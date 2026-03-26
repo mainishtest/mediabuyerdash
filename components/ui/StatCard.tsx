@@ -16,14 +16,14 @@ export function StatCard({
     trend?.direction === "up" ? "↑" : trend?.direction === "down" ? "↓" : "→";
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 sm:p-5">
+      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-slate-500 truncate">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-white">
+      <p className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold tracking-tight text-white">
         {value}
       </p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      {sub && <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-500 truncate">{sub}</p>}
       {trend && (
         <p className={`mt-2 text-xs font-medium ${trendColor}`}>
           {trendArrow} {trend.label}

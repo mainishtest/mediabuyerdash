@@ -110,7 +110,7 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
 
       {/* ── Header ── */}
       <PageHeader
@@ -129,10 +129,10 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
       />
 
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total Prep Items"    value={summary.total}             sub="in workflow" />
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4">
+        <StatCard label="Prep Items"          value={summary.total}             sub="in workflow" />
         <StatCard label="Blocked"             value={summary.blocked}           sub="need resolution" />
-        <StatCard label="Ready for Approval"  value={summary.readyForApproval}  sub="awaiting sign-off" />
+        <StatCard label="Ready"               value={summary.readyForApproval}  sub="awaiting sign-off" />
         <StatCard label="Published"           value={summary.published}         sub="launched" />
       </div>
 
@@ -151,21 +151,23 @@ export function PublishPrepView({ initialItems, initialSummary, clientAccountId 
         <div className="space-y-4 lg:col-span-4">
           <SectionCard title="Prep Queue" description={`${visibleItems.length} item${visibleItems.length !== 1 ? "s" : ""}`}>
 
-            {/* Status filter */}
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {statusOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setStatusFilter(opt.value)}
-                  className={`rounded-lg px-2.5 py-2 text-xs font-medium transition-colors
-                    ${statusFilter === opt.value
-                      ? "bg-indigo-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                    }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            {/* Status filter — wraps on desktop, scrolls on mobile */}
+            <div className="mb-4 -mx-1 overflow-x-auto scrollbar-thin">
+              <div className="flex flex-wrap gap-1.5 px-1 min-w-0">
+                {statusOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStatusFilter(opt.value)}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors
+                      ${statusFilter === opt.value
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                      }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {visibleItems.length === 0 ? (
