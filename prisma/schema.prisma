@@ -133,6 +133,23 @@ model ClientAccount {
   status      String   @default("active") // active | paused | archived
   notes       String?
   copywritingPrompt String?  // Custom AI copywriting instructions for this client (tone, voice, rules, context)
+  // Ad campaign defaults — auto-fill into launch test setup
+  defaultPageId         String?  // Facebook Page ID
+  defaultPixelId        String?  // Meta Pixel ID for conversion tracking
+  defaultDestinationUrl String?  // Landing page URL
+  defaultDailyBudget    Float?   // Default daily budget in dollars
+  defaultObjective      String?  // OUTCOME_TRAFFIC, OUTCOME_SALES, etc.
+  defaultOptGoal        String?  // LINK_CLICKS, OFFSITE_CONVERSIONS, etc.
+  defaultTargetCountries String? // Comma-separated: "US,CA,GB"
+  defaultAgeMin         Int?     // Minimum target age
+  defaultAgeMax         Int?     // Maximum target age
+  defaultGender         Int?     // 0=all, 1=male, 2=female
+  // UTM defaults
+  defaultUtmSource      String?  // e.g. "facebook"
+  defaultUtmMedium      String?  // e.g. "paid"
+  defaultUtmCampaign    String?  // e.g. "{{campaign.name}}"
+  defaultUtmContent     String?  // e.g. "{{ad.name}}"
+  defaultUtmTerm        String?
   clientPortalToken        String? @unique  // shareable read-only token for client portal
   clientPortalPasswordHash String?          // bcrypt hash of admin-issued portal password (null = no password required)
   createdAt   DateTime @default(now())
@@ -1889,4 +1906,21 @@ model BrandContext {
   updatedAt       DateTime @updatedAt
 
   clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+}
+
+// ── Image Library ──────────────────────────────────────────────────────────
+
+// Reusable ad images stored per client for quick selection during ad creation.
+model ClientAdImage {
+  id              String   @id @default(cuid())
+  clientAccountId String
+  label           String
+  imageUrl        String
+  metaImageHash   String?
+  width           Int?
+  height          Int?
+  tags            String?
+  createdAt       DateTime @default(now())
+
+  @@index([clientAccountId])
 }

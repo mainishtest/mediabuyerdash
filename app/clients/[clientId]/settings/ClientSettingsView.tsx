@@ -7,7 +7,7 @@
 // Desktop: defaults form and coverage summary side-by-side (lg: 2-col grid),
 //          apply action spans full width below.
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link                        from "next/link";
 import { GoalSourceBadge, GoalSourceLegend } from "../../../../components/ui/GoalSourceBadge";
 import type { ClientDefaultsRecord, ClientGoalCoverageSummary } from "../../../../lib/clientGoalDefaults/service";
@@ -559,6 +559,12 @@ export function ClientSettingsView({
           </div>
         </div>
 
+        {/* ── Campaign Launch Defaults ───────────────────────────────────────── */}
+        <CampaignDefaultsSection clientId={clientId} />
+
+        {/* ── Image Library ────────────────────────────────────────────────────── */}
+        <ImageLibrarySection clientId={clientId} />
+
         {/* Nav footer */}
         <div className="mt-8 flex flex-wrap gap-4 text-xs text-slate-600">
           <Link href={`/clients/${clientId}/campaigns`} className="hover:text-slate-300 transition-colors">
@@ -570,5 +576,239 @@ export function ClientSettingsView({
         </div>
       </div>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Campaign Launch Defaults
+// ---------------------------------------------------------------------------
+
+function CampaignDefaultsSection({ clientId }: { clientId: string }) {
+  const [d, setD] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/campaign-defaults`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.defaults) {
+          const vals: Record<string, string> = {};
+          for (const [k, v] of Object.entries(data.defaults)) {
+            if (v != null) vals[k] = String(v);
+          }
+          setD(vals);
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [clientId]);
+
+  function set(key: string, val: string) {
+    setD((prev) => ({ ...prev, [key]: val }));
+    setSaved(false);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    await fetch(`/api/clients/${clientId}/campaign-defaults`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(d),
+    });
+    setSaving(false);
+    setSaved(true);
+  }
+
+  const I = INPUT_CLS;
+  const L = LABEL_CLS;
+
+  if (!loaded) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-100">Campaign Launch Defaults</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Saved values auto-fill when launching ad tests. Override any field per launch.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><label className={L}>Facebook Page ID</label>
+          <input className={I} value={d.defaultPageId ?? ""} onChange={(e) => set("defaultPageId", e.target.value)} placeholder="109227360835..." /></div>
+        <div><label className={L}>Pixel ID</label>
+          <input className={I} value={d.defaultPixelId ?? ""} onChange={(e) => set("defaultPixelId", e.target.value)} placeholder="91036334748..." /></div>
+      </div>
+
+      <div><label className={L}>Default Destination URL</label>
+        <input className={I} value={d.defaultDestinationUrl ?? ""} onChange={(e) => set("defaultDestinationUrl", e.target.value)} placeholder="https://yoursite.com/landing-page" /></div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div><label className={L}>Daily Budget ($)</label>
+          <input type="number" className={I} value={d.defaultDailyBudget ?? ""} onChange={(e) => set("defaultDailyBudget", e.target.value)} placeholder="50" /></div>
+        <div><label className={L}>Objective</label>
+          <select className={I} value={d.defaultObjective ?? ""} onChange={(e) => set("defaultObjective", e.target.value)}>
+            <option value="">Select...</option>
+            <option value="OUTCOME_TRAFFIC">Traffic</option>
+            <option value="OUTCOME_SALES">Sales</option>
+            <option value="OUTCOME_ENGAGEMENT">Engagement</option>
+            <option value="OUTCOME_LEADS">Leads</option>
+          </select></div>
+        <div><label className={L}>Optimization Goal</label>
+          <select className={I} value={d.defaultOptGoal ?? ""} onChange={(e) => set("defaultOptGoal", e.target.value)}>
+            <option value="">Select...</option>
+            <option value="LINK_CLICKS">Link Clicks</option>
+            <option value="LANDING_PAGE_VIEWS">Landing Page Views</option>
+            <option value="OFFSITE_CONVERSIONS">Conversions</option>
+            <option value="IMPRESSIONS">Impressions</option>
+          </select></div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div><label className={L}>Countries</label>
+          <input className={I} value={d.defaultTargetCountries ?? ""} onChange={(e) => set("defaultTargetCountries", e.target.value)} placeholder="US" /></div>
+        <div><label className={L}>Age Min</label>
+          <input type="number" className={I} value={d.defaultAgeMin ?? ""} onChange={(e) => set("defaultAgeMin", e.target.value)} placeholder="18" /></div>
+        <div><label className={L}>Age Max</label>
+          <input type="number" className={I} value={d.defaultAgeMax ?? ""} onChange={(e) => set("defaultAgeMax", e.target.value)} placeholder="65" /></div>
+        <div><label className={L}>Gender</label>
+          <select className={I} value={d.defaultGender ?? ""} onChange={(e) => set("defaultGender", e.target.value)}>
+            <option value="0">All</option>
+            <option value="1">Male</option>
+            <option value="2">Female</option>
+          </select></div>
+      </div>
+
+      {/* UTM defaults */}
+      <div>
+        <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-widest">UTM Parameters</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div><label className={L}>utm_source</label>
+            <input className={I} value={d.defaultUtmSource ?? ""} onChange={(e) => set("defaultUtmSource", e.target.value)} placeholder="facebook" /></div>
+          <div><label className={L}>utm_medium</label>
+            <input className={I} value={d.defaultUtmMedium ?? ""} onChange={(e) => set("defaultUtmMedium", e.target.value)} placeholder="paid" /></div>
+          <div><label className={L}>utm_campaign</label>
+            <input className={I} value={d.defaultUtmCampaign ?? ""} onChange={(e) => set("defaultUtmCampaign", e.target.value)} placeholder="{{campaign.name}}" /></div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div><label className={L}>utm_content</label>
+            <input className={I} value={d.defaultUtmContent ?? ""} onChange={(e) => set("defaultUtmContent", e.target.value)} placeholder="{{ad.name}}" /></div>
+          <div><label className={L}>utm_term</label>
+            <input className={I} value={d.defaultUtmTerm ?? ""} onChange={(e) => set("defaultUtmTerm", e.target.value)} placeholder="optional" /></div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          {saving ? "Saving..." : "Save Defaults"}
+        </button>
+        {saved && <span className="text-xs text-emerald-400">Saved</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image Library
+// ---------------------------------------------------------------------------
+
+function ImageLibrarySection({ clientId }: { clientId: string }) {
+  const [images, setImages] = useState<Array<{
+    id: string; label: string; imageUrl: string; tags: string | null; createdAt: string;
+  }>>([]);
+  const [label, setLabel]     = useState("");
+  const [url, setUrl]         = useState("");
+  const [tags, setTags]       = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [loaded, setLoaded]   = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/images`)
+      .then((r) => r.json())
+      .then((data) => { if (data.ok) setImages(data.images ?? []); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, [clientId]);
+
+  async function handleAdd() {
+    if (!label || !url) return;
+    setSaving(true);
+    const res = await fetch(`/api/clients/${clientId}/images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, imageUrl: url, tags }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setImages((prev) => [data.image, ...prev]);
+      setLabel(""); setUrl(""); setTags("");
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(imageId: string) {
+    await fetch(`/api/clients/${clientId}/images`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageId }),
+    });
+    setImages((prev) => prev.filter((i) => i.id !== imageId));
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-100">Image Library</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Save ad images here. Select from the library when launching tests instead of pasting URLs.
+        </p>
+      </div>
+
+      {/* Add image form */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div><label className={LABEL_CLS}>Label</label>
+          <input className={INPUT_CLS} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Hero Product Shot" /></div>
+        <div><label className={LABEL_CLS}>Image URL</label>
+          <input className={INPUT_CLS} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." /></div>
+        <div><label className={LABEL_CLS}>Tags (optional)</label>
+          <input className={INPUT_CLS} value={tags} onChange={(e) => setTags(e.target.value)} placeholder="product,lifestyle" /></div>
+      </div>
+      <button onClick={handleAdd} disabled={saving || !label || !url}
+        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+        {saving ? "Adding..." : "+ Add Image"}
+      </button>
+
+      {/* Image grid */}
+      {images.length > 0 && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+          {images.map((img) => (
+            <div key={img.id} className="rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden group relative">
+              <div className="aspect-square bg-slate-800">
+                <img src={img.imageUrl} alt={img.label} className="h-full w-full object-cover" />
+              </div>
+              <div className="p-2">
+                <p className="text-xs font-medium text-slate-200 truncate">{img.label}</p>
+                {img.tags && <p className="text-[10px] text-slate-600 truncate">{img.tags}</p>}
+              </div>
+              <button
+                onClick={() => handleDelete(img.id)}
+                className="absolute top-1 right-1 rounded-md bg-slate-900/80 px-1.5 py-0.5 text-xs text-rose-400
+                  opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {images.length === 0 && (
+        <p className="text-xs text-slate-600">No images saved yet. Add your first ad image above.</p>
+      )}
+    </div>
   );
 }

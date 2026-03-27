@@ -56,7 +56,10 @@ export function QuickGenerateView() {
       .catch(() => {});
   }, []);
 
-  // When client changes, load their copywriting prompt
+  const [campaignDefaults, setCampaignDefaults] = useState<Record<string, string | null>>({});
+  const [clientImages, setClientImages] = useState<Array<{ id: string; label: string; imageUrl: string }>>([]);
+
+  // When client changes, load their copywriting prompt, campaign defaults, and images
   function handleClientChange(id: string) {
     setClientAccountId(id);
     const client = clients.find((c) => c.id === id);
@@ -66,7 +69,20 @@ export function QuickGenerateView() {
     } else {
       setClientName("");
       setCopywritingPrompt(null);
+      setCampaignDefaults({});
+      setClientImages([]);
+      return;
     }
+    // Load campaign defaults
+    fetch(`/api/clients/${id}/campaign-defaults`)
+      .then((r) => r.json())
+      .then((data) => { if (data.ok && data.defaults) setCampaignDefaults(data.defaults); })
+      .catch(() => {});
+    // Load image library
+    fetch(`/api/clients/${id}/images`)
+      .then((r) => r.json())
+      .then((data) => { if (data.ok) setClientImages(data.images ?? []); })
+      .catch(() => {});
   }
 
   // Output
@@ -384,6 +400,8 @@ export function QuickGenerateView() {
           clientName={clientName}
           campaignName={campaignName}
           destinationUrl=""
+          campaignDefaults={campaignDefaults}
+          clientImages={clientImages}
         />
       )}
 
@@ -411,35 +429,40 @@ function LaunchTestSection({
   clientName,
   campaignName: inputCampaignName,
   destinationUrl: inputUrl,
+  campaignDefaults: cd,
+  clientImages,
 }: {
   approved: VariationWithStatus[];
   clientName: string;
   campaignName: string;
   destinationUrl: string;
+  campaignDefaults: Record<string, string | null>;
+  clientImages: Array<{ id: string; label: string; imageUrl: string }>;
 }) {
   // Steps: configure → review → launched
   const [step, setStep] = useState<"configure" | "review" | "launching" | "done">("configure");
   const [adAccounts, setAdAccounts] = useState<AdAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
-  // Config state
+  // Config state — pre-filled from client campaign defaults
   const [adAccountId, setAdAccountId]     = useState("");
-  const [pageId, setPageId]               = useState("");
+  const [pageId, setPageId]               = useState(cd.defaultPageId ?? "");
   const [testName, setTestName]           = useState(
     inputCampaignName ? `${inputCampaignName} — Copy Test` : "Copy Test"
   );
-  const [objective, setObjective]         = useState("OUTCOME_TRAFFIC");
-  const [dailyBudget, setDailyBudget]     = useState("20");
-  const [destinationUrl, setDestinationUrl] = useState(inputUrl);
+  const [objective, setObjective]         = useState(cd.defaultObjective ?? "OUTCOME_TRAFFIC");
+  const [dailyBudget, setDailyBudget]     = useState(cd.defaultDailyBudget ?? "20");
+  const [destinationUrl, setDestinationUrl] = useState(cd.defaultDestinationUrl ?? inputUrl);
   const [imageUrl, setImageUrl]           = useState("");
-  const [pixelId, setPixelId]             = useState("");
-  const [optimizationGoal, setOptGoal]    = useState("LINK_CLICKS");
+  const [pixelId, setPixelId]             = useState(cd.defaultPixelId ?? "");
+  const [optimizationGoal, setOptGoal]    = useState(cd.defaultOptGoal ?? "LINK_CLICKS");
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
-  // Targeting
-  const [countries, setCountries] = useState("US");
-  const [ageMin, setAgeMin]       = useState("18");
-  const [ageMax, setAgeMax]       = useState("65");
-  const [gender, setGender]       = useState("0");
+  // Targeting — pre-filled from client defaults
+  const [countries, setCountries] = useState(cd.defaultTargetCountries ?? "US");
+  const [ageMin, setAgeMin]       = useState(cd.defaultAgeMin ?? "18");
+  const [ageMax, setAgeMax]       = useState(cd.defaultAgeMax ?? "65");
+  const [gender, setGender]       = useState(cd.defaultGender ?? "0");
 
   // Result
   const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
@@ -768,12 +791,46 @@ function LaunchTestSection({
         </div>
 
         <div>
-          <label className={LABEL}>Ad Image URL</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-slate-500">Ad Image</label>
+            {clientImages.length > 0 && (
+              <button type="button" onClick={() => setShowImagePicker((v) => !v)}
+                className="text-xs text-indigo-400 hover:text-indigo-300">
+                {showImagePicker ? "Hide Library" : `Choose from Library (${clientImages.length})`}
+              </button>
+            )}
+          </div>
           <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://... (image URL to upload to Meta)" className={INPUT} />
-          <p className="mt-1 text-xs text-slate-600">
-            Paste a direct image URL. This image will be used for all ad variations.
-          </p>
+            placeholder="https://... (paste URL or select from library below)" className={INPUT} />
+
+          {/* Image library picker */}
+          {showImagePicker && clientImages.length > 0 && (
+            <div className="mt-2 grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6">
+              {clientImages.map((img) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  onClick={() => { setImageUrl(img.imageUrl); setShowImagePicker(false); }}
+                  className={`rounded-lg border overflow-hidden text-left transition-all
+                    ${imageUrl === img.imageUrl
+                      ? "border-indigo-500 ring-1 ring-indigo-500/30"
+                      : "border-slate-700 hover:border-slate-600"
+                    }`}
+                >
+                  <div className="aspect-square bg-slate-800">
+                    <img src={img.imageUrl} alt={img.label} className="h-full w-full object-cover" />
+                  </div>
+                  <p className="px-1.5 py-1 text-[10px] text-slate-400 truncate">{img.label}</p>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {imageUrl && (
+            <div className="mt-2 h-20 w-20 rounded-lg border border-slate-700 overflow-hidden">
+              <img src={imageUrl} alt="Selected" className="h-full w-full object-cover" />
+            </div>
+          )}
         </div>
       </div>
 
