@@ -32,16 +32,42 @@ type LaunchResult = {
   error?: string;
 };
 
+type ClientOption = { id: string; name: string; copywritingPrompt: string | null };
+
 export function QuickGenerateView() {
   // Input
   const [hook, setHook]                 = useState("");
   const [bodyText, setBodyText]         = useState("");
   const [cta, setCta]                   = useState("");
   const [imageHeadline, setImageHeadline] = useState("");
+  const [clientAccountId, setClientAccountId] = useState("");
   const [clientName, setClientName]     = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [notes, setNotes]               = useState("");
   const [provider, setProvider]         = useState<"anthropic" | "openai">("anthropic");
+  const [clients, setClients]           = useState<ClientOption[]>([]);
+  const [copywritingPrompt, setCopywritingPrompt] = useState<string | null>(null);
+
+  // Load clients on mount
+  useEffect(() => {
+    fetch("/api/creative-lab/quick-generate/clients")
+      .then((r) => r.json())
+      .then((data) => { if (data.ok) setClients(data.clients ?? []); })
+      .catch(() => {});
+  }, []);
+
+  // When client changes, load their copywriting prompt
+  function handleClientChange(id: string) {
+    setClientAccountId(id);
+    const client = clients.find((c) => c.id === id);
+    if (client) {
+      setClientName(client.name);
+      setCopywritingPrompt(client.copywritingPrompt);
+    } else {
+      setClientName("");
+      setCopywritingPrompt(null);
+    }
+  }
 
   // Output
   const [variations, setVariations] = useState<VariationWithStatus[]>([]);
@@ -62,7 +88,7 @@ export function QuickGenerateView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hook, bodyText, cta, imageHeadline,
+          hook, bodyText, cta, imageHeadline, clientAccountId,
           provider, clientName, campaignName, notes,
         }),
       });
@@ -173,13 +199,27 @@ export function QuickGenerateView() {
         {/* Optional context row */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs text-slate-500">Client (optional)</label>
-            <input
-              type="text" value={clientName} onChange={(e) => setClientName(e.target.value)}
-              placeholder="Client name..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
-                text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
-            />
+            <label className="mb-1 block text-xs text-slate-500">Client</label>
+            {clients.length > 0 ? (
+              <select
+                value={clientAccountId}
+                onChange={(e) => handleClientChange(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                  text-slate-100 focus:border-indigo-600 focus:outline-none"
+              >
+                <option value="">Select client...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text" value={clientName} onChange={(e) => setClientName(e.target.value)}
+                placeholder="Client name..."
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                  text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+              />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs text-slate-500">Campaign (optional)</label>
@@ -212,6 +252,22 @@ export function QuickGenerateView() {
               text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none resize-y"
           />
         </div>
+
+        {/* Copywriting prompt indicator */}
+        {copywritingPrompt && (
+          <div className="rounded-lg border border-indigo-800/50 bg-indigo-950/15 p-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-indigo-400">Client Copywriting Prompt Active</p>
+              <a
+                href={`/clients/${clientAccountId}/settings`}
+                className="text-xs text-slate-500 hover:text-slate-300"
+              >
+                Edit →
+              </a>
+            </div>
+            <p className="text-xs text-slate-500 line-clamp-3 whitespace-pre-line">{copywritingPrompt}</p>
+          </div>
+        )}
 
         {/* Generate button */}
         <button

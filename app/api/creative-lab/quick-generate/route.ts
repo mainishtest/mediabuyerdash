@@ -3,6 +3,7 @@
 // Paste ad copy in, get 3 variations back. No pipeline, no briefs, no assembly.
 
 import { NextRequest, NextResponse } from "next/server";
+import { prisma }                    from "../../../../lib/db";
 
 export const maxDuration = 60;
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     bodyText,
     cta,
     imageHeadline,
+    clientAccountId,
     provider = "anthropic",
     clientName,
     campaignName,
@@ -22,6 +24,7 @@ export async function POST(req: NextRequest) {
     bodyText: string;
     cta: string;
     imageHeadline?: string;
+    clientAccountId?: string;
     provider?: "anthropic" | "openai";
     clientName?: string;
     campaignName?: string;
@@ -35,10 +38,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Load client copywriting prompt if a client is selected
+  let copywritingPrompt: string | null = null;
+  if (clientAccountId) {
+    const client = await prisma.clientAccount.findUnique({
+      where: { id: clientAccountId },
+      select: { copywritingPrompt: true, name: true, brandName: true },
+    });
+    copywritingPrompt = client?.copywritingPrompt ?? null;
+  }
+
   // Build a focused prompt with the actual ad copy
   const systemPrompt = `You are a senior direct-response copywriter for Facebook/Instagram ads.
 You write clear, specific, emotionally relevant copy — never vague, generic, or hype-heavy.
 You avoid language that sounds unbelievable.
+${copywritingPrompt ? `\nCLIENT-SPECIFIC COPYWRITING RULES:\n${copywritingPrompt}\n\nFollow these rules strictly for all variations.` : ""}
 Respond ONLY with valid JSON — no preamble, no markdown fences, no commentary.`;
 
   const userPrompt = `Here is the current Facebook ad copy that is running:

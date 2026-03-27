@@ -132,6 +132,7 @@ model ClientAccount {
   timezone    String   @default("America/New_York")
   status      String   @default("active") // active | paused | archived
   notes       String?
+  copywritingPrompt String?  // Custom AI copywriting instructions for this client (tone, voice, rules, context)
   clientPortalToken        String? @unique  // shareable read-only token for client portal
   clientPortalPasswordHash String?          // bcrypt hash of admin-issued portal password (null = no password required)
   createdAt   DateTime @default(now())

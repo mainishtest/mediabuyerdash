@@ -15,10 +15,11 @@ import type { ClientDefaultsRecord, ClientGoalCoverageSummary } from "../../../.
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 type Props = {
-  clientId:   string;
-  clientName: string;
-  defaults:   ClientDefaultsRecord | null;
-  coverage:   ClientGoalCoverageSummary;
+  clientId:            string;
+  clientName:          string;
+  defaults:            ClientDefaultsRecord | null;
+  coverage:            ClientGoalCoverageSummary;
+  copywritingPrompt?:  string | null;
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -106,7 +107,13 @@ export function ClientSettingsView({
   clientName,
   defaults,
   coverage: initialCoverage,
+  copywritingPrompt: initialPrompt,
 }: Props) {
+  // Copywriting prompt state
+  const [promptValue, setPromptValue]     = useState(initialPrompt ?? "");
+  const [promptSaving, setPromptSaving]   = useState(false);
+  const [promptSaved, setPromptSaved]     = useState(false);
+  const [promptError, setPromptError]     = useState<string | null>(null);
   // Form state — seeded from server-loaded defaults
   const [roasValue,     setRoasValue]     = useState(defaults ? String(defaults.defaultRoasGoalValue) : "");
   const [cpaValue,      setCpaValue]      = useState(defaults ? String(defaults.defaultCpaGoalValue)  : "");
@@ -490,6 +497,67 @@ export function ClientSettingsView({
             </p>
           </div>
         )}
+
+        {/* ── Copywriting Prompt ────────────────────────────────────────────── */}
+        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-slate-100">
+              AI Copywriting Prompt
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Custom instructions that auto-fill into every AI copy generation for this client.
+              Include tone, voice, audience context, product details, words to avoid, and any rules
+              the AI should follow when writing ad copy.
+            </p>
+          </div>
+
+          <textarea
+            value={promptValue}
+            onChange={(e) => { setPromptValue(e.target.value); setPromptSaved(false); }}
+            placeholder={`Example:\n\nTone: Warm, faith-based, testimonial-driven. Speak like a trusted neighbor, not a marketer.\n\nAudience: Women 45-65 dealing with joint pain, fatigue, and inflammation. Many have tried everything.\n\nProduct: Biblical herb tincture. Natural ingredients, backed by scripture references. Not FDA-evaluated.\n\nRules:\n- Never use "miracle" or "cure"\n- Always include a personal story angle\n- Keep hooks under 20 words\n- Reference biblical ingredients naturally\n- CTA should feel like an invitation, not a hard sell`}
+            rows={10}
+            className={`${INPUT_CLS} resize-y`}
+          />
+
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              disabled={promptSaving}
+              onClick={async () => {
+                setPromptSaving(true);
+                setPromptError(null);
+                setPromptSaved(false);
+                try {
+                  const res = await fetch(`/api/clients/${clientId}/copywriting-prompt`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ copywritingPrompt: promptValue }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setPromptError((data as { error?: string }).error ?? "Save failed");
+                  } else {
+                    setPromptSaved(true);
+                  }
+                } catch {
+                  setPromptError("Network error");
+                } finally {
+                  setPromptSaving(false);
+                }
+              }}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white
+                transition-colors hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {promptSaving ? "Saving..." : "Save Prompt"}
+            </button>
+            {promptSaved && (
+              <span className="text-xs text-emerald-400">Saved — this prompt will be used for all AI copy generation for this client.</span>
+            )}
+            {promptError && (
+              <span className="text-xs text-rose-400">{promptError}</span>
+            )}
+          </div>
+        </div>
 
         {/* Nav footer */}
         <div className="mt-8 flex flex-wrap gap-4 text-xs text-slate-600">

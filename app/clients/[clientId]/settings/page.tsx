@@ -27,7 +27,7 @@ export default async function ClientSettingsPage({ params }: PageProps) {
 
   const account = await prisma.clientAccount.findUnique({
     where:  { id: clientId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, copywritingPrompt: true },
   });
   if (!account) notFound();
 
@@ -42,6 +42,7 @@ export default async function ClientSettingsPage({ params }: PageProps) {
       clientName={account.name}
       defaults={defaults}
       coverage={coverage}
+      copywritingPrompt={account.copywritingPrompt}
     />
   );
 }
