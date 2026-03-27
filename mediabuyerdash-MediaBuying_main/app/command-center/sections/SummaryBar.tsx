@@ -1,4 +1,4 @@
-import type { CommandCenterSummary } from "../../../lib/commandCenter/types";
+import type { CommandCenterSummary, PeriodDelta } from "../../../lib/commandCenter/types";
 
 function fmt(v: number, currency = "USD", decimals = 0) {
   return new Intl.NumberFormat("en-US", {
@@ -10,6 +10,11 @@ function fmt(v: number, currency = "USD", decimals = 0) {
 
 function fmtNum(v: number) {
   return new Intl.NumberFormat("en-US").format(v);
+}
+
+function formatDeltaPct(pct: number): string {
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
 }
 
 function Kpi({
@@ -74,27 +79,32 @@ export function SummaryBar({ summary }: { summary: CommandCenterSummary }) {
         <Kpi
           label="Spend (30d)"
           value={fmt(summary.totalSpend)}
+          trend={summary.spendDelta ? { direction: summary.spendDelta.direction, label: formatDeltaPct(summary.spendDelta.changePct) + " vs prior" } : undefined}
         />
         <Kpi
           label="CRM Revenue"
           value={fmt(summary.totalRevenue)}
           sub="7-day attribution"
+          trend={summary.revenueDelta ? { direction: summary.revenueDelta.direction, label: formatDeltaPct(summary.revenueDelta.changePct) + " vs prior" } : undefined}
         />
         <Kpi
           label="Overall ROAS"
           value={summary.overallRoas != null ? `${summary.overallRoas.toFixed(2)}x` : "—"}
           sub="Revenue ÷ Spend"
           accent={roasAccent}
+          trend={summary.roasDelta ? { direction: summary.roasDelta.direction, label: formatDeltaPct(summary.roasDelta.changePct) + " vs prior" } : undefined}
         />
         <Kpi
           label="CPA"
           value={summary.overallCpa != null ? fmt(summary.overallCpa) : "—"}
           sub="Spend ÷ Orders"
+          trend={summary.cpaDelta ? { direction: summary.cpaDelta.direction === "up" ? "down" : summary.cpaDelta.direction === "down" ? "up" : "flat", label: formatDeltaPct(summary.cpaDelta.changePct) + " vs prior" } : undefined}
         />
         <Kpi
           label="Orders"
           value={fmtNum(summary.totalOrders)}
           sub="CRM attributed"
+          trend={summary.ordersDelta ? { direction: summary.ordersDelta.direction, label: formatDeltaPct(summary.ordersDelta.changePct) + " vs prior" } : undefined}
         />
         <Kpi
           label="Active Clients"

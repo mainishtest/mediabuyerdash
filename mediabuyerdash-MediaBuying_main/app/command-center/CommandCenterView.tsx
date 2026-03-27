@@ -13,6 +13,7 @@ import { ExperimentsPanel } from "./sections/ExperimentsPanel";
 import { CreativePanel }   from "./sections/CreativePanel";
 import { PacingPanel }     from "./sections/PacingPanel";
 import { AlertsPanel }     from "./sections/AlertsPanel";
+import { MorningBriefing } from "./sections/MorningBriefing";
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function Section({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export function CommandCenterView({ payload }: { payload: CommandCenterPayload }) {
+export function CommandCenterView({ payload, learningInsight }: { payload: CommandCenterPayload; learningInsight?: string | null }) {
   const router        = useRouter();
   const searchParams  = useSearchParams();
 
@@ -202,6 +203,15 @@ export function CommandCenterView({ payload }: { payload: CommandCenterPayload }
 
         {/* KPI summary */}
         <SummaryBar summary={summary} />
+
+        {/* Morning Briefing */}
+        <MorningBriefing
+          summary={summary}
+          priorities={priorities}
+          alertItems={alertItems}
+          experiments={experiments}
+          learningInsight={learningInsight ?? null}
+        />
 
         {/* Main grid: Today's Priorities + Approval Queue */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -25,6 +25,8 @@ import {
 }                                     from "../../components/ui";
 import type { BadgeVariant }          from "../../components/ui/Badge";
 
+type IterationType = "Hook variation" | "Copy variation" | "Visual variation" | "Offer variation" | "Full refresh";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -73,11 +75,13 @@ function CreativeCard({
   selected,
   onSelect,
   onViewClick,
+  onIterate,
 }: {
   item: CreativeLabItem;
   selected: boolean;
   onSelect: (id: string, selected: boolean) => void;
   onViewClick: (id: string) => void;
+  onIterate: (id: string) => void;
 }) {
   const perf = item.performanceContext;
   const displayName = item.creativeName || item.adName || `Creative ${item.id.slice(0, 8)}`;
@@ -158,14 +162,21 @@ function CreativeCard({
         </div>
       </div>
 
-      {/* Footer — View button */}
-      <div className="px-3 py-2 border-t border-slate-800/60">
+      {/* Footer — View and Iterate buttons */}
+      <div className="px-3 py-2 border-t border-slate-800/60 space-y-2">
         <button
           onClick={() => onViewClick(item.id)}
           className="w-full px-2 py-1.5 text-xs font-medium rounded bg-slate-800 text-slate-200
             hover:bg-slate-700 transition-colors"
         >
           View Details
+        </button>
+        <button
+          onClick={() => onIterate(item.id)}
+          className="w-full px-2 py-1.5 text-xs font-medium rounded bg-emerald-900/60 text-emerald-300
+            hover:bg-emerald-800/60 border border-emerald-800/40 transition-colors"
+        >
+          Iterate
         </button>
       </div>
     </div>
@@ -302,6 +313,155 @@ function ComparisonPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Duplicate & Iterate Modal
+// ---------------------------------------------------------------------------
+
+function DuplicateModal({
+  item,
+  onClose,
+}: {
+  item: CreativeLabItem;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const displayName = item.creativeName || item.adName || `Creative ${item.id.slice(0, 8)}`;
+  const perf = item.performanceContext;
+  const roasValue = perf?.campaignRoas ?? null;
+  const cpaValue = perf?.campaignCpa ?? null;
+  const spendValue = perf?.spend ?? 0;
+
+  const [variantName, setVariantName] = useState(`${displayName} — V2`);
+  const [iterationType, setIterationType] = useState<IterationType>("Hook variation");
+  const [notes, setNotes] = useState("");
+
+  const handleCreateIteration = () => {
+    const queryParams = new URLSearchParams({
+      clientId: item.clientAccountId,
+      sourceId: item.id,
+      type: iterationType,
+    });
+    router.push(`/creative-lab/generate?${queryParams.toString()}`);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-xl backdrop-blur"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-white">Create Iteration</h2>
+          <button
+            onClick={onClose}
+            className="text-slate-500 hover:text-slate-300 text-lg leading-none"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Source creative info */}
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 mb-6">
+          <p className="text-xs text-slate-500 mb-1">Source Creative</p>
+          <p className="text-sm font-medium text-white mb-3">{displayName}</p>
+          <p className="text-xs text-slate-400 mb-2">{item.clientName}</p>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            {roasValue !== null && (
+              <div>
+                <p className="text-slate-500">ROAS</p>
+                <p className="text-emerald-300 font-medium">{roasValue.toFixed(2)}x</p>
+              </div>
+            )}
+            {cpaValue !== null && (
+              <div>
+                <p className="text-slate-500">CPA</p>
+                <p className="text-emerald-300 font-medium">${cpaValue.toFixed(2)}</p>
+              </div>
+            )}
+            {spendValue > 0 && (
+              <div>
+                <p className="text-slate-500">Spend</p>
+                <p className="text-emerald-300 font-medium">${spendValue.toFixed(0)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Form fields */}
+        <div className="space-y-4 mb-6">
+          {/* Variant Name */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-2 font-medium">
+              New Variant Name
+            </label>
+            <input
+              type="text"
+              value={variantName}
+              onChange={(e) => setVariantName(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                text-slate-200 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600/30"
+            />
+          </div>
+
+          {/* Iteration Type */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-2 font-medium">
+              Iteration Type
+            </label>
+            <select
+              value={iterationType}
+              onChange={(e) => setIterationType(e.target.value as IterationType)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                text-slate-200 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600/30"
+            >
+              <option value="Hook variation">Hook variation</option>
+              <option value="Copy variation">Copy variation</option>
+              <option value="Visual variation">Visual variation</option>
+              <option value="Offer variation">Offer variation</option>
+              <option value="Full refresh">Full refresh</option>
+            </select>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-2 font-medium">
+              Notes (Optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="What do you want to change?"
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                text-slate-200 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600/30
+                resize-none"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-sm font-medium text-slate-300
+              hover:bg-slate-800 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreateIteration}
+            className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 text-sm font-medium text-white
+              hover:bg-emerald-700 transition-colors"
+          >
+            Create Iteration
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Filter bar
 // ---------------------------------------------------------------------------
 
@@ -423,6 +583,7 @@ export function CreativeGalleryView({ clients, initialItems, selectedClientId }:
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [showComparison, setShowComparison] = useState(false);
+  const [duplicateItem, setDuplicateItem] = useState<CreativeLabItem | null>(null);
 
   // Apply filters
   const filteredItems = useMemo(() => {
@@ -495,6 +656,13 @@ export function CreativeGalleryView({ clients, initialItems, selectedClientId }:
     // Could link to detail view or open modal
     // For now, just close comparison and reset
     setShowComparison(false);
+  };
+
+  const handleIterate = (id: string) => {
+    const found = filteredItems.find((i) => i.id === id);
+    if (found) {
+      setDuplicateItem(found);
+    }
   };
 
   // Redirect to list view
@@ -578,6 +746,7 @@ export function CreativeGalleryView({ clients, initialItems, selectedClientId }:
                 selected={selectedCards.has(item.id)}
                 onSelect={handleCardSelect}
                 onViewClick={handleViewClick}
+                onIterate={handleIterate}
               />
             ))}
           </div>
@@ -589,6 +758,14 @@ export function CreativeGalleryView({ clients, initialItems, selectedClientId }:
             items={Array.from(selectedCards)}
             allItems={sortedItems}
             onClose={() => setShowComparison(false)}
+          />
+        )}
+
+        {/* Duplicate & Iterate Modal */}
+        {duplicateItem && (
+          <DuplicateModal
+            item={duplicateItem}
+            onClose={() => setDuplicateItem(null)}
           />
         )}
       </div>

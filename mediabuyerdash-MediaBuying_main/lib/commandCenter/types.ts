@@ -32,6 +32,20 @@ export type CommandCenterSummary = {
   highPriorityCreativeIssues: number;
   pacingRisksCount: number;
   unresolvedAlertsCount: number;
+  spendDelta?: PeriodDelta;
+  revenueDelta?: PeriodDelta;
+  roasDelta?: PeriodDelta;
+  cpaDelta?: PeriodDelta;
+  ordersDelta?: PeriodDelta;
+};
+
+// ── Period Delta ───────────────────────────────────────────────────────────────
+
+export type PeriodDelta = {
+  current: number;
+  prior: number;
+  changePct: number; // ((current - prior) / prior) * 100
+  direction: "up" | "down" | "flat";
 };
 
 // ── Priority card (unified queue item) ───────────────────────────────────────

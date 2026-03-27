@@ -15,6 +15,7 @@ import type {
   CommandCenterCreativeItem,
   CommandCenterPacingItem,
   CommandCenterPriority,
+  PeriodDelta,
 } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -25,6 +26,13 @@ function daysAgo(n: number): string {
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function computeDelta(current: number, prior: number): PeriodDelta {
+  if (prior === 0) return { current, prior, changePct: 0, direction: current > 0 ? "up" : "flat" };
+  const changePct = ((current - prior) / prior) * 100;
+  const direction = Math.abs(changePct) < 1 ? "flat" : changePct > 0 ? "up" : "down";
+  return { current, prior, changePct, direction };
 }
 
 // ── Main aggregator ───────────────────────────────────────────────────────────
@@ -66,6 +74,37 @@ export async function buildCommandCenterPayload(params: {
   const totalOrders  = recoSummaries.reduce((s, r) => s + r.totalCrmOrders,  0);
   const overallRoas  = totalSpend > 0 ? totalRevenue / totalSpend : null;
   const overallCpa   = totalOrders > 0 ? totalSpend / totalOrders : null;
+
+  // ── 2b. Prior period query for deltas ──────────────────────────────────
+  // Calculate period length in days
+  const dateFromObj = new Date(dateFrom);
+  const dateToObj = new Date(dateTo);
+  const periodDays = Math.ceil((dateToObj.getTime() - dateFromObj.getTime()) / 864e5);
+
+  // Calculate prior period dates
+  const priorToObj = new Date(dateFromObj.getTime() - 1 * 864e5); // one day before dateFrom
+  const priorFromObj = new Date(priorToObj.getTime() - periodDays * 864e5);
+  const priorFrom = priorFromObj.toISOString().slice(0, 10);
+  const priorTo = priorToObj.toISOString().slice(0, 10);
+
+  const priorRecoSummaries = await prisma.reconciliationSummary.findMany({
+    where: {
+      ...clientFilter,
+      dateFrom: { gte: priorFrom },
+      dateTo:   { lte: priorTo },
+    },
+    select: {
+      totalMetaSpend:  true,
+      totalCrmRevenue: true,
+      totalCrmOrders:  true,
+    },
+  });
+
+  const priorSpend   = priorRecoSummaries.reduce((s, r) => s + r.totalMetaSpend,  0);
+  const priorRevenue = priorRecoSummaries.reduce((s, r) => s + r.totalCrmRevenue, 0);
+  const priorOrders  = priorRecoSummaries.reduce((s, r) => s + r.totalCrmOrders,  0);
+  const priorRoas    = priorSpend > 0 ? priorRevenue / priorSpend : null;
+  const priorCpa     = priorOrders > 0 ? priorSpend / priorOrders : null;
 
   // ── 3. Alerts ─────────────────────────────────────────────────────────────
   const rawAlerts = await prisma.alertEvent.findMany({
@@ -278,6 +317,11 @@ export async function buildCommandCenterPayload(params: {
     ).length,
     pacingRisksCount:        pacingItems.length,
     unresolvedAlertsCount:   alertItems.filter((a) => !a.isAcknowledged).length,
+    spendDelta:              computeDelta(totalSpend, priorSpend),
+    revenueDelta:            computeDelta(totalRevenue, priorRevenue),
+    roasDelta:               overallRoas != null && priorRoas != null ? computeDelta(overallRoas, priorRoas) : undefined,
+    cpaDelta:                overallCpa != null && priorCpa != null ? computeDelta(overallCpa, priorCpa) : undefined,
+    ordersDelta:             computeDelta(totalOrders, priorOrders),
   };
 
   return {
