@@ -277,8 +277,12 @@ async function metaPost(
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const msg = json?.error?.message ?? json?.error?.error_user_msg ?? `HTTP ${res.status}`;
-    return { error: msg };
+    const errObj = json?.error;
+    const msg = errObj?.error_user_msg ?? errObj?.message ?? `HTTP ${res.status}`;
+    const detail = errObj?.error_data ? ` (${JSON.stringify(errObj.error_data)})` : "";
+    const subcode = errObj?.error_subcode ? ` [subcode: ${errObj.error_subcode}]` : "";
+    const type = errObj?.type ? ` [${errObj.type}]` : "";
+    return { error: `${msg}${detail}${subcode}${type}` };
   }
 
   return { data: json };
