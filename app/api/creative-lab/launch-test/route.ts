@@ -133,10 +133,14 @@ export async function POST(req: NextRequest) {
       name:              campaignName,
       objective:         objective || "OUTCOME_TRAFFIC",
       status:            "PAUSED",
-      special_ad_categories: "[]",
+      special_ad_categories: [],
     });
     if (campaignRes.error) {
-      return NextResponse.json({ ok: false, error: `Campaign creation failed: ${campaignRes.error}` }, { status: 500 });
+      return NextResponse.json({
+        ok: false,
+        error: `Campaign creation failed: ${campaignRes.error}`,
+        debug: { objective, campaignName, adAccountId },
+      }, { status: 500 });
     }
     results.campaignId = campaignRes.data?.id as string | undefined;
 
@@ -159,13 +163,13 @@ export async function POST(req: NextRequest) {
       daily_budget:       Math.round(dailyBudget * 100), // cents
       billing_event:      billingEvent,
       optimization_goal:  optimizationGoal,
-      targeting:          JSON.stringify(targeting),
+      targeting,
       status:             "PAUSED",
     };
     if (startDate) adSetData.start_time = startDate;
     if (endDate)   adSetData.end_time   = endDate;
     if (pixelId && optimizationGoal === "OFFSITE_CONVERSIONS") {
-      adSetData.promoted_object = JSON.stringify({ pixel_id: pixelId, custom_event_type: "PURCHASE" });
+      adSetData.promoted_object = { pixel_id: pixelId, custom_event_type: "PURCHASE" };
     }
 
     const adSetRes = await metaPost(`${adAccountId}/adsets`, token, adSetData);
@@ -192,7 +196,7 @@ export async function POST(req: NextRequest) {
 
         const creativeRes = await metaPost(`${adAccountId}/adcreatives`, token, {
           name:               `${campaignName} — ${variation.title}`,
-          object_story_spec:  JSON.stringify(storySpec),
+          object_story_spec:  storySpec,
         });
 
         if (creativeRes.error) {
@@ -206,7 +210,7 @@ export async function POST(req: NextRequest) {
         const adRes = await metaPost(`${adAccountId}/ads`, token, {
           name:        `${campaignName} — ${variation.title}`,
           adset_id:    results.adSetId,
-          creative:    JSON.stringify({ creative_id: creativeId }),
+          creative:    { creative_id: creativeId },
           status:      "PAUSED",
         });
 
@@ -253,8 +257,14 @@ async function metaPost(
   params.set("access_token", accessToken);
 
   for (const [key, value] of Object.entries(data)) {
-    if (value !== null && value !== undefined) {
-      params.set(key, typeof value === "string" ? value : JSON.stringify(value));
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string") {
+      params.set(key, value);
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      params.set(key, String(value));
+    } else {
+      // Arrays and objects — JSON stringify
+      params.set(key, JSON.stringify(value));
     }
   }
 
