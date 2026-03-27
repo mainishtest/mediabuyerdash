@@ -24,7 +24,7 @@ export function PageContainer({
 }) {
   return (
     <div
-      className={`mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 ${
+      className={`mx-auto w-full min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 ${
         narrow ? "max-w-2xl" : "max-w-5xl"
       } ${className}`}
     >

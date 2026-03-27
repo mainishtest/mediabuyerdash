@@ -34,7 +34,7 @@ export function HourInsightRow({
   const { label, badge } = classificationStyles[classification];
 
   return (
-    <div className="grid grid-cols-4 gap-4 border-b border-slate-800 py-3 text-sm last:border-none">
+    <div className="grid grid-cols-2 gap-2 border-b border-slate-800 py-3 text-sm last:border-none sm:grid-cols-4 sm:gap-4">
       <span className="text-slate-200">{formattedHour}</span>
       <span className="text-slate-300">{formattedCpa}</span>
       <span className="text-slate-300">{formattedRoas}</span>

@@ -85,7 +85,7 @@ function BriefSummaryPanel({ brief }: { brief: CreativeBrief }) {
       {expanded && (
         <div className="border-t border-slate-800 px-4 pb-4 pt-3 space-y-4">
           {/* Metrics */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-2 sm:gap-x-4">
             {[
               { label: "Spend",      value: formatCurrency(pc.spend) },
               { label: "CTR",        value: `${pc.avgCtr.toFixed(2)}%` },

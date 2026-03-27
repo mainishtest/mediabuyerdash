@@ -110,7 +110,7 @@ export function AdDetailPanel({ ev, creative, clientId, onClose }: Props) {
                    sm:w-[520px] border-l border-slate-800"
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-5">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-4 py-5 sm:px-6">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Badge variant={STATUS_VARIANT[ev.status]}>
@@ -136,7 +136,7 @@ export function AdDetailPanel({ ev, creative, clientId, onClose }: Props) {
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6 sm:px-6">
 
           {/* Creative preview */}
           <section>
@@ -225,7 +225,7 @@ export function AdDetailPanel({ ev, creative, clientId, onClose }: Props) {
         </div>
 
         {/* Action buttons */}
-        <div className="border-t border-slate-800 px-6 py-4 space-y-3">
+        <div className="border-t border-slate-800 px-4 py-4 space-y-3 sm:px-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
             Actions
           </p>

@@ -22,8 +22,8 @@ export function SectionCard({
       className={`rounded-xl border border-slate-800 bg-slate-900/60 ${className}`}
     >
       {hasHeader && (
-        <div className="flex items-start justify-between gap-4 border-b border-slate-800/60 px-5 py-4">
-          <div>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-800/60 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
+          <div className="min-w-0">
             {title && (
               <h2 className="text-sm font-semibold text-white">{title}</h2>
             )}
@@ -34,7 +34,7 @@ export function SectionCard({
           {actions && <div className="shrink-0">{actions}</div>}
         </div>
       )}
-      <div className={flush ? "overflow-hidden" : "p-5"}>{children}</div>
+      <div className={flush ? "overflow-hidden" : "p-4 sm:p-5"}>{children}</div>
     </div>
   );
 }
