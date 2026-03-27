@@ -160,9 +160,9 @@ export async function loadDiagnosisInputs(
         callToAction: creative?.callToAction ?? "Shop Now",
       },
       image: {
-        imageHeadline: creative?.title ?? "",
-        imageStyle: "unknown",
-        dominantMessage: creative?.name ?? "",
+        imageHeadline: creative?.title ?? creative?.name ?? ad.name ?? "",
+        imageStyle: creative?.imageUrl ? "static_image" : creative?.thumbnailUrl ? "has_thumbnail" : "unknown",
+        dominantMessage: hook || creative?.name || "",
         visualTheme: "unknown",
       },
     });

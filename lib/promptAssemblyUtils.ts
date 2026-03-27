@@ -111,10 +111,12 @@ export function checkImageReadiness(entry: CreativeLabEntry): ReadinessCheckResu
 
   const { input, diagnosis } = entry;
 
-  if (!input.image.imageHeadline?.trim()) missing.push("imageHeadline");
-  if (!input.image.imageStyle?.trim()) missing.push("imageStyle");
-  if (!input.image.dominantMessage?.trim()) missing.push("dominantMessage");
-  if (!input.image.visualTheme?.trim()) missing.push("visualTheme");
+  // Missing image fields are warnings, not blockers — the AI can still generate
+  // image concepts from performance context and diagnosis alone
+  if (!input.image.imageHeadline?.trim()) warnings.push("imageHeadline not available — AI will generate without existing image context");
+  if (!input.image.imageStyle?.trim() || input.image.imageStyle === "unknown") warnings.push("imageStyle not available");
+  if (!input.image.dominantMessage?.trim()) warnings.push("dominantMessage not available");
+  if (!input.image.visualTheme?.trim() || input.image.visualTheme === "unknown") warnings.push("visualTheme not available");
 
   if (input.cpaGoalValue <= 0 && input.roasGoalValue <= 0) {
     warnings.push("No campaign goals set — generation may lack direction");
