@@ -456,8 +456,23 @@ function AIAssemblyPreviewSection({ entries }: { entries: CreativeLabEntry[] }) 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [copyResult, setCopyResult] = useState<PromptAssemblyResult<CopyGenerationContext> | null>(null);
   const [imageResult, setImageResult] = useState<PromptAssemblyResult<ImageGenerationContext> | null>(null);
+  const [asmManualHook, setAsmManualHook] = useState("");
+  const [asmManualBody, setAsmManualBody] = useState("");
+  const [asmManualCta, setAsmManualCta]   = useState("");
+  const [asmShowManual, setAsmShowManual] = useState(false);
 
-  const entry = entries[selectedIndex] ?? null;
+  const rawEntry = entries[selectedIndex] ?? null;
+  const entry = rawEntry ? {
+    ...rawEntry,
+    input: {
+      ...rawEntry.input,
+      copy: {
+        hook:         asmManualHook.trim() || rawEntry.input.copy.hook,
+        body:         asmManualBody.trim() || rawEntry.input.copy.body,
+        callToAction: asmManualCta.trim()  || rawEntry.input.copy.callToAction,
+      },
+    },
+  } : null;
 
   function handleAssembleCopy() {
     if (!entry) return;
@@ -513,7 +528,39 @@ function AIAssemblyPreviewSection({ entries }: { entries: CreativeLabEntry[] }) 
             >
               Assemble Image Input
             </button>
+            <button
+              type="button"
+              onClick={() => setAsmShowManual((v) => !v)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              {asmShowManual ? "Hide Manual Copy" : "Paste Ad Copy"}
+            </button>
           </div>
+
+          {asmShowManual && (
+            <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-3">
+              <p className="text-xs text-slate-600">
+                Paste ad text here when Meta sync doesn&apos;t capture it.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">Hook</label>
+                  <input type="text" value={asmManualHook} onChange={(e) => setAsmManualHook(e.target.value)}
+                    placeholder="Opening line..." className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">CTA</label>
+                  <input type="text" value={asmManualCta} onChange={(e) => setAsmManualCta(e.target.value)}
+                    placeholder="e.g. Shop Now..." className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Body</label>
+                <textarea value={asmManualBody} onChange={(e) => setAsmManualBody(e.target.value)}
+                  placeholder="Full ad text..." rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none resize-y" />
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2">
             {/* Copy assembly result */}
@@ -1154,7 +1201,31 @@ function EndToEndPipelineSection({
   const [traceOpen, setTraceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const entry = entries[selectedIndex] ?? null;
+  // Manual copy/image overrides — used when Meta sync doesn't capture ad text
+  const [manualHook, setManualHook] = useState("");
+  const [manualBody, setManualBody] = useState("");
+  const [manualCta, setManualCta]   = useState("");
+  const [manualImageHeadline, setManualImageHeadline] = useState("");
+  const [showManualFields, setShowManualFields] = useState(false);
+
+  const rawEntry = entries[selectedIndex] ?? null;
+
+  // Apply manual overrides to the entry if provided
+  const entry = rawEntry ? {
+    ...rawEntry,
+    input: {
+      ...rawEntry.input,
+      copy: {
+        hook:         manualHook.trim()  || rawEntry.input.copy.hook,
+        body:         manualBody.trim()  || rawEntry.input.copy.body,
+        callToAction: manualCta.trim()   || rawEntry.input.copy.callToAction,
+      },
+      image: {
+        ...rawEntry.input.image,
+        imageHeadline: manualImageHeadline.trim() || rawEntry.input.image.imageHeadline,
+      },
+    },
+  } : null;
   const openaiReady = providerConfig.openai.ready;
   const anthropicReady = providerConfig.anthropic.ready;
   const providerReady =
@@ -1269,6 +1340,13 @@ function EndToEndPipelineSection({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setShowManualFields((v) => !v)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              {showManualFields ? "Hide Manual Copy" : "Paste Ad Copy"}
+            </button>
             <label className="text-sm text-slate-400">Request type:</label>
             <select
               value={requestType}
@@ -1325,6 +1403,69 @@ function EndToEndPipelineSection({
               {loading ? "Running…" : mode === "mock" ? "Run Mock Image" : "Run Real Image"}
             </button>
           </div>
+
+          {/* Manual copy/image override fields */}
+          {showManualFields && (
+            <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                Paste Ad Copy Manually
+              </p>
+              <p className="text-xs text-slate-600">
+                When Meta sync doesn&apos;t capture the ad text, paste it here. These fields override synced data for this generation run.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">Hook (first line)</label>
+                  <input
+                    type="text"
+                    value={manualHook}
+                    onChange={(e) => setManualHook(e.target.value)}
+                    placeholder="Paste the opening line of the ad..."
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm
+                      text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">CTA</label>
+                  <input
+                    type="text"
+                    value={manualCta}
+                    onChange={(e) => setManualCta(e.target.value)}
+                    placeholder="e.g. Shop Now, Learn More..."
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm
+                      text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Body (full ad text)</label>
+                <textarea
+                  value={manualBody}
+                  onChange={(e) => setManualBody(e.target.value)}
+                  placeholder="Paste the full Facebook ad primary text here..."
+                  rows={4}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm
+                    text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none resize-y"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Image headline (optional)</label>
+                <input
+                  type="text"
+                  value={manualImageHeadline}
+                  onChange={(e) => setManualImageHeadline(e.target.value)}
+                  placeholder="Text overlay on the ad image, if any..."
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm
+                    text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+                />
+              </div>
+              {(manualHook || manualBody || manualCta || manualImageHeadline) && (
+                <p className="text-xs text-emerald-500">
+                  Manual overrides active — these will be used for the next generation run.
+                </p>
+              )}
+            </div>
+          )}
 
           {mode === "real" && !providerReady && (provider === "openai_text" || provider === "anthropic_text") && (
             <div className="mb-4 rounded-lg border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-300">
