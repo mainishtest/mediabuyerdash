@@ -445,7 +445,7 @@ function LaunchTestSection({
   const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   // Config state — pre-filled from client campaign defaults
-  const [adAccountId, setAdAccountId]     = useState("");
+  const [adAccountId, setAdAccountId]     = useState(cd.defaultAdAccountId ?? "");
   const [pageId, setPageId]               = useState(cd.defaultPageId ?? "");
   const [testName, setTestName]           = useState(
     inputCampaignName ? `${inputCampaignName} — Copy Test` : "Copy Test"

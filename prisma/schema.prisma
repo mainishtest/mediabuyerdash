@@ -134,6 +134,7 @@ model ClientAccount {
   notes       String?
   copywritingPrompt String?  // Custom AI copywriting instructions for this client (tone, voice, rules, context)
   // Ad campaign defaults — auto-fill into launch test setup
+  defaultAdAccountId    String?  // Meta Ad Account ID (e.g. act_123456)
   defaultPageId         String?  // Facebook Page ID
   defaultPixelId        String?  // Meta Pixel ID for conversion tracking
   defaultDestinationUrl String?  // Landing page URL

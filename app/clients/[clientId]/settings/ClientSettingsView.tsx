@@ -636,8 +636,13 @@ function CampaignDefaultsSection({ clientId }: { clientId: string }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
+        <div><label className={L}>Ad Account ID</label>
+          <input className={I} value={d.defaultAdAccountId ?? ""} onChange={(e) => set("defaultAdAccountId", e.target.value)} placeholder="act_2218192095198501" /></div>
         <div><label className={L}>Facebook Page ID</label>
-          <input className={I} value={d.defaultPageId ?? ""} onChange={(e) => set("defaultPageId", e.target.value)} placeholder="109227360835..." /></div>
+          <input className={I} value={d.defaultPageId ?? ""} onChange={(e) => set("defaultPageId", e.target.value)} placeholder="100078685202224" /></div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div><label className={L}>Pixel ID</label>
           <input className={I} value={d.defaultPixelId ?? ""} onChange={(e) => set("defaultPixelId", e.target.value)} placeholder="91036334748..." /></div>
       </div>
