@@ -29,13 +29,13 @@ CREATE TABLE "PasswordResetToken" (
 CREATE TABLE "Workspace" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "brandName" TEXT,
-    "website" TEXT,
-    "industry" TEXT,
-    "timezone" TEXT,
-    "monthlyAdSpend" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "brandName" TEXT,
+    "industry" TEXT,
+    "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
+    "website" TEXT,
+    "monthlyAdSpend" TEXT,
 
     CONSTRAINT "Workspace_pkey" PRIMARY KEY ("id")
 );
@@ -90,18 +90,18 @@ CREATE TABLE "NotificationLog" (
 -- CreateTable
 CREATE TABLE "ClientAccount" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "name" TEXT NOT NULL,
-    "brandName" TEXT,
     "platform" TEXT NOT NULL DEFAULT 'facebook',
     "currency" TEXT NOT NULL DEFAULT 'USD',
     "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
-    "status" TEXT NOT NULL DEFAULT 'active',
-    "notes" TEXT,
-    "clientPortalToken" TEXT,
-    "clientPortalPasswordHash" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "brandName" TEXT,
+    "notes" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "workspaceId" TEXT,
+    "clientPortalToken" TEXT,
+    "clientPortalPasswordHash" TEXT,
 
     CONSTRAINT "ClientAccount_pkey" PRIMARY KEY ("id")
 );
@@ -779,7 +779,6 @@ CREATE TABLE "MetaSyncLog" (
 -- CreateTable
 CREATE TABLE "MetaSyncedCampaign" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "externalAdAccountId" TEXT NOT NULL,
     "externalCampaignId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -790,6 +789,7 @@ CREATE TABLE "MetaSyncedCampaign" (
     "metaUpdatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "MetaSyncedCampaign_pkey" PRIMARY KEY ("id")
 );
@@ -803,7 +803,7 @@ CREATE TABLE "MetaCampaignGoal" (
     "cpaGoalType" TEXT NOT NULL,
     "cpaGoalValue" DOUBLE PRECISION NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "MetaCampaignGoal_pkey" PRIMARY KEY ("id")
 );
@@ -816,13 +816,13 @@ CREATE TABLE "ClientGoalDefaults" (
     "defaultRoasGoalValue" DOUBLE PRECISION NOT NULL,
     "defaultCpaGoalType" TEXT NOT NULL DEFAULT 'low',
     "defaultCpaGoalValue" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "targetRoas" DOUBLE PRECISION,
     "targetCpa" DOUBLE PRECISION,
     "targetCtr" DOUBLE PRECISION,
     "targetCvr" DOUBLE PRECISION,
     "maxDailySpend" DOUBLE PRECISION,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ClientGoalDefaults_pkey" PRIMARY KEY ("id")
 );
@@ -830,7 +830,6 @@ CREATE TABLE "ClientGoalDefaults" (
 -- CreateTable
 CREATE TABLE "MetaSyncedAdSet" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "externalAdAccountId" TEXT NOT NULL,
     "externalCampaignId" TEXT NOT NULL,
     "externalAdSetId" TEXT NOT NULL,
@@ -840,6 +839,7 @@ CREATE TABLE "MetaSyncedAdSet" (
     "metaUpdatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "MetaSyncedAdSet_pkey" PRIMARY KEY ("id")
 );
@@ -847,7 +847,6 @@ CREATE TABLE "MetaSyncedAdSet" (
 -- CreateTable
 CREATE TABLE "MetaSyncedAd" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "externalAdAccountId" TEXT NOT NULL,
     "externalCampaignId" TEXT NOT NULL,
     "externalAdSetId" TEXT NOT NULL,
@@ -859,6 +858,7 @@ CREATE TABLE "MetaSyncedAd" (
     "metaUpdatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "MetaSyncedAd_pkey" PRIMARY KEY ("id")
 );
@@ -866,7 +866,6 @@ CREATE TABLE "MetaSyncedAd" (
 -- CreateTable
 CREATE TABLE "MetaSyncedCreative" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "externalCreativeId" TEXT NOT NULL,
     "name" TEXT,
     "title" TEXT,
@@ -876,6 +875,7 @@ CREATE TABLE "MetaSyncedCreative" (
     "thumbnailUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "MetaSyncedCreative_pkey" PRIMARY KEY ("id")
 );
@@ -883,7 +883,6 @@ CREATE TABLE "MetaSyncedCreative" (
 -- CreateTable
 CREATE TABLE "MetaSyncedInsight" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "externalAdAccountId" TEXT NOT NULL,
     "level" TEXT NOT NULL DEFAULT 'ad',
     "externalCampaignId" TEXT NOT NULL DEFAULT '',
@@ -899,6 +898,7 @@ CREATE TABLE "MetaSyncedInsight" (
     "frequency" DOUBLE PRECISION,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "MetaSyncedInsight_pkey" PRIMARY KEY ("id")
 );
@@ -906,7 +906,6 @@ CREATE TABLE "MetaSyncedInsight" (
 -- CreateTable
 CREATE TABLE "ShopifyConnection" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "clientAccountId" TEXT,
     "shopDomain" TEXT NOT NULL,
     "accessToken" TEXT NOT NULL,
@@ -915,6 +914,7 @@ CREATE TABLE "ShopifyConnection" (
     "installedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "workspaceId" TEXT,
 
     CONSTRAINT "ShopifyConnection_pkey" PRIMARY KEY ("id")
 );
@@ -922,7 +922,6 @@ CREATE TABLE "ShopifyConnection" (
 -- CreateTable
 CREATE TABLE "ShopifyOrder" (
     "id" TEXT NOT NULL,
-    "workspaceId" TEXT,
     "shopifyConnectionId" TEXT NOT NULL,
     "clientAccountId" TEXT,
     "externalOrderId" TEXT NOT NULL,
@@ -944,12 +943,13 @@ CREATE TABLE "ShopifyOrder" (
     "referringSite" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "cancelReason" TEXT,
-    "cancelledAt" TIMESTAMP(3),
+    "workspaceId" TEXT,
     "financialStatus" TEXT,
     "fulfillmentStatus" TEXT,
-    "netRevenue" DOUBLE PRECISION,
-    "refundTotal" DOUBLE PRECISION,
+    "cancelledAt" TIMESTAMPTZ(6),
+    "cancelReason" TEXT,
+    "refundTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "netRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0,
 
     CONSTRAINT "ShopifyOrder_pkey" PRIMARY KEY ("id")
 );
@@ -1018,7 +1018,7 @@ CREATE TABLE "ReconciliationSummary" (
 
 -- CreateTable
 CREATE TABLE "ReconciledCampaignPerformance" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "clientAccountId" TEXT NOT NULL,
     "externalCampaignId" TEXT NOT NULL,
     "campaignName" TEXT NOT NULL,
@@ -1033,14 +1033,14 @@ CREATE TABLE "ReconciledCampaignPerformance" (
     "windowMatchedOrders" INTEGER NOT NULL DEFAULT 0,
     "attributionWindowDays" INTEGER NOT NULL DEFAULT 7,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ReconciledCampaignPerformance_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "AlertEvent" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "workspaceId" TEXT,
     "clientAccountId" TEXT NOT NULL,
     "clientName" TEXT NOT NULL,
@@ -1059,7 +1059,7 @@ CREATE TABLE "AlertEvent" (
     "acknowledgedAt" TIMESTAMP(3),
     "resolvedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AlertEvent_pkey" PRIMARY KEY ("id")
 );
@@ -1119,9 +1119,9 @@ CREATE TABLE "UploadedCreativeImage" (
     "storagePath" TEXT NOT NULL,
     "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "sourceCallToAction" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "sourceCopy" TEXT,
+    "sourceCallToAction" TEXT,
 
     CONSTRAINT "UploadedCreativeImage_pkey" PRIMARY KEY ("id")
 );
@@ -1140,7 +1140,7 @@ CREATE TABLE "UploadedCreativeAnalysis" (
     "attentionScore" INTEGER,
     "directResponseObservationsJson" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "UploadedCreativeAnalysis_pkey" PRIMARY KEY ("id")
 );
@@ -1156,7 +1156,7 @@ CREATE TABLE "GeneratedImageIterationConcept" (
     "directResponseAngle" TEXT,
     "approvalStatus" TEXT NOT NULL DEFAULT 'draft',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "GeneratedImageIterationConcept_pkey" PRIMARY KEY ("id")
 );
@@ -1171,8 +1171,8 @@ CREATE TABLE "AutomationRule" (
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "priority" TEXT NOT NULL DEFAULT 'medium',
     "conditions" TEXT NOT NULL DEFAULT '{}',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AutomationRule_pkey" PRIMARY KEY ("id")
 );
@@ -1193,16 +1193,16 @@ CREATE TABLE "ProposedAutomationAction" (
     "rationale" TEXT NOT NULL,
     "supportingData" TEXT NOT NULL DEFAULT '{}',
     "deduplicationKey" TEXT NOT NULL,
-    "proposedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" TIMESTAMP(3),
-    "approvedAt" TIMESTAMP(3),
-    "rejectedAt" TIMESTAMP(3),
+    "proposedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMPTZ(6),
+    "approvedAt" TIMESTAMPTZ(6),
+    "rejectedAt" TIMESTAMPTZ(6),
     "rejectionReason" TEXT,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deferredUntil" TIMESTAMP(3),
     "escalatedAt" TIMESTAMP(3),
     "escalationNote" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProposedAutomationAction_pkey" PRIMARY KEY ("id")
 );
@@ -1252,8 +1252,8 @@ CREATE TABLE "BudgetPacingTarget" (
     "campaignId" TEXT,
     "monthlyBudget" DOUBLE PRECISION NOT NULL,
     "dailyBudget" DOUBLE PRECISION,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "BudgetPacingTarget_pkey" PRIMARY KEY ("id")
 );
@@ -1348,7 +1348,7 @@ CREATE TABLE "ActionSafetyPolicy" (
     "notes" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ActionSafetyPolicy_pkey" PRIMARY KEY ("id")
 );
@@ -1391,7 +1391,7 @@ CREATE TABLE "GovernanceStop" (
     "clearedAt" TIMESTAMP(3),
     "clearedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "GovernanceStop_pkey" PRIMARY KEY ("id")
 );
@@ -1412,50 +1412,69 @@ CREATE TABLE "AutomationOverride" (
     "clearedBy" TEXT,
     "metadata" TEXT NOT NULL DEFAULT '{}',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AutomationOverride_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "DailyBriefRecord" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
+    "workspaceId" TEXT,
     "briefDate" TEXT NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
     "deliveryState" TEXT NOT NULL DEFAULT 'pending',
-    "contentJson" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "briefJson" TEXT NOT NULL,
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "lastError" TEXT,
+    "deliveredAt" TIMESTAMPTZ(6),
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DailyBriefRecord_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "OnboardingState" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "workspaceId" TEXT NOT NULL,
-    "currentStep" TEXT NOT NULL DEFAULT 'create_client',
-    "completedSteps" TEXT NOT NULL DEFAULT '[]',
-    "isComplete" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "currentStep" TEXT NOT NULL DEFAULT 'create_workspace',
+    "createWorkspaceDone" BOOLEAN NOT NULL DEFAULT false,
+    "businessDetailsDone" BOOLEAN NOT NULL DEFAULT false,
+    "accountDefaultsDone" BOOLEAN NOT NULL DEFAULT false,
+    "connectMetaPlaceholderDone" BOOLEAN NOT NULL DEFAULT false,
+    "connectShopifyPlaceholderDone" BOOLEAN NOT NULL DEFAULT false,
+    "reviewSetupDone" BOOLEAN NOT NULL DEFAULT false,
+    "draftFormData" TEXT,
+    "completedAt" TIMESTAMPTZ(6),
+    "lastActiveAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "OnboardingState_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ShopifyRefund" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT (gen_random_uuid())::text,
     "shopifyOrderId" TEXT NOT NULL,
     "externalRefundId" TEXT NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "reason" TEXT,
+    "refundAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "note" TEXT,
-    "processedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "refundCreatedAt" TIMESTAMPTZ(6) NOT NULL,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ShopifyRefund_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "playing_with_neon" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "value" REAL,
+
+    CONSTRAINT "playing_with_neon_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -1675,6 +1694,9 @@ CREATE INDEX "ReconciledCampaignPerformance_clientAccountId_dateFrom_idx" ON "Re
 CREATE UNIQUE INDEX "ReconciledCampaignPerformance_clientAccountId_externalCampa_key" ON "ReconciledCampaignPerformance"("clientAccountId", "externalCampaignId", "dateFrom", "dateTo");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ReconciledCampaignPerformance_client_campaign_dates_key" ON "ReconciledCampaignPerformance"("clientAccountId", "externalCampaignId", "dateFrom", "dateTo");
+
+-- CreateIndex
 CREATE INDEX "AlertEvent_clientAccountId_status_idx" ON "AlertEvent"("clientAccountId", "status");
 
 -- CreateIndex
@@ -1810,7 +1832,7 @@ CREATE INDEX "DailyBriefRecord_deliveryState_idx" ON "DailyBriefRecord"("deliver
 CREATE INDEX "DailyBriefRecord_workspaceId_briefDate_idx" ON "DailyBriefRecord"("workspaceId", "briefDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyBriefRecord_workspaceId_briefDate_key" ON "DailyBriefRecord"("workspaceId", "briefDate");
+CREATE UNIQUE INDEX "unique_workspace_briefdate" ON "DailyBriefRecord"("workspaceId", "briefDate");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "OnboardingState_workspaceId_key" ON "OnboardingState"("workspaceId");
@@ -1858,13 +1880,13 @@ ALTER TABLE "Ad" ADD CONSTRAINT "Ad_creativeId_fkey" FOREIGN KEY ("creativeId") 
 ALTER TABLE "MetaAccessibleAdAccount" ADD CONSTRAINT "MetaAccessibleAdAccount_metaConnectionId_fkey" FOREIGN KEY ("metaConnectionId") REFERENCES "MetaConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MetaSelectedAdAccount" ADD CONSTRAINT "MetaSelectedAdAccount_metaConnectionId_fkey" FOREIGN KEY ("metaConnectionId") REFERENCES "MetaConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "MetaSelectedAdAccount" ADD CONSTRAINT "MetaSelectedAdAccount_accessibleAdAccountId_fkey" FOREIGN KEY ("accessibleAdAccountId") REFERENCES "MetaAccessibleAdAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MetaSelectedAdAccount" ADD CONSTRAINT "MetaSelectedAdAccount_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MetaSelectedAdAccount" ADD CONSTRAINT "MetaSelectedAdAccount_metaConnectionId_fkey" FOREIGN KEY ("metaConnectionId") REFERENCES "MetaConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UTMPerformanceRow" ADD CONSTRAINT "UTMPerformanceRow_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1918,16 +1940,16 @@ ALTER TABLE "MetaSyncLog" ADD CONSTRAINT "MetaSyncLog_metaConnectionId_fkey" FOR
 ALTER TABLE "MetaCampaignGoal" ADD CONSTRAINT "MetaCampaignGoal_externalCampaignId_fkey" FOREIGN KEY ("externalCampaignId") REFERENCES "MetaSyncedCampaign"("externalCampaignId") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ClientGoalDefaults" ADD CONSTRAINT "ClientGoalDefaults_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ClientGoalDefaults" ADD CONSTRAINT "ClientGoalDefaults_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "ShopifyConnection" ADD CONSTRAINT "ShopifyConnection_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ShopifyOrder" ADD CONSTRAINT "ShopifyOrder_shopifyConnectionId_fkey" FOREIGN KEY ("shopifyConnectionId") REFERENCES "ShopifyConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ShopifyOrder" ADD CONSTRAINT "ShopifyOrder_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ShopifyOrder" ADD CONSTRAINT "ShopifyOrder_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ShopifyOrder" ADD CONSTRAINT "ShopifyOrder_shopifyConnectionId_fkey" FOREIGN KEY ("shopifyConnectionId") REFERENCES "ShopifyConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ShopifyOrderLineItem" ADD CONSTRAINT "ShopifyOrderLineItem_shopifyOrderId_fkey" FOREIGN KEY ("shopifyOrderId") REFERENCES "ShopifyOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1960,22 +1982,22 @@ ALTER TABLE "UploadedCreativeAnalysis" ADD CONSTRAINT "UploadedCreativeAnalysis_
 ALTER TABLE "GeneratedImageIterationConcept" ADD CONSTRAINT "GeneratedImageIterationConcept_uploadedCreativeImageId_fkey" FOREIGN KEY ("uploadedCreativeImageId") REFERENCES "UploadedCreativeImage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProposedAutomationAction" ADD CONSTRAINT "ProposedAutomationAction_automationRuleId_fkey" FOREIGN KEY ("automationRuleId") REFERENCES "AutomationRule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ProposedAutomationAction" ADD CONSTRAINT "ProposedAutomationAction_automationRuleId_fkey" FOREIGN KEY ("automationRuleId") REFERENCES "AutomationRule"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "ProposedAutomationAction" ADD CONSTRAINT "ProposedAutomationAction_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ProposedAutomationAction" ADD CONSTRAINT "ProposedAutomationAction_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "AutoExecutionSettings" ADD CONSTRAINT "AutoExecutionSettings_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BudgetPacingTarget" ADD CONSTRAINT "BudgetPacingTarget_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BudgetPacingTarget" ADD CONSTRAINT "BudgetPacingTarget_clientAccountId_fkey" FOREIGN KEY ("clientAccountId") REFERENCES "ClientAccount"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "CreativeLabActivityLog" ADD CONSTRAINT "CreativeLabActivityLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "CreativeLabWorkflowItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CreativeDraftVariantRecord" ADD CONSTRAINT "CreativeDraftVariantRecord_briefId_fkey" FOREIGN KEY ("briefId") REFERENCES "CreativeBriefRecord"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CreativeDraftVariantRecord" ADD CONSTRAINT "CreativeDraftVariantRecord_briefId_fkey" FOREIGN KEY ("briefId") REFERENCES "CreativeBriefRecord"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "ActionSafetyPolicy" ADD CONSTRAINT "ActionSafetyPolicy_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1987,11 +2009,8 @@ ALTER TABLE "GovernanceStop" ADD CONSTRAINT "GovernanceStop_workspaceId_fkey" FO
 ALTER TABLE "AutomationOverride" ADD CONSTRAINT "AutomationOverride_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "DailyBriefRecord" ADD CONSTRAINT "DailyBriefRecord_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "OnboardingState" ADD CONSTRAINT "OnboardingState_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "OnboardingState" ADD CONSTRAINT "OnboardingState_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ShopifyRefund" ADD CONSTRAINT "ShopifyRefund_shopifyOrderId_fkey" FOREIGN KEY ("shopifyOrderId") REFERENCES "ShopifyOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ShopifyRefund" ADD CONSTRAINT "ShopifyRefund_shopifyOrderId_fkey" FOREIGN KEY ("shopifyOrderId") REFERENCES "ShopifyOrder"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

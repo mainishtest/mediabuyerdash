@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - MediaBuying_main
+  pull_request:
+    branches:
+      - main
+      - MediaBuying_main
+
+jobs:
+  ci:
+    name: Lint, Type-check, Build
+    runs-on: ubuntu-latest
+
+    env:
+      # Dummy PostgreSQL URL — satisfies prisma generate (postinstall) and
+      # next build without requiring a live database connection.
+      # Schema migrations are applied separately via Supabase, not in CI.
+      DATABASE_URL: "postgresql://postgres:ci@localhost:5432/ci_dummy"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
