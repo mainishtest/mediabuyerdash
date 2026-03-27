@@ -56,7 +56,7 @@ type Summary = {
 type PortalData = {
   client: { name: string; brandName: string; currency: string };
   dateRange: { from: string; to: string };
-  dataSource?: "utm_reconciled" | "meta_insights";
+  dataSource?: "reconciled" | "utm_reconciled" | "meta_insights";
   summary: Summary;
   dailyRows: DailyRow[];
   campaignRows: CampaignRow[];
@@ -91,11 +91,15 @@ function roasColor(r: number | null) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC offset shifting "today" to tomorrow
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function daysAgo(n: number) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // ─── Insights generator ───────────────────────────────────────────────────────
@@ -437,21 +441,22 @@ function PasswordGate({ token, onSuccess }: { token: string; onSuccess: () => vo
 type PageProps = { params: { token: string } };
 
 const PRESETS = [
-  { label: "Last 7 days",  from: () => daysAgo(7),  to: today },
-  { label: "Last 14 days", from: () => daysAgo(14), to: today },
-  { label: "Last 30 days", from: () => daysAgo(30), to: today },
+  { label: "Today",       from: today,              to: today },
+  { label: "Yesterday",   from: () => daysAgo(1),   to: () => daysAgo(1) },
+  { label: "Last 7 days", from: () => daysAgo(7),   to: today },
 ];
 
 export default function ClientPortalPage({ params }: PageProps) {
   const { token } = params;
 
-  const [fromDate,       setFromDate]       = useState(daysAgo(30));
+  const [fromDate,       setFromDate]       = useState(daysAgo(7));
   const [toDate,         setToDate]         = useState(today());
   const [data,           setData]           = useState<PortalData | null>(null);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<string | null>(null);
   const [activeTab,      setActiveTab]      = useState<"chart" | "daily" | "campaigns" | "ads">("chart");
   const [needsPassword,  setNeedsPassword]  = useState(false);
+  const [refreshing,     setRefreshing]     = useState(false);
 
   const fetchData = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -560,6 +565,27 @@ export default function ClientPortalPage({ params }: PageProps) {
                 className="bg-transparent text-xs text-slate-300 outline-none"
               />
             </div>
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                await fetchData(fromDate, toDate);
+                setRefreshing(false);
+              }}
+              disabled={refreshing || loading}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs
+                         font-medium text-slate-400 transition-colors hover:border-slate-600
+                         hover:text-slate-200 disabled:opacity-50"
+            >
+              <svg
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
         </div>
       </div>
@@ -699,6 +725,8 @@ export default function ClientPortalPage({ params }: PageProps) {
           <p className="text-xs text-slate-600">
             {data.dataSource === "meta_insights"
               ? "Data reflects Meta ad spend and delivery metrics. Revenue figures will appear once Shopify reconciliation is complete."
+              : data.dataSource === "reconciled"
+              ? "Data reflects Meta ad spend reconciled against Shopify orders. Revenue and orders are sourced from Shopify (7-day attribution window)."
               : "Data reflects Meta ad spend reconciled against Shopify attributed revenue. Revenue figures use a 7-day attribution window."
             }
           </p>

@@ -2,14 +2,16 @@ export const dynamic = "force-dynamic";
 
 // app/integrations/page.tsx
 // Workspace-level integrations overview.
-// Shows all Meta connections and Shopify connections in the workspace.
-// Per-client mapping is managed at /clients/[clientId].
+// Shows all Meta connections and Shopify connections with inline actions.
 
 import Link               from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions }    from "../../lib/auth";
 import { prisma }         from "../../lib/db";
+import { isMetaConfigured } from "../../lib/meta/config";
+import { isShopifyConfigured } from "../../lib/shopify/config";
 import { PageHeader, SectionCard, Badge, EmptyState } from "../../components/ui";
+import { IntegrationsActions } from "./IntegrationsActions";
 
 export const metadata = {
   title: "Integrations — Media Buying Dashboard",
@@ -19,15 +21,18 @@ export default async function IntegrationsPage() {
   const session     = await getServerSession(authOptions);
   const workspaceId = session?.user?.workspaceId ?? null;
 
-  // Load Meta connections (no workspaceId field — global to the instance)
+  const metaConfigured    = isMetaConfigured();
+  const shopifyConfigured = isShopifyConfigured();
+
+  // Load Meta connections
   const metaConnections = await prisma.metaConnection.findMany({
     orderBy: { createdAt: "desc" },
     select: {
-      id:              true,
-      userDisplayName: true,
+      id:               true,
+      userDisplayName:  true,
       connectionStatus: true,
-      tokenExpiresAt:  true,
-      createdAt:       true,
+      tokenExpiresAt:   true,
+      createdAt:        true,
       selectedAccounts: {
         select: {
           id:              true,
@@ -40,7 +45,7 @@ export default async function IntegrationsPage() {
     },
   });
 
-  // Load workspace Shopify connections
+  // Load Shopify connections
   const shopifyConnections = await prisma.shopifyConnection.findMany({
     where:   workspaceId ? { workspaceId } : {},
     orderBy: { installedAt: "desc" },
@@ -53,7 +58,7 @@ export default async function IntegrationsPage() {
     },
   });
 
-  // Load clients for name lookup
+  // Client name lookup
   const clients = await prisma.clientAccount.findMany({
     where:   workspaceId ? { workspaceId } : {},
     select:  { id: true, name: true },
@@ -67,22 +72,39 @@ export default async function IntegrationsPage() {
     <div className="space-y-0">
       <PageHeader
         title="Integrations"
-        description="Workspace-level overview of Meta and Shopify connections. Manage per-client mappings from the client detail page."
+        description="Manage Meta and Shopify connections. Connect, reconnect, or disconnect from here."
       />
 
-      {/* Meta Connections */}
+      {/* ── Meta Connections ──────────────────────────────────────────────── */}
       <SectionCard
         title="Meta Connections"
         description="OAuth connections to Meta Ads accounts."
+        actions={
+          metaConfigured ? (
+            <a
+              href="/api/auth/meta/start"
+              className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm
+                font-medium text-white transition-colors hover:bg-emerald-500"
+            >
+              + Connect Meta
+            </a>
+          ) : undefined
+        }
         flush
         className="mb-8"
       >
         {metaConnections.length === 0 ? (
-          <EmptyState
-            icon="◎"
-            title="No Meta connections"
-            description="Connect a Meta account from a client's setup page."
-          />
+          <div className="p-5">
+            <EmptyState
+              icon="◎"
+              title="No Meta connections"
+              description={
+                metaConfigured
+                  ? "Click 'Connect Meta' above to link your Meta Ads account."
+                  : "Set META_APP_ID and META_APP_SECRET environment variables, then connect."
+              }
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -92,7 +114,7 @@ export default async function IntegrationsPage() {
                   <th className={TH}>Status</th>
                   <th className={TH}>Mapped Accounts</th>
                   <th className={TH}>Token Expires</th>
-                  <th className={TH}>Connected</th>
+                  <th className={TH}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -134,7 +156,11 @@ export default async function IntegrationsPage() {
                           : "—"}
                       </td>
                       <td className={TD}>
-                        {new Date(conn.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        <IntegrationsActions
+                          type="meta"
+                          connectionId={conn.id}
+                          metaConfigured={metaConfigured}
+                        />
                       </td>
                     </tr>
                   );
@@ -145,19 +171,30 @@ export default async function IntegrationsPage() {
         )}
       </SectionCard>
 
-      {/* Shopify Connections */}
+      {/* ── Shopify Connections ────────────────────────────────────────────── */}
       <SectionCard
         title="Shopify Connections"
         description="Connected Shopify stores used as the CRM source of truth for ROAS and CPA."
+        actions={
+          <Link
+            href="/integrations/shopify"
+            className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm
+              font-medium text-white transition-colors hover:bg-emerald-500"
+          >
+            + Connect Shopify
+          </Link>
+        }
         flush
         className="mb-8"
       >
         {shopifyConnections.length === 0 ? (
-          <EmptyState
-            icon="◎"
-            title="No Shopify connections"
-            description="Connect a Shopify store from a client's setup page."
-          />
+          <div className="p-5">
+            <EmptyState
+              icon="◎"
+              title="No Shopify connections"
+              description="Click 'Connect Shopify' above to link your store."
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -167,6 +204,7 @@ export default async function IntegrationsPage() {
                   <th className={TH}>Status</th>
                   <th className={TH}>Mapped Client</th>
                   <th className={TH}>Connected</th>
+                  <th className={TH}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -178,7 +216,7 @@ export default async function IntegrationsPage() {
                         {conn.shopDomain}
                       </td>
                       <td className={TD}>
-                        <Badge variant={isActive ? "success" : "neutral"}>
+                        <Badge variant={isActive ? "success" : "danger"}>
                           {isActive ? "Active" : conn.connectionStatus}
                         </Badge>
                       </td>
@@ -197,6 +235,13 @@ export default async function IntegrationsPage() {
                       <td className={TD}>
                         {new Date(conn.installedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </td>
+                      <td className={TD}>
+                        <IntegrationsActions
+                          type="shopify"
+                          connectionId={conn.id}
+                          shopDomain={conn.shopDomain}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -207,7 +252,7 @@ export default async function IntegrationsPage() {
       </SectionCard>
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-5 py-4 text-sm text-slate-500">
-        To connect or remap integrations, go to{" "}
+        For per-client account mapping, go to{" "}
         <Link href="/clients" className="text-slate-300 underline hover:text-white">
           Clients
         </Link>{" "}

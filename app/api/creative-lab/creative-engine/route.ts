@@ -138,7 +138,9 @@ export async function POST(req: Request) {
     }
 
     // ── concepts mode (default) ─────────────────────────────────────────────
+    console.log("[creative-engine] Generating concepts for", context.clientName, "trigger:", context.triggerType);
     const concepts = await generateCreativeConcepts(context);
+    console.log("[creative-engine] Generated", concepts.length, "concepts");
 
     // Build flat variants from concepts for constraint validation
     const allVariants: CreativeVariant[] = concepts.flatMap((c: CreativeConcept) => {

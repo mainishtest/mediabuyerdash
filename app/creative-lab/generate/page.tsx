@@ -9,6 +9,7 @@
 export const dynamic = "force-dynamic";
 
 import { mockCreativeDiagnosisInputs } from "../../../lib/data/mockCreativeDiagnosisInputs";
+import { loadDiagnosisInputs }         from "../../../lib/creativelab/loadDiagnosisInputs";
 import {
   diagnoseCreative,
   generateCopyRecommendation,
@@ -24,8 +25,18 @@ export const metadata = {
   title: "Creative Generator — Creative Lab",
 };
 
-export default async function CreativeLabGeneratePage() {
-  const entries: CreativeLabEntry[] = mockCreativeDiagnosisInputs.map((input) => {
+type PageProps = { searchParams: { clientId?: string } };
+
+export default async function CreativeLabGeneratePage({ searchParams }: PageProps) {
+  const clientId = searchParams.clientId;
+
+  // Use real ad data when a client is selected; fall back to mocks otherwise
+  const rawInputs = clientId
+    ? await loadDiagnosisInputs(clientId).catch(() => [])
+    : [];
+  const inputs = rawInputs.length > 0 ? rawInputs : mockCreativeDiagnosisInputs;
+
+  const entries: CreativeLabEntry[] = inputs.map((input) => {
     const diagnosis           = diagnoseCreative(input);
     const copyRecommendation  =
       diagnosis.causeType === "copy" || diagnosis.causeType === "mixed"

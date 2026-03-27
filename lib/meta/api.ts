@@ -58,6 +58,11 @@ export interface RawMetaCreativeEmbedded {
   call_to_action_type?: string;
   image_url?:           string;
   thumbnail_url?:       string;
+  object_story_spec?:   {
+    link_data?: { message?: string };
+    video_data?: { message?: string };
+    photo_data?: { message?: string };
+  };
 }
 
 export interface RawMetaAd {
@@ -93,7 +98,11 @@ const ADSET_FIELDS =
   "id,name,status,campaign_id,created_time,updated_time";
 const AD_FIELDS =
   "id,name,status,adset_id,campaign_id,created_time,updated_time," +
-  "creative{id,name,title,body,call_to_action_type,image_url,thumbnail_url}";
+  "creative{id,name,title,body,call_to_action_type,image_url,thumbnail_url," +
+  "object_story_spec}";
+const ADCREATIVE_FIELDS =
+  "id,name,title,body,call_to_action_type,image_url,thumbnail_url," +
+  "object_story_spec,effective_object_story_spec";
 const INSIGHT_FIELDS =
   "campaign_id,adset_id,ad_id,spend,impressions,clicks,ctr,cpm,frequency";
 
@@ -126,17 +135,64 @@ export async function fetchAds(
   return fetchAllPages<RawMetaAd>(url, accessToken);
 }
 
+/**
+ * Fetch ad creatives directly from the adcreatives endpoint.
+ * This reliably returns body, object_story_spec, and effective_object_story_spec
+ * which are often empty when fetched via field expansion on ads.
+ */
+export async function fetchAdCreatives(
+  externalAdAccountId: string,
+  accessToken: string
+): Promise<RawMetaCreativeEmbedded[]> {
+  const url = `${META_GRAPH_BASE}/${externalAdAccountId}/adcreatives` +
+    `?fields=${ADCREATIVE_FIELDS}&limit=100`;
+  const results = await fetchAllPages<RawMetaCreativeDirect>(url, accessToken);
+  // Normalize to RawMetaCreativeEmbedded shape
+  return results.map((r) => ({
+    id:                   r.id,
+    name:                 r.name,
+    title:                r.title,
+    body:                 r.body,
+    call_to_action_type:  r.call_to_action_type,
+    image_url:            r.image_url,
+    thumbnail_url:        r.thumbnail_url,
+    object_story_spec:    r.effective_object_story_spec ?? r.object_story_spec,
+  }));
+}
+
+/** Raw shape from direct /adcreatives endpoint (includes effective_object_story_spec) */
+interface RawMetaCreativeDirect {
+  id:                          string;
+  name?:                       string;
+  title?:                      string;
+  body?:                       string;
+  call_to_action_type?:        string;
+  image_url?:                  string;
+  thumbnail_url?:              string;
+  object_story_spec?:          RawMetaCreativeEmbedded["object_story_spec"];
+  effective_object_story_spec?: RawMetaCreativeEmbedded["object_story_spec"];
+}
+
 export async function fetchInsights(
   externalAdAccountId: string,
   accessToken: string,
-  dayRange = 7
+  dayRange = 7,
+  timezone = "America/New_York"
 ): Promise<{ rows: RawMetaInsight[]; since: string; until: string }> {
+  // Use the client's timezone so "today" matches the ad account's local date.
+  // Meta API interprets time_range dates in the ad account's timezone, so
+  // sending UTC dates when the server runs at a different offset causes
+  // misalignment (e.g. requesting "tomorrow" in the ad account's timezone).
+  const dateInTz = (d: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+
   const untilDate = new Date();
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dayRange);
 
-  const since = sinceDate.toISOString().slice(0, 10);
-  const until = untilDate.toISOString().slice(0, 10);
+  const since = dateInTz(sinceDate);
+  const until = dateInTz(untilDate);
 
   const params = new URLSearchParams({
     fields:         INSIGHT_FIELDS,

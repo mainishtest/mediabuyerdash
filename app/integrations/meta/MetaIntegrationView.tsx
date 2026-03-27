@@ -267,14 +267,29 @@ export function MetaIntegrationView({
               </div>
             )}
 
-            {/* Disconnect */}
-            {disconnectAction && (
-              <form action={disconnectAction}>
-                <ActionButton type="submit" variant="danger" size="sm">
-                  Disconnect Meta
-                </ActionButton>
-              </form>
-            )}
+            {/* Reconnect + Disconnect actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              {configured && (
+                <a
+                  href="/api/auth/meta/start"
+                  className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 px-4 py-2
+                    text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+                >
+                  Reconnect Meta
+                </a>
+              )}
+              {disconnectAction && (
+                <form action={disconnectAction}>
+                  <ActionButton type="submit" variant="danger" size="sm">
+                    Disconnect Meta
+                  </ActionButton>
+                </form>
+              )}
+            </div>
+            <p className="text-xs text-slate-600">
+              Reconnect re-authorizes with a fresh token without losing your ad account selections.
+              Disconnect removes the connection entirely.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">

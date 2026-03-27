@@ -27,15 +27,16 @@ export default async function CampaignPerformancePage({ params }: PageProps) {
 
   const account = await prisma.clientAccount.findUnique({
     where:  { id: clientId },
-    select: { id: true, name: true, currency: true },
+    select: { id: true, name: true, currency: true, timezone: true },
   });
 
   if (!account) notFound();
 
+  const tz = account.timezone || "America/New_York";
   const [snapshots, sparklines, clientDaily] = await Promise.all([
-    buildCampaignPerformanceSnapshots(clientId),
-    getCampaignSparklines(clientId, 30),
-    getClientDailyMetrics(clientId, 30),
+    buildCampaignPerformanceSnapshots(clientId, undefined, undefined, tz),
+    getCampaignSparklines(clientId, 30, undefined, undefined, tz),
+    getClientDailyMetrics(clientId, 30, undefined, undefined, tz),
   ]);
 
   return (

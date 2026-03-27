@@ -41,10 +41,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: `Invalid status: ${status}` }, { status: 400 });
     }
 
-    await updateBriefStatus(id, status as CreativeBriefStatus, notes).catch((err) => {
+    try {
+      await updateBriefStatus(id, status as CreativeBriefStatus, notes);
+    } catch (err: any) {
+      if (err?.code === "P2025") {
+        return NextResponse.json(
+          { error: `Brief ${id} not found` },
+          { status: 404 },
+        );
+      }
       console.error("[briefs PATCH status]", err);
       throw err;
-    });
+    }
 
     return NextResponse.json({ ok: true, id, status });
   }
@@ -62,14 +70,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: `Invalid reviewDecision: ${reviewDecision}` }, { status: 400 });
     }
 
-    await updateVariantReview({
-      variantId,
-      reviewDecision: reviewDecision as CreativeReviewDecision,
-      reviewNote,
-    }).catch((err) => {
+    try {
+      await updateVariantReview({
+        variantId,
+        reviewDecision: reviewDecision as CreativeReviewDecision,
+        reviewNote,
+      });
+    } catch (err: any) {
+      if (err?.code === "P2025") {
+        return NextResponse.json(
+          { error: `Variant ${variantId} not found` },
+          { status: 404 },
+        );
+      }
       console.error("[briefs PATCH variant]", err);
       throw err;
-    });
+    }
 
     return NextResponse.json({ ok: true, variantId, reviewDecision });
   }

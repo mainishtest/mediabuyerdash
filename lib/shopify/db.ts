@@ -4,6 +4,7 @@ import { prisma } from "../db";
 
 export async function getAllShopifyConnections() {
   return prisma.shopifyConnection.findMany({
+    where:   { connectionStatus: "active" },
     include: { clientAccount: true },
     orderBy: { createdAt: "desc" },
   });
@@ -66,6 +67,14 @@ export async function upsertShopifyConnection(data: {
       ...(data.workspaceId     && { workspaceId:     data.workspaceId }),
       ...(data.clientAccountId && { clientAccountId: data.clientAccountId }),
     },
+  });
+}
+
+/** Update the connectionStatus (e.g., to "error" on repeated sync failure). */
+export async function updateConnectionStatus(id: string, connectionStatus: string) {
+  return prisma.shopifyConnection.update({
+    where: { id },
+    data:  { connectionStatus },
   });
 }
 

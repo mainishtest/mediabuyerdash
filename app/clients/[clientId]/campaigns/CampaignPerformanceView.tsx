@@ -882,13 +882,15 @@ function FilterBar({
 type DatePreset = "7d" | "14d" | "30d" | "90d" | "custom";
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC offset shifting "today" to tomorrow
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function daysAgoStr(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function presetToDates(preset: DatePreset): { startDate: string; endDate: string } {

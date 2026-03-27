@@ -12,7 +12,6 @@ import {
 import {
   getOpenAIConfig,
   getAnthropicConfig,
-  getImagePlaceholderConfig
 } from "../../lib/providerExecution";
 import type { CreativeLabEntry } from "../../types/creativeDiagnosis";
 import type { CreativeApprovalStatus } from "../../types/aiProvider";
@@ -22,7 +21,7 @@ import type { MockGenerationPipelineResult } from "../../types/pipeline";
 
 export async function generateCopyVariationsAction(entry: CreativeLabEntry) {
   const { input, diagnosis } = entry;
-  const provider = getCopyProvider("mock");
+  const provider = getCopyProvider("anthropic");
 
   const request = {
     adId:              input.adId,
@@ -75,7 +74,7 @@ export async function generateCopyVariationsAction(entry: CreativeLabEntry) {
 
 export async function generateImageVariationsAction(entry: CreativeLabEntry) {
   const { input, diagnosis } = entry;
-  const provider = getImageProvider("mock");
+  const provider = getImageProvider("openai");
 
   const request = {
     adId:              input.adId,
@@ -212,10 +211,14 @@ export async function setSelectedVariantAction(
 export async function getProviderConfigStatusAction() {
   const openai = getOpenAIConfig();
   const anthropic = getAnthropicConfig();
-  const image = getImagePlaceholderConfig();
   return {
-    openai:   { ready: openai.ready, message: openai.message },
+    openai:    { ready: openai.ready, message: openai.message },
     anthropic: { ready: anthropic.ready, message: anthropic.message },
-    image:    { ready: image.ready, message: image.message }
+    image:     {
+      ready:   openai.ready,
+      message: openai.ready
+        ? "Image concepts powered by OpenAI"
+        : "OPENAI_API_KEY is not set. Add it to .env.local for AI image concept generation."
+    },
   };
 }

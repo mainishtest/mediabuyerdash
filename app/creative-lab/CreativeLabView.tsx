@@ -1691,10 +1691,28 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
           >
             Generation History
           </Link>
-          <div className="inline-flex items-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-            <span aria-hidden>⚠</span>
-            <span>Mock provider — not connected to real LLM or image APIs</span>
-          </div>
+          {providerConfig.anthropic.ready ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+              <span aria-hidden>✓</span>
+              <span>Anthropic connected (copy)</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+              <span aria-hidden>⚠</span>
+              <span>{providerConfig.anthropic.message}</span>
+            </div>
+          )}
+          {providerConfig.image.ready ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+              <span aria-hidden>✓</span>
+              <span>OpenAI connected (image concepts)</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+              <span aria-hidden>⚠</span>
+              <span>{providerConfig.image.message}</span>
+            </div>
+          )}
         </div>
       </header>
 

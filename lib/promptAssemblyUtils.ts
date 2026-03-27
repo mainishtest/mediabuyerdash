@@ -83,9 +83,11 @@ export function checkCopyReadiness(entry: CreativeLabEntry): ReadinessCheckResul
 
   const { input, diagnosis } = entry;
 
-  if (!input.copy.hook?.trim()) missing.push("hook");
-  if (!input.copy.body?.trim()) missing.push("body");
-  if (!input.copy.callToAction?.trim()) missing.push("callToAction");
+  // Missing copy fields are warnings, not blockers — the AI can still generate
+  // variations from performance context alone when ad copy isn't synced
+  if (!input.copy.hook?.trim()) warnings.push("hook not available from Meta sync — AI will generate without existing copy context");
+  if (!input.copy.body?.trim()) warnings.push("body not available from Meta sync — AI will generate without existing copy context");
+  if (!input.copy.callToAction?.trim()) warnings.push("callToAction not available from Meta sync");
 
   if (input.cpaGoalValue <= 0 && input.roasGoalValue <= 0) {
     warnings.push("No campaign goals set — generation may lack direction");

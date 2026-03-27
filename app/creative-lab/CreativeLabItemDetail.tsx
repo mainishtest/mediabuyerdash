@@ -357,6 +357,39 @@ export function CreativeLabItemDetail({ item, onStatusChange, onNotesSave, onClo
           )}
         </div>
 
+        {/* ── Post-approval: Next Step workflow ── */}
+        {item.status === "approved" && (
+          <div className="px-5 py-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Next Steps
+            </p>
+
+            {/* Workflow stepper */}
+            <div className="mb-4 flex items-center gap-1 text-xs">
+              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">Approved</span>
+              <span className="text-slate-600">→</span>
+              <span className="rounded-full border border-indigo-500 bg-indigo-950/40 px-2 py-0.5 text-indigo-300">Generate</span>
+              <span className="text-slate-600">→</span>
+              <span className="text-slate-600">Review</span>
+              <span className="text-slate-600">→</span>
+              <span className="text-slate-600">Launch</span>
+            </div>
+
+            <Link
+              href={`/creative-lab/creative-engine?clientId=${encodeURIComponent(item.clientAccountId)}${item.creativeId ? `&creativeId=${encodeURIComponent(item.creativeId)}` : ""}${item.campaignId ? `&campaignId=${encodeURIComponent(item.campaignId)}` : ""}`}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600
+                         px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500
+                         active:scale-95"
+            >
+              Generate Creative Concepts →
+            </Link>
+
+            <p className="mt-2 text-xs text-slate-500">
+              AI will generate copy variations and image concept briefs based on this creative&apos;s performance data.
+            </p>
+          </div>
+        )}
+
         {/* ── Linked entities ── */}
         {(item.campaignId || item.creativeId || item.clientAccountId) && (
           <div className="px-5 py-4">

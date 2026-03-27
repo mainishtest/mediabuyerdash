@@ -436,14 +436,19 @@ export function LaunchPlanDetail({ plan, onUpdate, pending = false }: Props) {
               </ActionButton>
             )}
             {canLaunch && (
-              <ActionButton
-                variant="primary"
-                size="md"
-                disabled={pending}
-                onClick={handleMarkLaunched}
-              >
-                Assign as Challenger →
-              </ActionButton>
+              <>
+                <ActionButton
+                  variant="primary"
+                  size="md"
+                  disabled={pending}
+                  onClick={handleMarkLaunched}
+                >
+                  Launch on Meta →
+                </ActionButton>
+                <p className="w-full text-xs text-slate-500 mt-1">
+                  Creates an A/B test campaign on Meta with the challenger creative against control.
+                </p>
+              </>
             )}
             {(readiness.state === "draft" || readiness.state === "needs_mapping") && (
               <ActionButton

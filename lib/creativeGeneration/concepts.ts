@@ -222,10 +222,20 @@ export async function generateCreativeConcepts(
     });
     const result = await generateCreativeDrafts(input);
 
-    if (!result.ok) return [];
+    if (!result.ok) {
+      console.error("[generateCreativeConcepts] Engine error:", result.error);
+      return [];
+    }
+
+    console.log(`[generateCreativeConcepts] Got ${result.output.variants.length} variants from ${result.output.provider}`);
 
     const copyVariants  = result.output.variants.filter((v) => v.variantType === "copy");
     const imageVariants = result.output.variants.filter((v) => v.variantType === "image");
+
+    if (copyVariants.length === 0) {
+      console.warn("[generateCreativeConcepts] No copy variants in response — cannot build concepts");
+      console.warn("[generateCreativeConcepts] Variant types:", result.output.variants.map((v) => v.variantType));
+    }
 
     return copyVariants.map((copy, idx): CreativeConcept => {
       const image    = imageVariants[idx] ?? null;
