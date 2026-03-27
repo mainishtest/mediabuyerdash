@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
       objective:         objective || "OUTCOME_TRAFFIC",
       status:            "PAUSED",
       special_ad_categories: [],
+      is_adset_budget_sharing_enabled: false,
     });
     if (campaignRes.error) {
       return NextResponse.json({
