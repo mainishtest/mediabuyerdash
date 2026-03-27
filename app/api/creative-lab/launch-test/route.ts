@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
       daily_budget:       Math.round(dailyBudget * 100), // cents
       billing_event:      billingEvent,
       optimization_goal:  optimizationGoal,
+      bid_strategy:       "LOWEST_COST_WITH_MAX_CONVERSIONS",
       targeting,
       status:             "PAUSED",
     };
