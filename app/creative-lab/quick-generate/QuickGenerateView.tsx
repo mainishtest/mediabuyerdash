@@ -1,9 +1,9 @@
 "use client";
 
-// Quick Generate — paste ad copy, get variations, pick winners.
-// No pipeline, no briefs, no assembly. Just fast iteration.
+// Quick Generate — paste ad copy, get variations, pick winners, launch test.
+// No pipeline, no briefs, no assembly. Just fast iteration → Facebook launch.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Variation = {
   title: string;
@@ -14,6 +14,22 @@ type Variation = {
 
 type VariationWithStatus = Variation & {
   status: "none" | "approved" | "rejected";
+};
+
+type AdAccount = {
+  id: string;
+  externalAdAccountId: string;
+  accountName: string;
+};
+
+type LaunchResult = {
+  ok: boolean;
+  campaignId?: string;
+  adSetId?: string;
+  ads?: Array<{ adId: string; creativeId: string; title: string }>;
+  errors?: string[];
+  summary?: string;
+  error?: string;
 };
 
 export function QuickGenerateView() {
@@ -305,25 +321,14 @@ export function QuickGenerateView() {
         </div>
       )}
 
-      {/* ── Approved summary ──────────────────────────────────────────── */}
+      {/* ── Approved + Launch Test ─────────────────────────────────────── */}
       {approved.length > 0 && (
-        <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/10 p-5 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500">
-            Approved for Testing ({approved.length})
-          </p>
-          {approved.map((v, i) => (
-            <div key={i} className="rounded-lg border border-emerald-800/30 bg-emerald-950/20 p-3">
-              <p className="text-xs font-semibold text-emerald-400">{v.title}</p>
-              <p className="mt-1 text-sm text-white">{v.hook}</p>
-              <p className="mt-1 text-xs text-slate-400">{v.body}</p>
-              <p className="mt-1 text-xs text-slate-500">CTA: {v.callToAction}</p>
-            </div>
-          ))}
-          <p className="text-xs text-slate-500">
-            Next step: Create a Facebook A/B test using these approved variations with the existing ad image.
-            Go to Meta Ads Manager → duplicate the original ad → swap in the new copy for each variation.
-          </p>
-        </div>
+        <LaunchTestSection
+          approved={approved}
+          clientName={clientName}
+          campaignName={campaignName}
+          destinationUrl=""
+        />
       )}
 
       {/* ── Original copy reference ───────────────────────────────────── */}
@@ -337,6 +342,424 @@ export function QuickGenerateView() {
           {cta && <p className="mt-1 text-xs text-slate-600">CTA: {cta}</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Launch Test Section — full campaign setup + launch to Facebook
+// ---------------------------------------------------------------------------
+
+function LaunchTestSection({
+  approved,
+  clientName,
+  campaignName: inputCampaignName,
+  destinationUrl: inputUrl,
+}: {
+  approved: VariationWithStatus[];
+  clientName: string;
+  campaignName: string;
+  destinationUrl: string;
+}) {
+  // Steps: configure → review → launched
+  const [step, setStep] = useState<"configure" | "review" | "launching" | "done">("configure");
+  const [adAccounts, setAdAccounts] = useState<AdAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+
+  // Config state
+  const [adAccountId, setAdAccountId]     = useState("");
+  const [pageId, setPageId]               = useState("");
+  const [testName, setTestName]           = useState(
+    inputCampaignName ? `${inputCampaignName} — Copy Test` : "Copy Test"
+  );
+  const [objective, setObjective]         = useState("OUTCOME_TRAFFIC");
+  const [dailyBudget, setDailyBudget]     = useState("20");
+  const [destinationUrl, setDestinationUrl] = useState(inputUrl);
+  const [imageUrl, setImageUrl]           = useState("");
+  const [pixelId, setPixelId]             = useState("");
+  const [optimizationGoal, setOptGoal]    = useState("LINK_CLICKS");
+
+  // Targeting
+  const [countries, setCountries] = useState("US");
+  const [ageMin, setAgeMin]       = useState("18");
+  const [ageMax, setAgeMax]       = useState("65");
+  const [gender, setGender]       = useState("0");
+
+  // Result
+  const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
+  const [launchError, setLaunchError]   = useState<string | null>(null);
+
+  // Load ad accounts on mount
+  useEffect(() => {
+    setLoadingAccounts(true);
+    fetch("/api/creative-lab/launch-test/accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          setAdAccounts(data.accounts ?? []);
+          if (data.accounts?.length === 1) {
+            setAdAccountId(data.accounts[0].externalAdAccountId);
+          }
+          if (data.pageId) setPageId(data.pageId);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingAccounts(false));
+  }, []);
+
+  async function handleLaunch() {
+    setStep("launching");
+    setLaunchError(null);
+
+    try {
+      const res = await fetch("/api/creative-lab/launch-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountId,
+          pageId,
+          campaignName: testName,
+          objective,
+          dailyBudget: parseFloat(dailyBudget),
+          destinationUrl,
+          imageUrl: imageUrl || undefined,
+          pixelId: pixelId || undefined,
+          optimizationGoal: optimizationGoal,
+          targetCountries: countries.split(",").map((c) => c.trim().toUpperCase()),
+          targetAgeMin: parseInt(ageMin),
+          targetAgeMax: parseInt(ageMax),
+          targetGenders: [parseInt(gender)],
+          variations: approved.map((v) => ({
+            title:        v.title,
+            hook:         v.hook,
+            body:         v.body,
+            callToAction: v.callToAction,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      setLaunchResult(data);
+      if (data.ok) {
+        setStep("done");
+      } else {
+        setLaunchError(data.error ?? "Launch failed");
+        setStep("review");
+      }
+    } catch (err) {
+      setLaunchError(err instanceof Error ? err.message : "Network error");
+      setStep("review");
+    }
+  }
+
+  const INPUT = "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none";
+  const LABEL = "mb-1 block text-xs text-slate-500";
+
+  // ── Done state ──────────────────────────────────────────────────────
+  if (step === "done" && launchResult?.ok) {
+    return (
+      <div className="rounded-xl border border-emerald-700 bg-emerald-950/20 p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">✓</span>
+          <div>
+            <p className="text-lg font-semibold text-emerald-300">Test Launched Successfully</p>
+            <p className="text-sm text-slate-400">{launchResult.summary}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          {launchResult.campaignId && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+              <p className="text-xs text-slate-500">Campaign ID</p>
+              <p className="mt-1 font-mono text-xs text-slate-200">{launchResult.campaignId}</p>
+            </div>
+          )}
+          {launchResult.adSetId && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+              <p className="text-xs text-slate-500">Ad Set ID</p>
+              <p className="mt-1 font-mono text-xs text-slate-200">{launchResult.adSetId}</p>
+            </div>
+          )}
+          <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+            <p className="text-xs text-slate-500">Ads Created</p>
+            <p className="mt-1 text-sm font-semibold text-white">{launchResult.ads?.length ?? 0}</p>
+          </div>
+        </div>
+
+        {launchResult.ads && launchResult.ads.length > 0 && (
+          <div className="space-y-2">
+            {launchResult.ads.map((ad, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg bg-slate-800/30 px-3 py-2">
+                <span className="text-xs text-emerald-400">✓</span>
+                <span className="text-sm text-white">{ad.title}</span>
+                <span className="ml-auto font-mono text-xs text-slate-500">{ad.adId}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {launchResult.errors && launchResult.errors.length > 0 && (
+          <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+            <p className="text-xs font-semibold text-amber-400 mb-1">Warnings</p>
+            {launchResult.errors.map((e, i) => (
+              <p key={i} className="text-xs text-amber-300">{e}</p>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-slate-500">
+          Campaign launched as PAUSED. Go to Meta Ads Manager to review and activate.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Review state ────────────────────────────────────────────────────
+  if (step === "review" || step === "launching") {
+    const missingFields: string[] = [];
+    if (!adAccountId) missingFields.push("Ad Account");
+    if (!pageId)      missingFields.push("Facebook Page ID");
+    if (!destinationUrl) missingFields.push("Destination URL");
+    if (!testName)    missingFields.push("Test Name");
+
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Pre-Launch Review</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {approved.length} ad variation(s) will be created in Meta Ads Manager
+            </p>
+          </div>
+          <button onClick={() => setStep("configure")}
+            className="text-xs text-slate-500 hover:text-slate-300">
+            ← Edit Config
+          </button>
+        </div>
+
+        {launchError && (
+          <div className="rounded-lg border border-rose-800/50 bg-rose-950/20 px-4 py-3 text-sm text-rose-300">
+            {launchError}
+          </div>
+        )}
+
+        {missingFields.length > 0 && (
+          <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 px-4 py-3">
+            <p className="text-xs text-amber-300">Missing: {missingFields.join(", ")}</p>
+          </div>
+        )}
+
+        {/* Summary grid */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Campaign", value: testName },
+            { label: "Objective", value: objective.replace("OUTCOME_", "") },
+            { label: "Budget", value: `$${dailyBudget}/day` },
+            { label: "Targeting", value: `${countries} · ${ageMin}-${ageMax}` },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+              <p className="text-xs text-slate-500">{label}</p>
+              <p className="mt-1 text-sm text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Ad previews */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Ads to Create ({approved.length})
+          </p>
+          <div className="space-y-3">
+            {approved.map((v, i) => (
+              <div key={i} className="rounded-xl border border-slate-700 bg-slate-800/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {imageUrl && (
+                    <div className="h-12 w-12 shrink-0 rounded-lg bg-slate-700 overflow-hidden">
+                      <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold text-indigo-400">{v.title}</p>
+                    <p className="text-xs text-slate-600">{destinationUrl}</p>
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-white">{v.hook}</p>
+                <p className="mt-1 text-xs text-slate-400">{v.body}</p>
+                <p className="mt-2 inline-block rounded-md border border-indigo-600/50 bg-indigo-600/20 px-2.5 py-1 text-xs text-indigo-300">
+                  {v.callToAction}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Launch button */}
+        <button
+          onClick={handleLaunch}
+          disabled={step === "launching" || missingFields.length > 0}
+          className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white
+            transition-colors hover:bg-emerald-500 disabled:opacity-50 active:scale-[0.98]"
+        >
+          {step === "launching" ? "Launching to Facebook..." : `Launch ${approved.length} Ad(s) to Facebook`}
+        </button>
+        <p className="text-center text-xs text-slate-600">
+          Ads will be created as PAUSED. You can review and activate in Ads Manager.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Configure state ─────────────────────────────────────────────────
+  return (
+    <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/10 p-5 space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500">
+            Launch Test to Facebook
+          </p>
+          <p className="mt-1 text-sm text-slate-400">
+            {approved.length} approved variation(s) ready to launch
+          </p>
+        </div>
+      </div>
+
+      {/* Approved variations summary */}
+      <div className="space-y-2">
+        {approved.map((v, i) => (
+          <div key={i} className="rounded-lg border border-emerald-800/30 bg-emerald-950/20 p-3">
+            <p className="text-xs font-semibold text-emerald-400">{v.title}</p>
+            <p className="mt-1 text-sm text-white">{v.hook}</p>
+            <p className="mt-1 text-xs text-slate-400 line-clamp-2">{v.body}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Campaign setup */}
+      <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-800/30 p-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Campaign Setup</p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Ad Account</label>
+            {loadingAccounts ? (
+              <p className="text-xs text-slate-600">Loading accounts...</p>
+            ) : adAccounts.length > 0 ? (
+              <select value={adAccountId} onChange={(e) => setAdAccountId(e.target.value)} className={INPUT}>
+                <option value="">Select account...</option>
+                {adAccounts.map((a) => (
+                  <option key={a.id} value={a.externalAdAccountId}>
+                    {a.accountName} ({a.externalAdAccountId})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input type="text" value={adAccountId} onChange={(e) => setAdAccountId(e.target.value)}
+                placeholder="act_123456789" className={INPUT} />
+            )}
+          </div>
+          <div>
+            <label className={LABEL}>Facebook Page ID</label>
+            <input type="text" value={pageId} onChange={(e) => setPageId(e.target.value)}
+              placeholder="Your Facebook Page ID" className={INPUT} />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Test Name</label>
+            <input type="text" value={testName} onChange={(e) => setTestName(e.target.value)}
+              placeholder="Copy Test — March 2026" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Objective</label>
+            <select value={objective} onChange={(e) => setObjective(e.target.value)} className={INPUT}>
+              <option value="OUTCOME_TRAFFIC">Traffic</option>
+              <option value="OUTCOME_SALES">Sales</option>
+              <option value="OUTCOME_ENGAGEMENT">Engagement</option>
+              <option value="OUTCOME_LEADS">Leads</option>
+              <option value="OUTCOME_AWARENESS">Awareness</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className={LABEL}>Daily Budget ($)</label>
+            <input type="number" value={dailyBudget} onChange={(e) => setDailyBudget(e.target.value)}
+              placeholder="20" min="1" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Optimization Goal</label>
+            <select value={optimizationGoal} onChange={(e) => setOptGoal(e.target.value)} className={INPUT}>
+              <option value="LINK_CLICKS">Link Clicks</option>
+              <option value="LANDING_PAGE_VIEWS">Landing Page Views</option>
+              <option value="OFFSITE_CONVERSIONS">Conversions</option>
+              <option value="IMPRESSIONS">Impressions</option>
+              <option value="REACH">Reach</option>
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>Pixel ID (for conversions)</label>
+            <input type="text" value={pixelId} onChange={(e) => setPixelId(e.target.value)}
+              placeholder="Optional" className={INPUT} />
+          </div>
+        </div>
+
+        <div>
+          <label className={LABEL}>Destination URL</label>
+          <input type="url" value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)}
+            placeholder="https://yoursite.com/landing-page" className={INPUT} />
+        </div>
+
+        <div>
+          <label className={LABEL}>Ad Image URL</label>
+          <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://... (image URL to upload to Meta)" className={INPUT} />
+          <p className="mt-1 text-xs text-slate-600">
+            Paste a direct image URL. This image will be used for all ad variations.
+          </p>
+        </div>
+      </div>
+
+      {/* Targeting */}
+      <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/30 p-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Targeting</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div>
+            <label className={LABEL}>Countries</label>
+            <input type="text" value={countries} onChange={(e) => setCountries(e.target.value)}
+              placeholder="US,CA,GB" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Age Min</label>
+            <input type="number" value={ageMin} onChange={(e) => setAgeMin(e.target.value)}
+              min="13" max="65" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Age Max</label>
+            <input type="number" value={ageMax} onChange={(e) => setAgeMax(e.target.value)}
+              min="13" max="65" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Gender</label>
+            <select value={gender} onChange={(e) => setGender(e.target.value)} className={INPUT}>
+              <option value="0">All</option>
+              <option value="1">Male</option>
+              <option value="2">Female</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Review button */}
+      <button
+        onClick={() => setStep("review")}
+        disabled={!adAccountId || !pageId || !destinationUrl}
+        className="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white
+          transition-colors hover:bg-indigo-500 disabled:opacity-50 active:scale-[0.98]"
+      >
+        Review & Launch →
+      </button>
     </div>
   );
 }
