@@ -1,7 +1,7 @@
 export const META_GRAPH_VERSION = "v20.0";
 export const META_GRAPH_BASE   = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 export const META_DIALOG_BASE  = `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`;
-export const META_SCOPES       = "ads_read,ads_management,business_management";
+export const META_SCOPES       = "ads_read,ads_management,business_management,pages_manage_ads,pages_read_engagement";
 
 export interface MetaConfig {
   appId:       string;
