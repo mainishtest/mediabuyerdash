@@ -42,8 +42,8 @@ export function DaypartingInsights({ result }: DaypartingInsightsProps) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm shadow-slate-900/40">
-        <div className="grid grid-cols-4 gap-4 border-b border-slate-700 pb-3 text-xs font-medium uppercase tracking-widest text-slate-400">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm shadow-slate-900/40 sm:p-6">
+        <div className="grid grid-cols-2 gap-2 border-b border-slate-700 pb-3 text-xs font-medium uppercase tracking-widest text-slate-400 sm:grid-cols-4 sm:gap-4">
           <span>Hour</span>
           <span>CPA</span>
           <span>ROAS</span>

@@ -571,7 +571,7 @@ export function CreativeFatigueView({ summaries, counts }: Props) {
                   </div>
 
                   {/* Metrics */}
-                  <div className="grid grid-cols-4 gap-4 text-center shrink-0">
+                  <div className="grid grid-cols-2 gap-2 text-center shrink-0 sm:grid-cols-4 sm:gap-4">
                     <div>
                       <p className="text-sm font-semibold text-slate-200">{fmt(s.avgCtr)}%</p>
                       <p className="text-xs text-slate-600">CTR</p>

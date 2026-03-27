@@ -40,7 +40,7 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
         {recommendation.reason}
       </p>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
         <div>
           <p className="text-xs font-medium uppercase tracking-widest text-slate-400">CPA</p>
           <p className="mt-0.5 text-sm font-semibold text-slate-50">{recommendation.formattedCpa}</p>
