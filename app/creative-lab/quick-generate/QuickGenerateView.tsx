@@ -651,10 +651,20 @@ function LaunchTestSection({
           <div className="space-y-3">
             {approved.map((v, i) => (
               <div key={i} className="rounded-xl border border-slate-700 bg-slate-800/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  {imageUrl && (
-                    <div className="h-12 w-12 shrink-0 rounded-lg bg-slate-700 overflow-hidden">
-                      <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                <div className="flex items-center gap-3 mb-2">
+                  {imageUrl ? (
+                    <div className="h-16 w-16 shrink-0 rounded-lg bg-slate-700 overflow-hidden border border-slate-600">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageUrl}
+                        alt="Ad creative"
+                        className="h-full w-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-700 border border-slate-600 text-xs text-slate-500">
+                      No img
                     </div>
                   )}
                   <div>

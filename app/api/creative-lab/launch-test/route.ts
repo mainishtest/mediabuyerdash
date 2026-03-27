@@ -105,20 +105,26 @@ export async function POST(req: NextRequest) {
     // ── 1. Upload image if needed ────────────────────────────────────────
     let finalImageHash = imageHash ?? null;
     if (!finalImageHash && imageUrl) {
-      const imgRes = await metaPost(`${adAccountId}/adimages`, token, {
-        url: imageUrl,
-      });
-      if (imgRes.error) {
-        return NextResponse.json({ ok: false, error: `Image upload failed: ${imgRes.error}` }, { status: 500 });
-      }
-      // Response: { images: { bytes: { hash: "abc123" } } }
-      const images = imgRes.data?.images;
-      if (images && typeof images === "object") {
-        const firstKey = Object.keys(images)[0];
-        finalImageHash = (images as Record<string, { hash?: string }>)[firstKey]?.hash ?? null;
-      }
-      if (!finalImageHash) {
-        return NextResponse.json({ ok: false, error: "Image uploaded but no hash returned" }, { status: 500 });
+      try {
+        const imgRes = await metaPost(`${adAccountId}/adimages`, token, {
+          url: imageUrl,
+        });
+        if (imgRes.error) {
+          // Image upload failed — continue without image, don't abort the launch
+          results.errors.push(`Image upload failed: ${imgRes.error}`);
+        } else {
+          // Response: { images: { bytes: { hash: "abc123" } } }
+          const images = imgRes.data?.images;
+          if (images && typeof images === "object") {
+            const firstKey = Object.keys(images)[0];
+            finalImageHash = (images as Record<string, { hash?: string }>)[firstKey]?.hash ?? null;
+          }
+          if (!finalImageHash) {
+            results.errors.push("Image uploaded but no hash returned — ads will be created without image");
+          }
+        }
+      } catch (err) {
+        results.errors.push(`Image upload error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
