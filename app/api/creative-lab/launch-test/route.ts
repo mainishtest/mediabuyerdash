@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
       geo_locations: { countries: targetCountries?.length ? targetCountries : ["US"] },
       age_min: targetAgeMin,
       age_max: targetAgeMax,
+      targeting_automation: { advantage_audience: 0 },
     };
     if (targetGenders && targetGenders[0] !== 0) {
       targeting.genders = targetGenders;
