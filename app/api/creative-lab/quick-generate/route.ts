@@ -75,10 +75,20 @@ Generate exactly 3 ad copy variations. Each must take a DIFFERENT angle:
 2. "problem_first" — name the specific pain before presenting the solution
 3. "social_proof" — open with a credibility signal or community validation
 
+IMPORTANT — Match the LENGTH and STYLE of the current ad copy above:
+- If the current body is long-form (200+ words, storytelling, testimonial-style), write LONG-FORM variations of similar length
+- If the current body is short (under 100 words), write short variations
+- Match the tone, narrative style, and pacing of the original
+- Long-form ads should tell a COMPLETE STORY with a beginning, middle, and end
+- Use paragraph breaks for readability (include \\n\\n between paragraphs)
+- The hook should stop the scroll in the first line
+- The body should be a full narrative that builds emotional connection before the pitch
+- End the body with a natural transition to the CTA
+
 Requirements for EACH variation:
-- hook: 1–2 sentences, scroll-stopping, ≤ 40 words. Must NOT start with the same word as the other hooks.
-- body: 2–4 sentences, benefit-focused, ≤ 80 words
-- callToAction: 3–7 words, action-oriented verb phrase
+- hook: 1–2 sentences, scroll-stopping opening line. Must NOT start with the same word as the other hooks.
+- body: Full ad body text — match the length of the original copy. For long-form ads, write 200-400 words with paragraph breaks.
+- callToAction: 3–10 words, natural invitation to click
 
 Respond ONLY with this JSON array (no text outside):
 [
@@ -122,7 +132,7 @@ async function generateWithAnthropic(apiKey: string, system: string, user: strin
       },
       body: JSON.stringify({
         model:      process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
-        max_tokens: 2048,
+        max_tokens: 8192,
         system,
         messages:   [{ role: "user", content: user }],
       }),
@@ -170,7 +180,7 @@ async function generateWithOpenAI(apiKey: string, system: string, user: string) 
       },
       body: JSON.stringify({
         model:      process.env.OPENAI_MODEL ?? "gpt-4o",
-        max_tokens: 2048,
+        max_tokens: 8192,
         messages: [
           { role: "system", content: system },
           { role: "user",   content: user },
