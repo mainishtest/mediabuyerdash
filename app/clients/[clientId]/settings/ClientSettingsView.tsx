@@ -650,6 +650,10 @@ function CampaignDefaultsSection({ clientId }: { clientId: string }) {
       <div><label className={L}>Default Destination URL</label>
         <input className={I} value={d.defaultDestinationUrl ?? ""} onChange={(e) => set("defaultDestinationUrl", e.target.value)} placeholder="https://yoursite.com/landing-page" /></div>
 
+      <div><label className={L}>Default Ad Headline</label>
+        <input className={I} value={d.defaultHeadline ?? ""} onChange={(e) => set("defaultHeadline", e.target.value)} placeholder="Headline shown below image in link ads" />
+        <p className="mt-1 text-xs text-slate-600">This appears below the ad image in the link preview area.</p></div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div><label className={L}>Daily Budget ($)</label>
           <input type="number" className={I} value={d.defaultDailyBudget ?? ""} onChange={(e) => set("defaultDailyBudget", e.target.value)} placeholder="50" /></div>

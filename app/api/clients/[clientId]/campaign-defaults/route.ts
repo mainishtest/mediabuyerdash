@@ -8,7 +8,7 @@ export async function GET(
   const client = await prisma.clientAccount.findUnique({
     where: { id: params.clientId },
     select: {
-      defaultAdAccountId: true, defaultPageId: true, defaultPixelId: true, defaultDestinationUrl: true,
+      defaultAdAccountId: true, defaultPageId: true, defaultPixelId: true, defaultDestinationUrl: true, defaultHeadline: true,
       defaultDailyBudget: true, defaultObjective: true, defaultOptGoal: true,
       defaultTargetCountries: true, defaultAgeMin: true, defaultAgeMax: true,
       defaultGender: true, defaultUtmSource: true, defaultUtmMedium: true,
@@ -30,6 +30,7 @@ export async function POST(
       defaultPageId:         body.defaultPageId         || null,
       defaultPixelId:        body.defaultPixelId        || null,
       defaultDestinationUrl: body.defaultDestinationUrl || null,
+      defaultHeadline:       body.defaultHeadline       || null,
       defaultDailyBudget:    body.defaultDailyBudget    ? parseFloat(body.defaultDailyBudget) : null,
       defaultObjective:      body.defaultObjective      || null,
       defaultOptGoal:        body.defaultOptGoal        || null,
