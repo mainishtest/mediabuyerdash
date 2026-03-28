@@ -46,6 +46,7 @@ interface LaunchRequest {
   targetGenders?:  number[];   // 0=all, 1=male, 2=female
   targetInterests?: Array<{ id: string; name: string }>;
   // Creative
+  headline?:      string;   // Ad headline (shown below image in link ads)
   imageUrl?:      string;   // URL to upload as ad image
   imageHash?:     string;   // Existing image hash (skip upload)
   variations:     LaunchVariation[];
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     billingEvent = "IMPRESSIONS",
     targetCountries, targetAgeMin = 18, targetAgeMax = 65,
     targetGenders = [0], targetInterests,
-    imageUrl, imageHash, variations,
+    imageUrl, imageHash, variations, headline,
   } = body;
 
   if (!adAccountId || !pageId || !campaignName || !destinationUrl || !variations?.length) {
@@ -229,8 +230,8 @@ export async function POST(req: NextRequest) {
           link_data: {
             link:            destinationUrl,
             message:         `${variation.hook}\n\n${variation.body}`,
-            name:            variation.callToAction,
-            call_to_action:  { type: mapCtaType(variation.callToAction) },
+            name:            headline || variation.title,
+            call_to_action:  { type: mapCtaType(variation.callToAction), value: { link: destinationUrl } },
             ...(finalImageHash ? { image_hash: finalImageHash } : {}),
           },
         };

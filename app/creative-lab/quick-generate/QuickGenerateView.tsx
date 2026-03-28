@@ -453,6 +453,7 @@ function LaunchTestSection({
   const [objective, setObjective]         = useState(cd.defaultObjective ?? "OUTCOME_TRAFFIC");
   const [dailyBudget, setDailyBudget]     = useState(cd.defaultDailyBudget ?? "20");
   const [destinationUrl, setDestinationUrl] = useState(cd.defaultDestinationUrl ?? inputUrl);
+  const [adHeadline, setAdHeadline]       = useState(cd.defaultHeadline ?? "");
   const [imageUrl, setImageUrl]           = useState("");
   const [pixelId, setPixelId]             = useState(cd.defaultPixelId ?? "");
   const [optimizationGoal, setOptGoal]    = useState(cd.defaultOptGoal ?? "LINK_CLICKS");
@@ -501,6 +502,7 @@ function LaunchTestSection({
           objective,
           dailyBudget: parseFloat(dailyBudget),
           destinationUrl,
+          headline: adHeadline || undefined,
           imageUrl: imageUrl || undefined,
           pixelId: pixelId || undefined,
           optimizationGoal: optimizationGoal,
@@ -794,10 +796,17 @@ function LaunchTestSection({
           </div>
         </div>
 
-        <div>
-          <label className={LABEL}>Destination URL</label>
-          <input type="url" value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)}
-            placeholder="https://yoursite.com/landing-page" className={INPUT} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Destination URL</label>
+            <input type="url" value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)}
+              placeholder="https://yoursite.com/landing-page" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Ad Headline</label>
+            <input type="text" value={adHeadline} onChange={(e) => setAdHeadline(e.target.value)}
+              placeholder="Headline shown below image" className={INPUT} />
+          </div>
         </div>
 
         <div>

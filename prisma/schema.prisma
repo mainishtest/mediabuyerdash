@@ -138,6 +138,7 @@ model ClientAccount {
   defaultPageId         String?  // Facebook Page ID
   defaultPixelId        String?  // Meta Pixel ID for conversion tracking
   defaultDestinationUrl String?  // Landing page URL
+  defaultHeadline       String?  // Default ad headline (shown below image in link ads)
   defaultDailyBudget    Float?   // Default daily budget in dollars
   defaultObjective      String?  // OUTCOME_TRAFFIC, OUTCOME_SALES, etc.
   defaultOptGoal        String?  // LINK_CLICKS, OFFSITE_CONVERSIONS, etc.
