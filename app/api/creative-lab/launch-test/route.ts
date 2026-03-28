@@ -108,21 +108,36 @@ export async function POST(req: NextRequest) {
     let pageAccessToken: string | null = null;
     if (pageId) {
       try {
-        const pageTokenRes = await fetch(
-          `${META_GRAPH_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`,
+        // First try: get Page token via /me/accounts (list of pages the user manages)
+        const pagesRes = await fetch(
+          `${META_GRAPH_BASE}/me/accounts?access_token=${encodeURIComponent(token)}`,
           { cache: "no-store" },
         );
-        const pageTokenData = await pageTokenRes.json().catch(() => ({})) as Record<string, unknown>;
-        if (pageTokenData.access_token) {
-          pageAccessToken = pageTokenData.access_token as string;
+        const pagesData = await pagesRes.json().catch(() => ({})) as { data?: Array<{ id: string; access_token?: string; name?: string }> };
+        const matchedPage = pagesData.data?.find((p) => p.id === pageId);
+
+        if (matchedPage?.access_token) {
+          pageAccessToken = matchedPage.access_token;
         } else {
-          results.errors.push(
-            `Could not get Page access token. Make sure you have admin access to this Page and granted pages_manage_ads permission. ` +
-            `Disconnect and reconnect Meta at /integrations/meta.`
+          // Second try: direct page token fetch
+          const pageTokenRes = await fetch(
+            `${META_GRAPH_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`,
+            { cache: "no-store" },
           );
+          const pageTokenData = await pageTokenRes.json().catch(() => ({})) as Record<string, unknown>;
+          if (pageTokenData.access_token) {
+            pageAccessToken = pageTokenData.access_token as string;
+          } else {
+            const availablePages = pagesData.data?.map((p) => `${p.name} (${p.id})`).join(", ") || "none found";
+            results.errors.push(
+              `Could not get Page access token for Page ID ${pageId}. ` +
+              `Available pages on your token: ${availablePages}. ` +
+              `Make sure this Page is added to your Business Manager and you have Content + Ads permissions on it.`
+            );
+          }
         }
-      } catch {
-        results.errors.push("Failed to fetch Page access token");
+      } catch (err) {
+        results.errors.push(`Failed to fetch Page access token: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     // ── 1. Upload image if needed ────────────────────────────────────────
