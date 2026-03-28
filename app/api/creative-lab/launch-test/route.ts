@@ -50,6 +50,13 @@ interface LaunchRequest {
   imageUrl?:      string;   // URL to upload as ad image
   imageHash?:     string;   // Existing image hash (skip upload)
   variations:     LaunchVariation[];
+  // UTMs
+  clientAccountId?: string; // To load UTM defaults from client settings
+  utmSource?:     string;
+  utmMedium?:     string;
+  utmCampaign?:   string;
+  utmContent?:    string;
+  utmTerm?:       string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +79,8 @@ export async function POST(req: NextRequest) {
     targetCountries, targetAgeMin = 18, targetAgeMax = 65,
     targetGenders = [0], targetInterests,
     imageUrl, imageHash, variations, headline,
+    clientAccountId,
+    utmSource, utmMedium, utmCampaign, utmContent, utmTerm,
   } = body;
 
   if (!adAccountId || !pageId || !campaignName || !destinationUrl || !variations?.length) {
@@ -95,6 +104,46 @@ export async function POST(req: NextRequest) {
   }
 
   const token = connection.accessToken;
+
+  // ── Load UTM defaults from client settings if not provided ──────────────
+  let finalUtmSource   = utmSource   ?? null;
+  let finalUtmMedium   = utmMedium   ?? null;
+  let finalUtmCampaign = utmCampaign ?? null;
+  let finalUtmContent  = utmContent  ?? null;
+  let finalUtmTerm     = utmTerm     ?? null;
+
+  if (clientAccountId && (!finalUtmSource && !finalUtmMedium)) {
+    const clientDefaults = await prisma.clientAccount.findUnique({
+      where: { id: clientAccountId },
+      select: {
+        defaultUtmSource: true, defaultUtmMedium: true, defaultUtmCampaign: true,
+        defaultUtmContent: true, defaultUtmTerm: true,
+      },
+    });
+    if (clientDefaults) {
+      finalUtmSource   = finalUtmSource   ?? clientDefaults.defaultUtmSource;
+      finalUtmMedium   = finalUtmMedium   ?? clientDefaults.defaultUtmMedium;
+      finalUtmCampaign = finalUtmCampaign ?? clientDefaults.defaultUtmCampaign;
+      finalUtmContent  = finalUtmContent  ?? clientDefaults.defaultUtmContent;
+      finalUtmTerm     = finalUtmTerm     ?? clientDefaults.defaultUtmTerm;
+    }
+  }
+
+  // Build destination URL with UTM parameters
+  function buildUrlWithUtms(baseUrl: string, variationTitle?: string): string {
+    try {
+      const url = new URL(baseUrl);
+      if (finalUtmSource)   url.searchParams.set("utm_source", finalUtmSource);
+      if (finalUtmMedium)   url.searchParams.set("utm_medium", finalUtmMedium);
+      if (finalUtmCampaign) url.searchParams.set("utm_campaign", finalUtmCampaign.replace("{{campaign.name}}", campaignName));
+      if (finalUtmContent)  url.searchParams.set("utm_content", finalUtmContent.replace("{{ad.name}}", variationTitle ?? ""));
+      if (finalUtmTerm)     url.searchParams.set("utm_term", finalUtmTerm);
+      return url.toString();
+    } catch {
+      return baseUrl;
+    }
+  }
+
   const results: {
     campaignId?: string;
     adSetId?: string;
@@ -225,13 +274,14 @@ export async function POST(req: NextRequest) {
     for (const variation of variations) {
       try {
         // Build the object_story_spec
+        const adUrl = buildUrlWithUtms(destinationUrl, variation.title);
         const storySpec: Record<string, unknown> = {
           page_id: pageId,
           link_data: {
-            link:            destinationUrl,
+            link:            adUrl,
             message:         `${variation.hook}\n\n${variation.body}`,
             name:            headline || variation.title,
-            call_to_action:  { type: mapCtaType(variation.callToAction), value: { link: destinationUrl } },
+            call_to_action:  { type: mapCtaType(variation.callToAction), value: { link: adUrl } },
             ...(finalImageHash ? { image_hash: finalImageHash } : {}),
           },
         };
