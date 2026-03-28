@@ -1906,19 +1906,23 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
       </section>
 
       {/* AI Input Assembly Preview */}
-      <AIAssemblyPreviewSection entries={entries} />
-
-      {/* Prompt Template Preview */}
-      <PromptTemplatePreviewSection entries={entries} />
-
-      {/* Provider Payload Preview */}
-      <ProviderPayloadPreviewSection entries={entries} />
-
-      {/* Provider Response Parsing Preview */}
-      <ProviderResponseParsingSection />
-
-      {/* End-to-End Generation Pipeline */}
-      <EndToEndPipelineSection entries={entries} providerConfig={providerConfig} />
+      {/* Pipeline sections removed — use Quick Generate instead */}
+      <div className="mb-10 rounded-xl border border-indigo-800/50 bg-indigo-950/15 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-indigo-300">Want to iterate on ad copy?</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Use Quick Generate to paste copy, generate variations, and launch tests directly to Facebook.
+            </p>
+          </div>
+          <Link
+            href="/creative-lab/quick-generate"
+            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            Open Quick Generate →
+          </Link>
+        </div>
+      </div>
 
       {/* Summary bar */}
       <section className="mb-8 flex flex-wrap gap-3">
