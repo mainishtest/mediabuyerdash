@@ -398,6 +398,7 @@ export function QuickGenerateView() {
         <LaunchTestSection
           approved={approved}
           clientName={clientName}
+          clientAccountId={clientAccountId}
           campaignName={campaignName}
           destinationUrl=""
           campaignDefaults={campaignDefaults}
@@ -427,6 +428,7 @@ export function QuickGenerateView() {
 function LaunchTestSection({
   approved,
   clientName,
+  clientAccountId,
   campaignName: inputCampaignName,
   destinationUrl: inputUrl,
   campaignDefaults: cd,
@@ -434,6 +436,7 @@ function LaunchTestSection({
 }: {
   approved: VariationWithStatus[];
   clientName: string;
+  clientAccountId: string;
   campaignName: string;
   destinationUrl: string;
   campaignDefaults: Record<string, string | null>;
@@ -498,6 +501,7 @@ function LaunchTestSection({
         body: JSON.stringify({
           adAccountId,
           pageId,
+          clientAccountId: clientAccountId || undefined,
           campaignName: testName,
           objective,
           dailyBudget: parseFloat(dailyBudget),
