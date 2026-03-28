@@ -39,6 +39,16 @@ export async function getLatestSyncLog(shopifyConnectionId: string) {
   });
 }
 
+/** Returns the N most recent sync logs for this connection. */
+export async function getRecentSyncLogs(shopifyConnectionId: string, count: number) {
+  return prisma.shopifySyncLog.findMany({
+    where:   { shopifyConnectionId },
+    orderBy: { startedAt: "desc" },
+    take:    count,
+    select:  { status: true, startedAt: true },
+  });
+}
+
 /** Returns the most recent orderCreatedAt for this connection, or null if no orders exist. */
 export async function getLatestOrderDate(shopifyConnectionId: string): Promise<Date | null> {
   const latest = await prisma.shopifyOrder.findFirst({
