@@ -1,7 +1,7 @@
 import { getShopifyConnectionById, getClientShopifyConnection, updateConnectionStatus } from "./db";
 import { streamOrdersSince }        from "./api";
 import { mapOrder, mapLineItemsForOrder } from "./mappers";
-import { createSyncLog, completeSyncLog, getLatestOrderDate, upsertOrder, replaceLineItems } from "./syncDb";
+import { createSyncLog, completeSyncLog, getLatestOrderDate, getRecentSyncLogs, upsertOrder, replaceLineItems } from "./syncDb";
 
 export interface ShopifySyncSummary {
   status:          "completed" | "partial" | "failed";
@@ -120,9 +120,9 @@ async function _runSync(
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`Order fetch failed: ${msg}`);
 
-    // Detect auth/token errors so we can mark the connection unhealthy
-    const lower = msg.toLowerCase();
-    if (lower.includes("401") || lower.includes("403") || lower.includes("unauthorized") || lower.includes("forbidden")) {
+    // Detect auth/token errors — only mark connection as error for definitive auth failures
+    // Match "HTTP 401" or "HTTP 403" at the start of Shopify error messages, not substring matches
+    if (/Shopify GraphQL HTTP (401|403)/i.test(msg) || /\b(unauthorized|forbidden)\b/i.test(msg)) {
       isAuthError = true;
     }
   }
@@ -130,8 +130,17 @@ async function _runSync(
   await completeSyncLog(syncLog.id, counts, errors);
 
   // Update connection health status
+  // Only mark as error for definitive auth failures, not transient errors
   if (isAuthError) {
-    await updateConnectionStatus(connection.id, "error").catch(() => {});
+    // Check if there have been multiple recent failures before marking as error
+    // This prevents transient 401s from killing the connection
+    const recentLogs = await getRecentSyncLogs(connection.id, 3).catch(() => []);
+    const recentFailures = recentLogs.filter((l) => l.status === "failed").length;
+    if (recentFailures >= 2) {
+      // 3+ consecutive failures (including this one) — mark as error
+      await updateConnectionStatus(connection.id, "error").catch(() => {});
+    }
+    // Otherwise leave as active — might be transient
   } else if (counts.ordersSynced > 0 || errors.length === 0) {
     // Successful sync — ensure status is active (repairs previously errored connections)
     await updateConnectionStatus(connection.id, "active").catch(() => {});
