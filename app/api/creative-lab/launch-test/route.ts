@@ -102,6 +102,29 @@ export async function POST(req: NextRequest) {
   } = { ads: [], errors: [] };
 
   try {
+    // ── 0. Get Page Access Token ──────────────────────────────────────────
+    // User tokens can't create ad creatives that reference a Page.
+    // We need a Page Access Token for the object_story_spec.
+    let pageAccessToken: string | null = null;
+    if (pageId) {
+      try {
+        const pageTokenRes = await fetch(
+          `${META_GRAPH_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`,
+          { cache: "no-store" },
+        );
+        const pageTokenData = await pageTokenRes.json().catch(() => ({})) as Record<string, unknown>;
+        if (pageTokenData.access_token) {
+          pageAccessToken = pageTokenData.access_token as string;
+        } else {
+          results.errors.push(
+            `Could not get Page access token. Make sure you have admin access to this Page and granted pages_manage_ads permission. ` +
+            `Disconnect and reconnect Meta at /integrations/meta.`
+          );
+        }
+      } catch {
+        results.errors.push("Failed to fetch Page access token");
+      }
+    }
     // ── 1. Upload image if needed ────────────────────────────────────────
     let finalImageHash = imageHash ?? null;
     if (!finalImageHash && imageUrl) {
@@ -197,7 +220,9 @@ export async function POST(req: NextRequest) {
           },
         };
 
-        const creativeRes = await metaPost(`${adAccountId}/adcreatives`, token, {
+        // Use Page Access Token for creative creation (required for object_story_spec)
+        const creativeToken = pageAccessToken ?? token;
+        const creativeRes = await metaPost(`${adAccountId}/adcreatives`, creativeToken, {
           name:               `${campaignName} — ${variation.title}`,
           object_story_spec:  storySpec,
         });
