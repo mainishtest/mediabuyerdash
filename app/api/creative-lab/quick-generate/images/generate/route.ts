@@ -18,15 +18,17 @@ export async function POST(req: NextRequest) {
     clientAccountId?: string;
   };
 
-  // Load product reference image from client settings if not provided
+  // Load product reference image and image directions from client settings
   let referenceImageUrl = productImageUrl ?? null;
-  if (!referenceImageUrl && clientAccountId) {
+  let imageDirections = "";
+  if (clientAccountId) {
     const { prisma } = await import("../../../../../../lib/db");
     const client = await prisma.clientAccount.findUnique({
       where: { id: clientAccountId },
-      select: { productImageUrl: true },
+      select: { productImageUrl: true, imagePromptDirections: true },
     });
-    referenceImageUrl = client?.productImageUrl ?? null;
+    if (!referenceImageUrl) referenceImageUrl = client?.productImageUrl ?? null;
+    if (client?.imagePromptDirections) imageDirections = client.imagePromptDirections;
   }
 
   if (!concept) {
@@ -35,7 +37,8 @@ export async function POST(req: NextRequest) {
 
   // Build prompt — shared across providers
   const prompt = [
-    `Professional Facebook ad image for a health/wellness product.`,
+    `Professional Facebook ad image.`,
+    imageDirections ? `IMPORTANT STYLE DIRECTIONS: ${imageDirections}` : "Health/wellness product photography.",
     concept,
     colorDirection ? `Color palette: ${colorDirection}.` : "",
     textOverlay && textOverlay !== "none"

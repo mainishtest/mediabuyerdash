@@ -26,20 +26,24 @@ export async function POST(req: NextRequest) {
 
   // Load client copywriting prompt for brand context
   let brandContext = "";
+  let imageDirections = "";
   if (clientAccountId) {
     const client = await prisma.clientAccount.findUnique({
       where: { id: clientAccountId },
-      select: { copywritingPrompt: true, brandName: true },
+      select: { copywritingPrompt: true, imagePromptDirections: true, brandName: true },
     });
     if (client?.copywritingPrompt) {
       brandContext = `\nBRAND CONTEXT:\n${client.copywritingPrompt}`;
+    }
+    if (client?.imagePromptDirections) {
+      imageDirections = `\nCLIENT IMAGE DIRECTIONS (follow these strictly):\n${client.imagePromptDirections}`;
     }
   }
 
   const systemPrompt = `You are a senior direct-response creative director specializing in Meta (Facebook/Instagram) ad imagery.
 You design high-converting static image ads that stop the scroll and drive clicks.
 You understand that the image is the #1 factor in ad performance — it must earn attention in under 0.5 seconds.
-${brandContext}
+${brandContext}${imageDirections}
 Respond ONLY with valid JSON — no preamble, no markdown fences, no commentary.`;
 
   const userPrompt = `${clientName ? `CLIENT: ${clientName}` : ""}

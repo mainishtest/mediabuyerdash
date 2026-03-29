@@ -19,8 +19,9 @@ type Props = {
   clientName:          string;
   defaults:            ClientDefaultsRecord | null;
   coverage:            ClientGoalCoverageSummary;
-  copywritingPrompt?:       string | null;
-  initialProductImageUrl?:  string | null;
+  copywritingPrompt?:           string | null;
+  initialImagePromptDirections?: string | null;
+  initialProductImageUrl?:      string | null;
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -109,6 +110,7 @@ export function ClientSettingsView({
   defaults,
   coverage: initialCoverage,
   copywritingPrompt: initialPrompt,
+  initialImagePromptDirections,
   initialProductImageUrl,
 }: Props) {
   // Copywriting prompt state
@@ -561,6 +563,9 @@ export function ClientSettingsView({
           </div>
         </div>
 
+        {/* ── Image Prompt Directions ──────────────────────────────────────────── */}
+        <ImagePromptSection clientId={clientId} initialValue={initialImagePromptDirections ?? ""} />
+
         {/* ── Product Reference Image ─────────────────────────────────────────── */}
         <ProductImageSection clientId={clientId} initialUrl={initialProductImageUrl ?? ""} />
 
@@ -823,6 +828,65 @@ function ImageLibrarySection({ clientId }: { clientId: string }) {
       {images.length === 0 && (
         <p className="text-xs text-slate-600">No images saved yet. Add your first ad image above.</p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image Prompt Directions
+// ---------------------------------------------------------------------------
+
+function ImagePromptSection({ clientId, initialValue }: { clientId: string; initialValue: string }) {
+  const [value, setValue]   = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/copywriting-prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagePromptDirections: value || null }),
+      });
+      if (!res.ok) setError("Save failed");
+      else setSaved(true);
+    } catch {
+      setError("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-100">AI Image Prompt Directions</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Custom instructions for AI image generation. Describe your brand&apos;s visual style,
+          product placement rules, mood, and anything the AI should always include or avoid when
+          generating ad images for this client.
+        </p>
+      </div>
+
+      <textarea
+        value={value}
+        onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+        placeholder={`Example:\n\nProduct: Amber glass tincture bottle with gold cap, label reads "Wisdom Nutrition" with list of 8 biblical ingredients.\n\nStyle: Warm, premium, faith-inspired. Think ancient meets modern — biblical herbs with clean product photography.\n\nAlways include:\n- The actual Wisdom Nutrition bottle as the focal point\n- Warm earth tones (gold, amber, cream, deep brown)\n- Natural ingredients visible (cinnamon sticks, frankincense, herbs)\n\nNever include:\n- People's faces (use hands/silhouettes only)\n- Medical imagery or doctor settings\n- Bright neon colors or tech aesthetics\n- Competitor products or generic supplement bottles`}
+        rows={8}
+        className={INPUT_CLS + " resize-y"}
+      />
+
+      <div className="flex items-center gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          {saving ? "Saving..." : "Save Image Directions"}
+        </button>
+        {saved && <span className="text-xs text-emerald-400">Saved — these directions will guide all AI image generation for this client.</span>}
+        {error && <span className="text-xs text-rose-400">{error}</span>}
+      </div>
     </div>
   );
 }
