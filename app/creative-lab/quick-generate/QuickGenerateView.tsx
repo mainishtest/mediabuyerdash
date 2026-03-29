@@ -95,6 +95,7 @@ export function QuickGenerateView() {
     title: string; concept: string; whyItWorks: string; textOverlay: string; colorDirection: string;
   }>>([]);
   const [generatingImages, setGeneratingImages] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState<Record<number, { url: string; loading: boolean; error?: string }>>({});
 
   // Output
   const [variations, setVariations] = useState<VariationWithStatus[]>([]);
@@ -642,19 +643,88 @@ export function QuickGenerateView() {
 
             {imageConcepts.length > 0 && (
               <div className="grid gap-3 md:grid-cols-3">
-                {imageConcepts.map((concept, i) => (
-                  <div key={i} className="rounded-xl border border-blue-800/30 bg-blue-950/15 p-4 space-y-2">
-                    <p className="text-sm font-semibold text-blue-300">{concept.title}</p>
-                    <p className="text-xs text-slate-300 leading-relaxed">{concept.concept}</p>
-                    <div className="space-y-1 pt-1 border-t border-blue-800/20">
-                      <p className="text-xs"><span className="text-slate-600">Why: </span><span className="text-slate-400">{concept.whyItWorks}</span></p>
-                      {concept.textOverlay && concept.textOverlay !== "none" && (
-                        <p className="text-xs"><span className="text-slate-600">Text overlay: </span><span className="text-indigo-300">&ldquo;{concept.textOverlay}&rdquo;</span></p>
+                {imageConcepts.map((concept, i) => {
+                  const gen = generatedImages[i];
+                  return (
+                    <div key={i} className="rounded-xl border border-blue-800/30 bg-blue-950/15 p-4 space-y-2">
+                      {/* Generated image preview */}
+                      {gen?.url && (
+                        <div className="rounded-lg overflow-hidden border border-blue-700/30">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={gen.url} alt={concept.title} className="w-full aspect-square object-cover" />
+                        </div>
                       )}
-                      <p className="text-xs"><span className="text-slate-600">Colors: </span><span className="text-slate-400">{concept.colorDirection}</span></p>
+
+                      <p className="text-sm font-semibold text-blue-300">{concept.title}</p>
+                      <p className="text-xs text-slate-300 leading-relaxed">{concept.concept}</p>
+                      <div className="space-y-1 pt-1 border-t border-blue-800/20">
+                        <p className="text-xs"><span className="text-slate-600">Why: </span><span className="text-slate-400">{concept.whyItWorks}</span></p>
+                        {concept.textOverlay && concept.textOverlay !== "none" && (
+                          <p className="text-xs"><span className="text-slate-600">Text overlay: </span><span className="text-indigo-300">&ldquo;{concept.textOverlay}&rdquo;</span></p>
+                        )}
+                        <p className="text-xs"><span className="text-slate-600">Colors: </span><span className="text-slate-400">{concept.colorDirection}</span></p>
+                      </div>
+
+                      {/* Generate / Use buttons */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-blue-800/20">
+                        {!gen?.url ? (
+                          <button
+                            type="button"
+                            disabled={gen?.loading}
+                            onClick={async () => {
+                              setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: true } }));
+                              try {
+                                const res = await fetch("/api/creative-lab/quick-generate/images/generate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    concept: concept.concept,
+                                    title: concept.title,
+                                    textOverlay: concept.textOverlay,
+                                    colorDirection: concept.colorDirection,
+                                    productName: clientName,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (data.ok && data.imageUrl) {
+                                  setGeneratedImages((prev) => ({ ...prev, [i]: { url: data.imageUrl, loading: false } }));
+                                } else {
+                                  setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false, error: data.error } }));
+                                }
+                              } catch (err) {
+                                setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false, error: String(err) } }));
+                              }
+                            }}
+                            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white
+                              hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            {gen?.loading ? "Generating..." : "Generate Image"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Add to image test URLs
+                              const emptyIdx = imageTestUrls.findIndex((u) => !u);
+                              if (emptyIdx >= 0) {
+                                setImageTestUrls((prev) => prev.map((u, j) => j === emptyIdx ? gen.url : u));
+                              } else {
+                                setImageTestUrls((prev) => [...prev, gen.url]);
+                              }
+                            }}
+                            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white
+                              hover:bg-emerald-500"
+                          >
+                            Use for Test
+                          </button>
+                        )}
+                        {gen?.error && (
+                          <p className="text-xs text-rose-400">{gen.error}</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
