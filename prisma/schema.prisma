@@ -133,6 +133,7 @@ model ClientAccount {
   status      String   @default("active") // active | paused | archived
   notes       String?
   copywritingPrompt String?  // Custom AI copywriting instructions for this client (tone, voice, rules, context)
+  productImageUrl   String?  // Reference product image URL for AI image generation (keeps product consistent)
   // Ad campaign defaults — auto-fill into launch test setup
   defaultAdAccountId    String?  // Meta Ad Account ID (e.g. act_123456)
   defaultPageId         String?  // Facebook Page ID

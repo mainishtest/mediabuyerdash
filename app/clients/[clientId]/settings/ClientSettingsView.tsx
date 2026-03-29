@@ -19,7 +19,8 @@ type Props = {
   clientName:          string;
   defaults:            ClientDefaultsRecord | null;
   coverage:            ClientGoalCoverageSummary;
-  copywritingPrompt?:  string | null;
+  copywritingPrompt?:       string | null;
+  initialProductImageUrl?:  string | null;
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export function ClientSettingsView({
   defaults,
   coverage: initialCoverage,
   copywritingPrompt: initialPrompt,
+  initialProductImageUrl,
 }: Props) {
   // Copywriting prompt state
   const [promptValue, setPromptValue]     = useState(initialPrompt ?? "");
@@ -559,6 +561,9 @@ export function ClientSettingsView({
           </div>
         </div>
 
+        {/* ── Product Reference Image ─────────────────────────────────────────── */}
+        <ProductImageSection clientId={clientId} initialUrl={initialProductImageUrl ?? ""} />
+
         {/* ── Campaign Launch Defaults ───────────────────────────────────────── */}
         <CampaignDefaultsSection clientId={clientId} />
 
@@ -818,6 +823,70 @@ function ImageLibrarySection({ clientId }: { clientId: string }) {
       {images.length === 0 && (
         <p className="text-xs text-slate-600">No images saved yet. Add your first ad image above.</p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Product Reference Image
+// ---------------------------------------------------------------------------
+
+function ProductImageSection({ clientId, initialUrl }: { clientId: string; initialUrl: string }) {
+  const [url, setUrl]       = useState(initialUrl);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await fetch(`/api/clients/${clientId}/copywriting-prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productImageUrl: url || null }),
+    });
+    setSaving(false);
+    setSaved(true);
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-100">Product Reference Image</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Upload your actual product image. AI image generation will use this as a reference to keep
+          your product looking consistent across all generated ad creatives.
+        </p>
+      </div>
+
+      <div className="flex items-start gap-4">
+        {url && (
+          <div className="h-24 w-24 shrink-0 rounded-xl border border-slate-600 overflow-hidden bg-slate-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="Product reference" className="h-full w-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          </div>
+        )}
+        <div className="flex-1 space-y-2">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => { setUrl(e.target.value); setSaved(false); }}
+            placeholder="https://... (direct URL to your product image)"
+            className={INPUT_CLS}
+          />
+          <p className="text-xs text-slate-600">
+            Use a clear, high-quality product photo on a plain background. This image will be used as the
+            reference for all AI-generated ad image variations.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          {saving ? "Saving..." : "Save Product Image"}
+        </button>
+        {saved && <span className="text-xs text-emerald-400">Saved</span>}
+      </div>
     </div>
   );
 }

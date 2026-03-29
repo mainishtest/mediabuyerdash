@@ -683,6 +683,7 @@ export function QuickGenerateView() {
                                     textOverlay: concept.textOverlay,
                                     colorDirection: concept.colorDirection,
                                     productName: clientName,
+                                    clientAccountId,
                                   }),
                                 });
                                 const data = await res.json();
