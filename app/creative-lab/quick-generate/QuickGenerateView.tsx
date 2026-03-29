@@ -85,6 +85,13 @@ export function QuickGenerateView() {
       .catch(() => {});
   }
 
+  // Imported ad image
+  const [importedImageUrl, setImportedImageUrl] = useState("");
+
+  // Image test mode
+  const [imageTestUrls, setImageTestUrls] = useState<string[]>([""]);
+  const [showImageTest, setShowImageTest] = useState(false);
+
   // Output
   const [variations, setVariations] = useState<VariationWithStatus[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -171,6 +178,7 @@ export function QuickGenerateView() {
     setBodyText(ad.body);
     setCta(ad.cta);
     setCampaignName(ad.campaignName);
+    if (ad.imageUrl) setImportedImageUrl(ad.imageUrl);
     setShowAdPicker(false);
   }
 
@@ -391,6 +399,29 @@ export function QuickGenerateView() {
           </div>
         )}
 
+        {/* Imported image preview */}
+        {importedImageUrl && (
+          <div className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+            <div className="h-20 w-20 shrink-0 rounded-lg border border-slate-600 overflow-hidden bg-slate-800">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={importedImageUrl} alt="Imported ad" className="h-full w-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-400">Imported Ad Image</p>
+              <p className="mt-0.5 text-xs text-slate-600 truncate">{importedImageUrl}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setShowImageTest(true)}
+                  className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500">
+                  Test Image Variations
+                </button>
+                <button type="button" onClick={() => setImportedImageUrl("")}
+                  className="text-xs text-slate-600 hover:text-slate-400">Clear</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Notes */}
         <div>
           <label className="mb-1 block text-xs text-slate-500">Notes for AI (optional)</label>
@@ -538,6 +569,124 @@ export function QuickGenerateView() {
           campaignDefaults={campaignDefaults}
           clientImages={clientImages}
         />
+      )}
+
+      {/* ── Image Test Section ──────────────────────────────────────────── */}
+      {showImageTest && (
+        <div className="rounded-xl border border-blue-800/50 bg-blue-950/10 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-blue-400">
+                Image Variation Test
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                Test different images with the same copy, headline, targeting, and landing page.
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowImageTest(false)}
+              className="text-xs text-slate-600 hover:text-slate-400">Close</button>
+          </div>
+
+          {/* Current copy that will be used for all image variations */}
+          {(hook || bodyText) && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-3">
+              <p className="text-xs text-slate-600 mb-1">Copy (same for all image variations):</p>
+              <p className="text-sm text-slate-300 line-clamp-3">{hook}</p>
+              {cta && <p className="mt-1 text-xs text-slate-500">CTA: {cta}</p>}
+            </div>
+          )}
+
+          {/* Image URL inputs */}
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">Add image URLs to test (one per variation):</p>
+            {imageTestUrls.map((url, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2">
+                  {url && (
+                    <div className="h-10 w-10 shrink-0 rounded border border-slate-600 overflow-hidden bg-slate-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    </div>
+                  )}
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setImageTestUrls((prev) => prev.map((u, j) => j === i ? e.target.value : u))}
+                    placeholder={`Image ${i + 1} URL...`}
+                    className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm
+                      text-slate-100 placeholder-slate-600 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+                {imageTestUrls.length > 1 && (
+                  <button type="button"
+                    onClick={() => setImageTestUrls((prev) => prev.filter((_, j) => j !== i))}
+                    className="text-xs text-rose-500 hover:text-rose-400">✕</button>
+                )}
+              </div>
+            ))}
+
+            {/* Image library picker for image test */}
+            {clientImages.length > 0 && (
+              <div className="grid gap-2 grid-cols-4 sm:grid-cols-6 lg:grid-cols-8">
+                {clientImages.map((img) => (
+                  <button
+                    key={img.id}
+                    type="button"
+                    onClick={() => {
+                      // Add to the first empty slot, or add a new one
+                      const emptyIdx = imageTestUrls.findIndex((u) => !u);
+                      if (emptyIdx >= 0) {
+                        setImageTestUrls((prev) => prev.map((u, j) => j === emptyIdx ? img.imageUrl : u));
+                      } else {
+                        setImageTestUrls((prev) => [...prev, img.imageUrl]);
+                      }
+                    }}
+                    className={`rounded-lg border overflow-hidden transition-all
+                      ${imageTestUrls.includes(img.imageUrl)
+                        ? "border-blue-500 ring-1 ring-blue-500/30"
+                        : "border-slate-700 hover:border-slate-600"
+                      }`}
+                  >
+                    <div className="aspect-square bg-slate-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.imageUrl} alt={img.label} className="h-full w-full object-cover" />
+                    </div>
+                    <p className="px-1 py-0.5 text-[9px] text-slate-500 truncate">{img.label}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button type="button"
+                onClick={() => setImageTestUrls((prev) => [...prev, ""])}
+                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-400 hover:text-white">
+                + Add Image
+              </button>
+            </div>
+          </div>
+
+          {/* Launch image test */}
+          {imageTestUrls.filter((u) => u).length >= 2 && (
+            <div className="pt-2 border-t border-blue-800/30">
+              <p className="text-xs text-slate-500 mb-3">
+                {imageTestUrls.filter((u) => u).length} image(s) ready. Each will be created as a separate ad
+                with identical copy, headline, targeting, and landing page.
+              </p>
+              <LaunchImageTestButton
+                imageUrls={imageTestUrls.filter((u) => u)}
+                hook={hook}
+                bodyText={bodyText}
+                cta={cta}
+                clientAccountId={clientAccountId}
+                clientName={clientName}
+                campaignName={campaignName}
+                campaignDefaults={campaignDefaults}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Original copy reference ───────────────────────────────────── */}
@@ -1030,6 +1179,108 @@ function LaunchTestSection({
       >
         Review & Launch →
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Launch Image Test Button — creates one campaign with N ads, each a different image
+// ---------------------------------------------------------------------------
+
+function LaunchImageTestButton({
+  imageUrls, hook, bodyText, cta, clientAccountId, clientName, campaignName, campaignDefaults: cd,
+}: {
+  imageUrls: string[];
+  hook: string; bodyText: string; cta: string;
+  clientAccountId: string; clientName: string; campaignName: string;
+  campaignDefaults: Record<string, string | null>;
+}) {
+  const [launching, setLaunching] = useState(false);
+  const [result, setResult]       = useState<LaunchResult | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+
+  async function handleLaunch() {
+    setLaunching(true);
+    setError(null);
+    try {
+      // Create one variation per image, all with the same copy
+      const variations = imageUrls.map((url, i) => ({
+        title:        `Image ${String.fromCharCode(65 + i)}`,
+        hook,
+        body:         bodyText,
+        callToAction: cta || "Learn More",
+        imageUrl:     url,
+      }));
+
+      // Launch each image as a separate ad creative
+      const res = await fetch("/api/creative-lab/launch-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountId:      cd.defaultAdAccountId ?? "",
+          pageId:           cd.defaultPageId ?? "",
+          clientAccountId,
+          campaignName:     `${campaignName || clientName} — Image Test`,
+          objective:        cd.defaultObjective ?? "OUTCOME_SALES",
+          dailyBudget:      parseFloat(cd.defaultDailyBudget ?? "50"),
+          destinationUrl:   cd.defaultDestinationUrl ?? "",
+          headline:         cd.defaultHeadline ?? "",
+          pixelId:          cd.defaultPixelId ?? "",
+          optimizationGoal: cd.defaultOptGoal ?? "OFFSITE_CONVERSIONS",
+          targetCountries:  (cd.defaultTargetCountries ?? "US").split(",").map((c: string) => c.trim().toUpperCase()),
+          targetAgeMin:     parseInt(cd.defaultAgeMin ?? "18"),
+          targetAgeMax:     parseInt(cd.defaultAgeMax ?? "65"),
+          targetGenders:    [parseInt(cd.defaultGender ?? "0")],
+          variations,
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (!data.ok) setError(data.error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setLaunching(false);
+    }
+  }
+
+  if (result?.ok) {
+    return (
+      <div className="rounded-lg border border-emerald-700 bg-emerald-950/20 p-4">
+        <p className="text-sm font-semibold text-emerald-300">Image test launched!</p>
+        <p className="mt-1 text-xs text-slate-400">{result.summary}</p>
+        {result.ads && result.ads.length > 0 && (
+          <p className="mt-1 text-xs text-emerald-500">{result.ads.length} ad(s) created</p>
+        )}
+        {result.errors && result.errors.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs text-amber-400">Warnings:</p>
+            {result.errors.map((e: string, i: number) => <p key={i} className="text-xs text-amber-300">{e}</p>)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && <p className="mb-2 text-xs text-rose-400">{error}</p>}
+      <button
+        onClick={handleLaunch}
+        disabled={launching || !cd.defaultAdAccountId || !cd.defaultPageId || !cd.defaultDestinationUrl}
+        className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white
+          hover:bg-blue-500 disabled:opacity-50 active:scale-[0.98]"
+      >
+        {launching ? "Launching image test..." : `Launch Image Test (${imageUrls.length} images)`}
+      </button>
+      {(!cd.defaultAdAccountId || !cd.defaultPageId || !cd.defaultDestinationUrl) && (
+        <p className="mt-1 text-xs text-amber-400">
+          Set Ad Account ID, Page ID, and Destination URL in Client Settings first.
+        </p>
+      )}
+      <p className="mt-1 text-center text-xs text-slate-600">
+        Same copy, headline, targeting, and URL. Only the image changes per ad.
+      </p>
     </div>
   );
 }
