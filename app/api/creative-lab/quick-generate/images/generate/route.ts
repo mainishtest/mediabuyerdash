@@ -8,13 +8,26 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { concept, title, textOverlay, colorDirection, productName } = body as {
+  const { concept, title, textOverlay, colorDirection, productName, productImageUrl, clientAccountId } = body as {
     concept: string;
     title?: string;
     textOverlay?: string;
     colorDirection?: string;
     productName?: string;
+    productImageUrl?: string;
+    clientAccountId?: string;
   };
+
+  // Load product reference image from client settings if not provided
+  let referenceImageUrl = productImageUrl ?? null;
+  if (!referenceImageUrl && clientAccountId) {
+    const { prisma } = await import("../../../../../../lib/db");
+    const client = await prisma.clientAccount.findUnique({
+      where: { id: clientAccountId },
+      select: { productImageUrl: true },
+    });
+    referenceImageUrl = client?.productImageUrl ?? null;
+  }
 
   if (!concept) {
     return NextResponse.json({ ok: false, error: "Concept description required" }, { status: 400 });
@@ -38,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   // Primary: Flux Pro via fal.ai
   if (falKey) {
-    const result = await generateWithFlux(falKey, prompt, title);
+    const result = await generateWithFlux(falKey, prompt, title, referenceImageUrl);
     if (result.ok) return NextResponse.json(result);
     // If Flux fails, fall through to DALL-E
     console.error("[image-gen] Flux failed, trying DALL-E fallback:", result.error);
@@ -63,21 +76,35 @@ async function generateWithFlux(
   apiKey: string,
   prompt: string,
   title?: string,
+  referenceImageUrl?: string | null,
 ): Promise<{ ok: boolean; imageUrl?: string; provider?: string; title?: string; error?: string }> {
   try {
-    // Submit the generation request
-    const submitRes = await fetch("https://queue.fal.run/fal-ai/flux-pro/v1.1", {
+    // Use image-to-image when a product reference image is provided
+    const endpoint = referenceImageUrl
+      ? "https://queue.fal.run/fal-ai/flux-pro/v1.1/redux"
+      : "https://queue.fal.run/fal-ai/flux-pro/v1.1";
+
+    const requestBody: Record<string, unknown> = {
+      prompt: referenceImageUrl
+        ? `Using the product shown in the reference image, create: ${prompt}`
+        : prompt,
+      image_size: "square",
+      num_images: 1,
+      safety_tolerance: "5",
+    };
+
+    // Add reference image for image-to-image mode
+    if (referenceImageUrl) {
+      requestBody.image_url = referenceImageUrl;
+    }
+
+    const submitRes = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Key ${apiKey}`,
       },
-      body: JSON.stringify({
-        prompt,
-        image_size: "square",
-        num_images: 1,
-        safety_tolerance: "5",
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!submitRes.ok) {
@@ -103,7 +130,7 @@ async function generateWithFlux(
 
     // If queued, poll for result
     if (submitData.request_id) {
-      const imageUrl = await pollFluxResult(apiKey, submitData.request_id);
+      const imageUrl = await pollFluxResult(apiKey, submitData.request_id, endpoint);
       if (imageUrl) {
         return { ok: true, imageUrl, provider: "flux-pro", title };
       }
@@ -116,12 +143,12 @@ async function generateWithFlux(
   }
 }
 
-async function pollFluxResult(apiKey: string, requestId: string): Promise<string | null> {
+async function pollFluxResult(apiKey: string, requestId: string, endpoint: string): Promise<string | null> {
   const maxAttempts = 30; // 30 * 2s = 60s max wait
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, 2000));
 
-    const res = await fetch(`https://queue.fal.run/fal-ai/flux-pro/v1.1/requests/${requestId}/status`, {
+    const res = await fetch(`${endpoint}/requests/${requestId}/status`, {
       headers: { "Authorization": `Key ${apiKey}` },
     });
 
