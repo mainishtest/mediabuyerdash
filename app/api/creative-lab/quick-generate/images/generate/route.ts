@@ -79,23 +79,22 @@ async function generateWithFlux(
   referenceImageUrl?: string | null,
 ): Promise<{ ok: boolean; imageUrl?: string; provider?: string; title?: string; error?: string }> {
   try {
-    // Use image-to-image when a product reference image is provided
-    const endpoint = referenceImageUrl
-      ? "https://queue.fal.run/fal-ai/flux-pro/v1.1/redux"
-      : "https://queue.fal.run/fal-ai/flux-pro/v1.1";
-
+    let endpoint: string;
     const requestBody: Record<string, unknown> = {
-      prompt: referenceImageUrl
-        ? `Using the product shown in the reference image, create: ${prompt}`
-        : prompt,
+      prompt,
       image_size: "square",
       num_images: 1,
       safety_tolerance: "5",
     };
 
-    // Add reference image for image-to-image mode
     if (referenceImageUrl) {
-      requestBody.image_url = referenceImageUrl;
+      // Use Flux Pro v1.1 with image_prompt_url for image-guided generation
+      // This keeps the visual style/product from the reference while applying the new concept
+      endpoint = "https://queue.fal.run/fal-ai/flux-pro/v1.1";
+      requestBody.image_prompt_url = referenceImageUrl;
+      requestBody.prompt = `Keep the exact product bottle/packaging shown in the reference image. Place it in this new scene: ${prompt}`;
+    } else {
+      endpoint = "https://queue.fal.run/fal-ai/flux-pro/v1.1";
     }
 
     const submitRes = await fetch(endpoint, {

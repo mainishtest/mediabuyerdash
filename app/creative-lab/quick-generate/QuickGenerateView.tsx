@@ -87,6 +87,7 @@ export function QuickGenerateView() {
 
   // Imported ad image
   const [importedImageUrl, setImportedImageUrl] = useState("");
+  const [referenceImageUrl, setReferenceImageUrl] = useState("");
 
   // Image test mode
   const [imageTestUrls, setImageTestUrls] = useState<string[]>([""]);
@@ -601,6 +602,38 @@ export function QuickGenerateView() {
             </div>
           )}
 
+          {/* Reference product image */}
+          <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-400">Product Reference Image</p>
+            <p className="text-xs text-slate-600">
+              Paste your actual product photo URL. Generated images will use this as a visual reference
+              to keep your product consistent.
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="url"
+                value={referenceImageUrl}
+                onChange={(e) => setReferenceImageUrl(e.target.value)}
+                placeholder="https://... (direct URL to your product photo)"
+                className="flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm
+                  text-slate-200 placeholder-slate-600 focus:border-blue-600 focus:outline-none"
+              />
+              {referenceImageUrl && (
+                <div className="h-14 w-14 shrink-0 rounded-lg border border-slate-600 overflow-hidden bg-slate-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={referenceImageUrl} alt="Product ref" className="h-full w-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                </div>
+              )}
+            </div>
+            {importedImageUrl && !referenceImageUrl && (
+              <button type="button" onClick={() => setReferenceImageUrl(importedImageUrl)}
+                className="text-xs text-blue-400 hover:text-blue-300">
+                Use imported ad image as reference →
+              </button>
+            )}
+          </div>
+
           {/* AI-generated image concepts */}
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -684,6 +717,7 @@ export function QuickGenerateView() {
                                     colorDirection: concept.colorDirection,
                                     productName: clientName,
                                     clientAccountId,
+                                    productImageUrl: referenceImageUrl || undefined,
                                   }),
                                 });
                                 const data = await res.json();
