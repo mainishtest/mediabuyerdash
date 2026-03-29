@@ -91,6 +91,10 @@ export function QuickGenerateView() {
   // Image test mode
   const [imageTestUrls, setImageTestUrls] = useState<string[]>([""]);
   const [showImageTest, setShowImageTest] = useState(false);
+  const [imageConcepts, setImageConcepts] = useState<Array<{
+    title: string; concept: string; whyItWorks: string; textOverlay: string; colorDirection: string;
+  }>>([]);
+  const [generatingImages, setGeneratingImages] = useState(false);
 
   // Output
   const [variations, setVariations] = useState<VariationWithStatus[]>([]);
@@ -595,6 +599,65 @@ export function QuickGenerateView() {
               {cta && <p className="mt-1 text-xs text-slate-500">CTA: {cta}</p>}
             </div>
           )}
+
+          {/* AI-generated image concepts */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setGeneratingImages(true);
+                  try {
+                    const res = await fetch("/api/creative-lab/quick-generate/images", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        currentImageDescription: importedImageUrl ? "Product bottle image — supplement/tincture" : undefined,
+                        productName: clientName,
+                        adCopy: hook ? `${hook}\n\n${bodyText}` : undefined,
+                        clientAccountId,
+                        clientName,
+                        notes,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) setImageConcepts(data.concepts);
+                    else setError(data.error);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to generate");
+                  } finally {
+                    setGeneratingImages(false);
+                  }
+                }}
+                disabled={generatingImages}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white
+                  hover:bg-blue-500 disabled:opacity-50 active:scale-[0.98]"
+              >
+                {generatingImages ? "Generating..." : "Generate 3 Image Concepts"}
+              </button>
+              {imageConcepts.length > 0 && (
+                <span className="text-xs text-slate-500">{imageConcepts.length} concepts generated</span>
+              )}
+            </div>
+
+            {imageConcepts.length > 0 && (
+              <div className="grid gap-3 md:grid-cols-3">
+                {imageConcepts.map((concept, i) => (
+                  <div key={i} className="rounded-xl border border-blue-800/30 bg-blue-950/15 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-blue-300">{concept.title}</p>
+                    <p className="text-xs text-slate-300 leading-relaxed">{concept.concept}</p>
+                    <div className="space-y-1 pt-1 border-t border-blue-800/20">
+                      <p className="text-xs"><span className="text-slate-600">Why: </span><span className="text-slate-400">{concept.whyItWorks}</span></p>
+                      {concept.textOverlay && concept.textOverlay !== "none" && (
+                        <p className="text-xs"><span className="text-slate-600">Text overlay: </span><span className="text-indigo-300">&ldquo;{concept.textOverlay}&rdquo;</span></p>
+                      )}
+                      <p className="text-xs"><span className="text-slate-600">Colors: </span><span className="text-slate-400">{concept.colorDirection}</span></p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Image URL inputs */}
           <div className="space-y-2">
