@@ -25,6 +25,7 @@ interface LaunchVariation {
   hook:         string;
   body:         string;
   callToAction: string;
+  imageUrl?:    string; // Per-variation image (for image tests)
 }
 
 interface LaunchRequest {
@@ -273,6 +274,27 @@ export async function POST(req: NextRequest) {
     // ── 4. Create ad creative + ad for each variation ────────────────────
     for (const variation of variations) {
       try {
+        // Upload per-variation image if provided (for image tests)
+        let variationImageHash = finalImageHash;
+        if (variation.imageUrl && !variationImageHash) {
+          try {
+            const varImgRes = await metaPost(`${adAccountId}/adimages`, token, {
+              url: variation.imageUrl,
+            });
+            if (!varImgRes.error) {
+              const imgs = varImgRes.data?.images;
+              if (imgs && typeof imgs === "object") {
+                const firstKey = Object.keys(imgs)[0];
+                variationImageHash = (imgs as Record<string, { hash?: string }>)[firstKey]?.hash ?? null;
+              }
+            } else {
+              results.errors.push(`Image upload for "${variation.title}" failed: ${varImgRes.error}`);
+            }
+          } catch {
+            results.errors.push(`Image upload for "${variation.title}" failed`);
+          }
+        }
+
         // Build the object_story_spec
         const adUrl = buildUrlWithUtms(destinationUrl, variation.title);
         const storySpec: Record<string, unknown> = {
@@ -282,7 +304,7 @@ export async function POST(req: NextRequest) {
             message:         `${variation.hook}\n\n${variation.body}`,
             name:            headline || variation.title,
             call_to_action:  { type: mapCtaType(variation.callToAction), value: { link: adUrl } },
-            ...(finalImageHash ? { image_hash: finalImageHash } : {}),
+            ...(variationImageHash ? { image_hash: variationImageHash } : {}),
           },
         };
 
