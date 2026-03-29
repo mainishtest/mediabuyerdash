@@ -142,6 +142,35 @@ export function QuickGenerateView() {
     });
   }
 
+  // Ad importer
+  const [showAdPicker, setShowAdPicker] = useState(false);
+  const [existingAds, setExistingAds]   = useState<Array<{
+    adId: string; adName: string; campaignName: string;
+    hook: string; body: string; cta: string; imageUrl: string | null;
+  }>>([]);
+  const [loadingAds, setLoadingAds] = useState(false);
+
+  function handleLoadAds() {
+    if (!clientAccountId) return;
+    setLoadingAds(true);
+    fetch(`/api/creative-lab/quick-generate/ads?clientId=${clientAccountId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) setExistingAds(data.ads ?? []);
+        setShowAdPicker(true);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingAds(false));
+  }
+
+  function handleImportAd(ad: typeof existingAds[0]) {
+    setHook(ad.hook);
+    setBodyText(ad.body);
+    setCta(ad.cta);
+    setCampaignName(ad.campaignName);
+    setShowAdPicker(false);
+  }
+
   const approved = variations.filter((v) => v.status === "approved");
   const comparing = variations.filter((_, i) => compareIds.has(i));
 
@@ -152,7 +181,7 @@ export function QuickGenerateView() {
       <div>
         <h1 className="text-xl font-semibold text-white">Quick Generate</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Paste your current ad copy. Get 3 variations. Pick winners. Build a test.
+          Paste your current ad copy or import from an existing ad. Get 3 variations. Pick winners. Build a test.
         </p>
       </div>
 
@@ -256,6 +285,51 @@ export function QuickGenerateView() {
             />
           </div>
         </div>
+
+        {/* Import existing ad */}
+        {clientAccountId && (
+          <div>
+            <button
+              type="button"
+              onClick={handleLoadAds}
+              disabled={loadingAds}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium
+                text-slate-300 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {loadingAds ? "Loading ads..." : "Import Existing Ad →"}
+            </button>
+
+            {showAdPicker && existingAds.length > 0 && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800/40 divide-y divide-slate-800">
+                {existingAds.map((ad) => (
+                  <button
+                    key={ad.adId}
+                    type="button"
+                    onClick={() => handleImportAd(ad)}
+                    className="w-full px-4 py-3 text-left hover:bg-slate-700/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-white truncate">{ad.adName}</p>
+                        <p className="text-xs text-slate-500 truncate">{ad.campaignName}</p>
+                        {ad.hook && (
+                          <p className="mt-1 text-xs text-slate-400 line-clamp-2">{ad.hook}</p>
+                        )}
+                      </div>
+                      {!ad.hook && !ad.body && (
+                        <span className="shrink-0 text-xs text-slate-600">No copy</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showAdPicker && existingAds.length === 0 && !loadingAds && (
+              <p className="mt-2 text-xs text-slate-600">No active ads found for this client. Run a Meta sync first.</p>
+            )}
+          </div>
+        )}
 
         {/* Notes */}
         <div>
