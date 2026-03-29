@@ -145,15 +145,18 @@ export function QuickGenerateView() {
   // Ad importer
   const [showAdPicker, setShowAdPicker] = useState(false);
   const [existingAds, setExistingAds]   = useState<Array<{
-    adId: string; adName: string; campaignName: string;
-    hook: string; body: string; cta: string; imageUrl: string | null;
+    adId: string; adName: string; status: string; campaignName: string;
+    hook: string; body: string; cta: string; hasCopy: boolean; imageUrl: string | null;
   }>>([]);
   const [loadingAds, setLoadingAds] = useState(false);
+  const [adSearch, setAdSearch]     = useState("");
 
-  function handleLoadAds() {
+  function handleLoadAds(searchTerm = "") {
     if (!clientAccountId) return;
     setLoadingAds(true);
-    fetch(`/api/creative-lab/quick-generate/ads?clientId=${clientAccountId}`)
+    const params = new URLSearchParams({ clientId: clientAccountId });
+    if (searchTerm) params.set("search", searchTerm);
+    fetch(`/api/creative-lab/quick-generate/ads?${params}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.ok) setExistingAds(data.ads ?? []);
@@ -289,44 +292,101 @@ export function QuickGenerateView() {
         {/* Import existing ad */}
         {clientAccountId && (
           <div>
-            <button
-              type="button"
-              onClick={handleLoadAds}
-              disabled={loadingAds}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium
-                text-slate-300 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50"
-            >
-              {loadingAds ? "Loading ads..." : "Import Existing Ad →"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleLoadAds(adSearch)}
+                disabled={loadingAds}
+                className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium
+                  text-slate-300 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50"
+              >
+                {loadingAds ? "Loading..." : showAdPicker ? "Refresh" : "Import Existing Ad →"}
+              </button>
+              {showAdPicker && (
+                <button
+                  type="button"
+                  onClick={() => setShowAdPicker(false)}
+                  className="text-xs text-slate-600 hover:text-slate-400"
+                >
+                  Close
+                </button>
+              )}
+            </div>
 
-            {showAdPicker && existingAds.length > 0 && (
-              <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800/40 divide-y divide-slate-800">
-                {existingAds.map((ad) => (
-                  <button
-                    key={ad.adId}
-                    type="button"
-                    onClick={() => handleImportAd(ad)}
-                    className="w-full px-4 py-3 text-left hover:bg-slate-700/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-white truncate">{ad.adName}</p>
-                        <p className="text-xs text-slate-500 truncate">{ad.campaignName}</p>
-                        {ad.hook && (
-                          <p className="mt-1 text-xs text-slate-400 line-clamp-2">{ad.hook}</p>
+            {showAdPicker && (
+              <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden">
+                {/* Search bar */}
+                <div className="border-b border-slate-700 p-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={adSearch}
+                      onChange={(e) => setAdSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleLoadAds(adSearch); }}
+                      placeholder="Search by ad name, campaign, or ID..."
+                      className="flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm
+                        text-slate-200 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleLoadAds(adSearch)}
+                      disabled={loadingAds}
+                      className="rounded-lg bg-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-600 disabled:opacity-50"
+                    >
+                      Search
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-600">
+                    {existingAds.length} ad{existingAds.length !== 1 ? "s" : ""} found
+                    {existingAds.filter((a) => a.hasCopy).length > 0 && ` · ${existingAds.filter((a) => a.hasCopy).length} with copy`}
+                  </p>
+                </div>
+
+                {/* Ad list */}
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-800">
+                  {existingAds.map((ad) => (
+                    <button
+                      key={ad.adId}
+                      type="button"
+                      onClick={() => handleImportAd(ad)}
+                      className={`w-full px-4 py-3 text-left transition-colors
+                        ${ad.hasCopy ? "hover:bg-indigo-950/30" : "hover:bg-slate-700/30 opacity-60"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white truncate">{ad.adName}</p>
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
+                              ad.status === "ACTIVE" ? "bg-emerald-900/40 text-emerald-400" :
+                              ad.status === "PAUSED" ? "bg-amber-900/40 text-amber-400" :
+                              "bg-slate-800 text-slate-500"
+                            }`}>
+                              {ad.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 truncate">{ad.campaignName}</p>
+                          {ad.hasCopy ? (
+                            <p className="mt-1 text-xs text-slate-400 line-clamp-2">{ad.hook}</p>
+                          ) : (
+                            <p className="mt-1 text-xs text-slate-600 italic">No copy synced — paste manually after import</p>
+                          )}
+                        </div>
+                        {ad.hasCopy && (
+                          <span className="shrink-0 mt-1 text-xs text-indigo-400">Import →</span>
                         )}
                       </div>
-                      {!ad.hook && !ad.body && (
-                        <span className="shrink-0 text-xs text-slate-600">No copy</span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+                    </button>
+                  ))}
+                </div>
 
-            {showAdPicker && existingAds.length === 0 && !loadingAds && (
-              <p className="mt-2 text-xs text-slate-600">No active ads found for this client. Run a Meta sync first.</p>
+                {existingAds.length === 0 && !loadingAds && (
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-xs text-slate-600">
+                      {adSearch ? `No ads matching "${adSearch}"` : "No ads found. Run a Meta sync first."}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
