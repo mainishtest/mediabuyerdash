@@ -244,6 +244,7 @@ function AdEntryCard({
   approvalMap,
   onGenerateCopy,
   onGenerateImage,
+  onPullToQuickGenerate,
   onApprovalChange
 }: {
   entry: CreativeLabEntry;
@@ -251,6 +252,7 @@ function AdEntryCard({
   approvalMap: ApprovalMap;
   onGenerateCopy: (entry: CreativeLabEntry) => Promise<void>;
   onGenerateImage: (entry: CreativeLabEntry) => Promise<void>;
+  onPullToQuickGenerate: (entry: CreativeLabEntry) => void;
   onApprovalChange: (jobId: string, variationId: string, entityType: "copy" | "image", adId: string, status: CreativeApprovalStatus) => Promise<void>;
 }) {
   const { input, diagnosis, copyRecommendation, imageRecommendation } = entry;
@@ -374,28 +376,32 @@ function AdEntryCard({
       )}
 
       {/* Action buttons */}
-      {(showCopyAction || showImageAction) && (
-        <div className="flex flex-wrap gap-3 p-5">
-          {showCopyAction && (
-            <button
-              onClick={handleGenerateCopy}
-              disabled={copyLoading}
-              className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
-            >
-              {copyLoading ? "Generating…" : "Generate 3 Copy Variations"}
-            </button>
-          )}
-          {showImageAction && (
-            <button
-              onClick={handleGenerateImage}
-              disabled={imageLoading}
-              className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
-            >
-              {imageLoading ? "Generating…" : "Generate 3 Image Variations"}
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-3 p-5">
+        <button
+          onClick={() => onPullToQuickGenerate(entry)}
+          className="rounded-lg border border-indigo-700/60 bg-indigo-900/30 px-4 py-2 text-sm font-medium text-indigo-300 transition-colors hover:bg-indigo-800/40 hover:text-indigo-100"
+        >
+          Pull into Quick Generate →
+        </button>
+        {showCopyAction && (
+          <button
+            onClick={handleGenerateCopy}
+            disabled={copyLoading}
+            className="rounded-lg border border-violet-700/60 bg-violet-900/30 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-800/40 hover:text-violet-100 disabled:opacity-50"
+          >
+            {copyLoading ? "Generating…" : "Generate 3 Copy Variations"}
+          </button>
+        )}
+        {showImageAction && (
+          <button
+            onClick={handleGenerateImage}
+            disabled={imageLoading}
+            className="rounded-lg border border-blue-700/60 bg-blue-900/30 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-800/40 hover:text-blue-100 disabled:opacity-50"
+          >
+            {imageLoading ? "Generating…" : "Generate 3 Image Variations"}
+          </button>
+        )}
+      </div>
 
       {/* Generated copy variations */}
       {latestCopyJob && (
@@ -1812,6 +1818,19 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
     router.refresh();
   }
 
+  function handlePullToQuickGenerate(entry: CreativeLabEntry) {
+    const params = new URLSearchParams();
+    if (entry.input.copy.hook) params.set("hook", entry.input.copy.hook);
+    if (entry.input.copy.body) params.set("body", entry.input.copy.body);
+    if (entry.input.copy.callToAction) params.set("cta", entry.input.copy.callToAction);
+    if (entry.input.campaignName) params.set("campaign", entry.input.campaignName);
+    if (entry.input.image?.imageHeadline) params.set("imageHeadline", entry.input.image.imageHeadline);
+    if (entry.input.imageUrl) params.set("imageUrl", entry.input.imageUrl);
+    params.set("adName", entry.input.adName);
+    params.set("adId", entry.input.adId);
+    router.push(`/creative-lab/quick-generate?${params.toString()}`);
+  }
+
   return (
     <>
       <header className="mb-10">
@@ -1948,6 +1967,7 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
             approvalMap={approvalMap}
             onGenerateCopy={handleGenerateCopy}
             onGenerateImage={handleGenerateImage}
+            onPullToQuickGenerate={handlePullToQuickGenerate}
             onApprovalChange={async (jobId, variationId, entityType, adId, status) => {
               await setApprovalAction(jobId, variationId, entityType, adId, status);
               router.refresh();

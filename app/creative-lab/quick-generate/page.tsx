@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { Suspense } from "react";
 import { QuickGenerateView } from "./QuickGenerateView";
 
 export const metadata = {
@@ -7,5 +8,9 @@ export const metadata = {
 };
 
 export default function QuickGeneratePage() {
-  return <QuickGenerateView />;
+  return (
+    <Suspense fallback={<div className="p-6 text-slate-500">Loading Quick Generate...</div>}>
+      <QuickGenerateView />
+    </Suspense>
+  );
 }

@@ -4,6 +4,7 @@
 // No pipeline, no briefs, no assembly. Just fast iteration → Facebook launch.
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Variation = {
   title: string;
@@ -48,6 +49,9 @@ export function QuickGenerateView() {
   const [clients, setClients]           = useState<ClientOption[]>([]);
   const [copywritingPrompt, setCopywritingPrompt] = useState<string | null>(null);
 
+  // Pre-populate from URL params (when coming from "Pull into Quick Generate")
+  const searchParams = useSearchParams();
+
   // Load clients on mount
   useEffect(() => {
     fetch("/api/creative-lab/quick-generate/clients")
@@ -55,6 +59,25 @@ export function QuickGenerateView() {
       .then((data) => { if (data.ok) setClients(data.clients ?? []); })
       .catch(() => {});
   }, []);
+
+  // Pre-populate fields from URL params
+  useEffect(() => {
+    const urlHook = searchParams.get("hook");
+    const urlBody = searchParams.get("body");
+    const urlCta = searchParams.get("cta");
+    const urlCampaign = searchParams.get("campaign");
+    const urlImageHeadline = searchParams.get("imageHeadline");
+    const urlImageUrl = searchParams.get("imageUrl");
+    const urlAdName = searchParams.get("adName");
+
+    if (urlHook) setHook(urlHook);
+    if (urlBody) setBodyText(urlBody);
+    if (urlCta) setCta(urlCta);
+    if (urlCampaign) setCampaignName(urlCampaign);
+    if (urlImageHeadline) setImageHeadline(urlImageHeadline);
+    if (urlImageUrl) setImportedImageUrl(urlImageUrl);
+    if (urlAdName) setNotes((prev) => prev || `Iterating on: ${urlAdName}`);
+  }, [searchParams]);
 
   const [campaignDefaults, setCampaignDefaults] = useState<Record<string, string | null>>({});
   const [clientImages, setClientImages] = useState<Array<{ id: string; label: string; imageUrl: string }>>([]);

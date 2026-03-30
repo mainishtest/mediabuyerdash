@@ -165,6 +165,7 @@ export async function loadDiagnosisInputs(
         dominantMessage: hook || creative?.name || "",
         visualTheme: "unknown",
       },
+      imageUrl: creative?.imageUrl ?? creative?.thumbnailUrl ?? undefined,
     });
   }
 

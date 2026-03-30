@@ -55,6 +55,7 @@ export interface CreativeDiagnosisInput {
   // Creative content
   copy:           AdCopyFields;
   image:          AdImageMetadata;
+  imageUrl?:      string;  // Meta creative image URL for Quick Generate pre-population
 }
 
 // ── Diagnosis result ──────────────────────────────────────────────────────────
