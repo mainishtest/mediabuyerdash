@@ -97,6 +97,7 @@ export function QuickGenerateView() {
   }>>([]);
   const [generatingImages, setGeneratingImages] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<Record<number, { url: string; loading: boolean; error?: string }>>({});
+  const [refinePrompts, setRefinePrompts] = useState<Record<number, string>>({});
 
   // Output
   const [variations, setVariations] = useState<VariationWithStatus[]>([]);
@@ -736,27 +737,91 @@ export function QuickGenerateView() {
                             {gen?.loading ? "Generating..." : "Generate Image"}
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Add to image test URLs
-                              const emptyIdx = imageTestUrls.findIndex((u) => !u);
-                              if (emptyIdx >= 0) {
-                                setImageTestUrls((prev) => prev.map((u, j) => j === emptyIdx ? gen.url : u));
-                              } else {
-                                setImageTestUrls((prev) => [...prev, gen.url]);
-                              }
-                            }}
-                            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white
-                              hover:bg-emerald-500"
-                          >
-                            Use for Test
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const emptyIdx = imageTestUrls.findIndex((u) => !u);
+                                if (emptyIdx >= 0) {
+                                  setImageTestUrls((prev) => prev.map((u, j) => j === emptyIdx ? gen.url : u));
+                                } else {
+                                  setImageTestUrls((prev) => [...prev, gen.url]);
+                                }
+                              }}
+                              className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white
+                                hover:bg-emerald-500"
+                            >
+                              Use for Test
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Clear image to show refine input
+                                setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false } }));
+                              }}
+                              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-400
+                                hover:text-white"
+                            >
+                              Regenerate
+                            </button>
+                          </>
                         )}
                         {gen?.error && (
                           <p className="text-xs text-rose-400">{gen.error}</p>
                         )}
                       </div>
+
+                      {/* Refine prompt — shown when no image or after clicking Regenerate */}
+                      {!gen?.url && !gen?.loading && (
+                        <div className="space-y-2 pt-2 border-t border-blue-800/20">
+                          <input
+                            type="text"
+                            value={refinePrompts[i] ?? ""}
+                            onChange={(e) => setRefinePrompts((prev) => ({ ...prev, [i]: e.target.value }))}
+                            placeholder="Adjust: e.g. 'make background darker', 'add more herbs', 'zoom in on bottle'..."
+                            className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-xs
+                              text-slate-200 placeholder-slate-600 focus:border-blue-600 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            disabled={gen?.loading}
+                            onClick={async () => {
+                              setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: true } }));
+                              try {
+                                const refinement = refinePrompts[i] ?? "";
+                                const fullConcept = refinement
+                                  ? `${concept.concept}\n\nADJUSTMENTS: ${refinement}`
+                                  : concept.concept;
+                                const res = await fetch("/api/creative-lab/quick-generate/images/generate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    concept: fullConcept,
+                                    title: concept.title,
+                                    textOverlay: concept.textOverlay,
+                                    colorDirection: concept.colorDirection,
+                                    productName: clientName,
+                                    clientAccountId,
+                                    productImageUrl: referenceImageUrl || undefined,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (data.ok && data.imageUrl) {
+                                  setGeneratedImages((prev) => ({ ...prev, [i]: { url: data.imageUrl, loading: false } }));
+                                } else {
+                                  setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false, error: data.error } }));
+                                }
+                              } catch (err) {
+                                setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false, error: String(err) } }));
+                              }
+                            }}
+                            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white
+                              hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            {gen?.loading ? "Generating..." : refinePrompts[i] ? "Generate with Adjustments" : "Generate Image"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
