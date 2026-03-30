@@ -1159,6 +1159,8 @@ model ShopifyConnection {
   clientAccountId  String?
   shopDomain       String    @unique // e.g. "mystore.myshopify.com"
   accessToken      String    // WARNING: encrypt in production
+  clientId         String?   // Shopify app client ID (for auto token refresh)
+  clientSecret     String?   // Shopify app client secret (for auto token refresh)
   connectionStatus String    @default("active") // active | disconnected | error
   scopes           String?
   installedAt      DateTime  @default(now())
