@@ -1930,3 +1930,42 @@ model ClientAdImage {
 
   @@index([clientAccountId])
 }
+
+// ── Creative Source Assets ────────────────────────────────────────────────────
+
+// User-uploaded source assets for creative generation workflows.
+// Links to a client account. Can store image, copy, or both.
+model CreativeSourceAsset {
+  id              String   @id @default(cuid())
+  clientAccountId String
+  workspaceId     String?
+  // Asset type
+  assetType       String   // uploaded_image | uploaded_copy | uploaded_image_and_copy | existing_ad_source
+  status          String   @default("active") // draft | active | archived
+  label           String?  // user-provided name
+  // Image fields
+  imageUrl        String?
+  imageMimeType   String?
+  imageWidth      Int?
+  imageHeight     Int?
+  imageFileSize   Int?     // bytes
+  // Copy fields
+  hook            String?
+  bodyText        String?
+  callToAction    String?
+  imageHeadline   String?
+  // Source reference (if pulled from existing ad)
+  sourceAdId      String?
+  sourceAdName    String?
+  sourceCampaignId   String?
+  sourceCampaignName String?
+  // Notes
+  notes           String?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([clientAccountId])
+  @@index([workspaceId])
+  @@index([assetType])
+}

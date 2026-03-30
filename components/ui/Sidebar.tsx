@@ -73,6 +73,7 @@ const NAV: NavEntry[] = [
     icon:  "◇",
     children: [
       { kind: "leaf", href: "/creative-lab/quick-generate", label: "Quick Generate"       },
+      { kind: "leaf", href: "/creative-lab/upload",          label: "Upload Asset"         },
       { kind: "leaf", href: "/creative-lab/workspace",    label: "Review Workspace"     },
       { kind: "leaf", href: "/creative-lab",              label: "Creative Lab"         },
       { kind: "leaf", href: "/creative-lab/publish-prep", label: "Publish Prep"        },
