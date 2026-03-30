@@ -144,11 +144,15 @@ export async function connectShopifyClientCredentialsAction(
       create: {
         shopDomain,
         accessToken,
+        clientId:         clientIdVal,
+        clientSecret:     clientSecret,
         connectionStatus: "active",
         scopes:           scopes ?? "client_credentials",
       },
       update: {
         accessToken,
+        clientId:         clientIdVal,
+        clientSecret:     clientSecret,
         connectionStatus: "active",
         scopes:           scopes ?? "client_credentials",
       },

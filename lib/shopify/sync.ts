@@ -2,6 +2,7 @@ import { getShopifyConnectionById, getClientShopifyConnection, updateConnectionS
 import { streamOrdersSince }        from "./api";
 import { mapOrder, mapLineItemsForOrder } from "./mappers";
 import { createSyncLog, completeSyncLog, getLatestOrderDate, getRecentSyncLogs, upsertOrder, replaceLineItems } from "./syncDb";
+import { prisma }                    from "../db";
 
 export interface ShopifySyncSummary {
   status:          "completed" | "partial" | "failed";
@@ -132,15 +133,38 @@ async function _runSync(
   // Update connection health status
   // Only mark as error for definitive auth failures, not transient errors
   if (isAuthError) {
-    // Check if there have been multiple recent failures before marking as error
-    // This prevents transient 401s from killing the connection
-    const recentLogs = await getRecentSyncLogs(connection.id, 3).catch(() => []);
-    const recentFailures = recentLogs.filter((l) => l.status === "failed").length;
-    if (recentFailures >= 2) {
-      // 3+ consecutive failures (including this one) — mark as error
-      await updateConnectionStatus(connection.id, "error").catch(() => {});
+    // Try to auto-refresh the token if client credentials are stored
+    const fullConn = await prisma.shopifyConnection.findUnique({
+      where: { id: connection.id },
+      select: { clientId: true, clientSecret: true, shopDomain: true },
+    }).catch(() => null);
+
+    if (fullConn?.clientId && fullConn?.clientSecret) {
+      const refreshed = await refreshShopifyToken(
+        fullConn.shopDomain,
+        fullConn.clientId,
+        fullConn.clientSecret,
+        connection.id,
+      );
+      if (refreshed) {
+        // Token refreshed — don't mark as error, next sync will use new token
+        errors.push("Token expired — auto-refreshed. Next sync will use the new token.");
+      } else {
+        // Refresh failed — check consecutive failures before marking error
+        const recentLogs = await getRecentSyncLogs(connection.id, 3).catch(() => []);
+        const recentFailures = recentLogs.filter((l) => l.status === "failed").length;
+        if (recentFailures >= 2) {
+          await updateConnectionStatus(connection.id, "error").catch(() => {});
+        }
+      }
+    } else {
+      // No client credentials stored — check consecutive failures
+      const recentLogs = await getRecentSyncLogs(connection.id, 3).catch(() => []);
+      const recentFailures = recentLogs.filter((l) => l.status === "failed").length;
+      if (recentFailures >= 2) {
+        await updateConnectionStatus(connection.id, "error").catch(() => {});
+      }
     }
-    // Otherwise leave as active — might be transient
   } else if (counts.ordersSynced > 0 || errors.length === 0) {
     // Successful sync — ensure status is active (repairs previously errored connections)
     await updateConnectionStatus(connection.id, "active").catch(() => {});
@@ -157,4 +181,44 @@ async function _runSync(
     startedAt:       startedAt.toISOString(),
     completedAt:     new Date().toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-refresh Shopify client credentials token
+// ---------------------------------------------------------------------------
+
+async function refreshShopifyToken(
+  shopDomain: string,
+  clientId: string,
+  clientSecret: string,
+  connectionId: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type:    "client_credentials",
+        client_id:     clientId,
+        client_secret: clientSecret,
+      }),
+      cache: "no-store",
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json() as { access_token?: string };
+    if (!data.access_token) return false;
+
+    // Update the stored token
+    await prisma.shopifyConnection.update({
+      where: { id: connectionId },
+      data:  { accessToken: data.access_token, connectionStatus: "active" },
+    });
+
+    console.log(`[shopify-sync] Auto-refreshed token for ${shopDomain}`);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -753,17 +753,6 @@ export function QuickGenerateView() {
                             >
                               Use for Test
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Clear image to show refine input
-                                setGeneratedImages((prev) => ({ ...prev, [i]: { url: "", loading: false } }));
-                              }}
-                              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-400
-                                hover:text-white"
-                            >
-                              Regenerate
-                            </button>
                           </>
                         )}
                         {gen?.error && (
@@ -771,14 +760,14 @@ export function QuickGenerateView() {
                         )}
                       </div>
 
-                      {/* Refine prompt — shown when no image or after clicking Regenerate */}
-                      {!gen?.url && !gen?.loading && (
+                      {/* Refine prompt — always visible for adjustment */}
+                      {!gen?.loading && (
                         <div className="space-y-2 pt-2 border-t border-blue-800/20">
                           <input
                             type="text"
                             value={refinePrompts[i] ?? ""}
                             onChange={(e) => setRefinePrompts((prev) => ({ ...prev, [i]: e.target.value }))}
-                            placeholder="Adjust: e.g. 'make background darker', 'add more herbs', 'zoom in on bottle'..."
+                            placeholder={gen?.url ? "Adjust: 'darker background', 'zoom in', 'more herbs'..." : "Optional: add directions before generating..."}
                             className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-xs
                               text-slate-200 placeholder-slate-600 focus:border-blue-600 focus:outline-none"
                           />
@@ -818,7 +807,7 @@ export function QuickGenerateView() {
                             className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white
                               hover:bg-blue-500 disabled:opacity-50"
                           >
-                            {gen?.loading ? "Generating..." : refinePrompts[i] ? "Generate with Adjustments" : "Generate Image"}
+                            {gen?.url ? "Regenerate with Changes" : refinePrompts[i] ? "Generate with Directions" : "Generate Image"}
                           </button>
                         </div>
                       )}

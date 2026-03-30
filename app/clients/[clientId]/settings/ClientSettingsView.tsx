@@ -700,6 +700,19 @@ function CampaignDefaultsSection({ clientId }: { clientId: string }) {
           </select></div>
       </div>
 
+      {/* Timezone */}
+      <div>
+        <label className={L}>Reporting Timezone</label>
+        <select className={I} value={d.timezone ?? "America/Denver"} onChange={(e) => set("timezone", e.target.value)}>
+          <option value="America/New_York">Eastern (New York)</option>
+          <option value="America/Chicago">Central (Chicago)</option>
+          <option value="America/Denver">Mountain (Denver)</option>
+          <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+          <option value="America/Phoenix">Arizona (Phoenix, no DST)</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </div>
+
       {/* UTM defaults */}
       <div>
         <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-widest">UTM Parameters</p>
