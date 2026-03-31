@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Copy Variation Generator
 // ─────────────────────────────────────────────────────────────────────────────
-// Generates copy variations using the same Anthropic/OpenAI providers already
-// wired up in the quick-generate route. This module builds the prompt from
-// the source context and calls the appropriate provider.
+// Generates copy variations by calling Anthropic/OpenAI directly.
+// Eliminates the self-fetch pattern that fails on Vercel serverless.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { prisma } from "../../lib/db";
 import type {
   VariationSourceContext,
   CopyVariationCandidate,
@@ -22,10 +22,6 @@ interface CopyGenerationResult {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-/**
- * Generate copy variations from a fully-assembled source context.
- * Calls the internal quick-generate API to reuse existing provider logic.
- */
 export async function generateCopyVariationsFromSource(
   ctx: VariationSourceContext,
   options: {
@@ -39,12 +35,10 @@ export async function generateCopyVariationsFromSource(
     provider = "anthropic",
     variationCount = 3,
     notes,
-    baseUrl = "",
   } = options;
 
   const { source } = ctx;
 
-  // Validate: need at least some copy to vary on
   if (!source.hook && !source.bodyText && !source.callToAction) {
     return {
       ok: false,
@@ -59,50 +53,83 @@ export async function generateCopyVariationsFromSource(
   }
 
   try {
-    // Build enriched notes with context
+    // Load client copywriting prompt
+    let copywritingPrompt: string | null = null;
+    if (source.clientAccountId) {
+      const client = await prisma.clientAccount.findUnique({
+        where: { id: source.clientAccountId },
+        select: { copywritingPrompt: true },
+      });
+      copywritingPrompt = client?.copywritingPrompt ?? null;
+    }
+
     const enrichedNotes = buildEnrichedNotes(ctx, notes);
 
-    // Call the existing quick-generate API route
-    const response = await fetch(`${baseUrl}/api/creative-lab/quick-generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        hook: source.hook || "",
-        bodyText: source.bodyText || "",
-        cta: source.callToAction || "",
-        imageHeadline: source.imageHeadline || "",
-        clientAccountId: source.clientAccountId,
-        clientName: source.clientName || "",
-        campaignName: source.sourceCampaignName || "",
-        provider,
-        notes: enrichedNotes,
-      }),
-    });
+    const systemPrompt = `You are a senior direct-response copywriter for Facebook/Instagram ads.
+You write clear, specific, emotionally relevant copy — never vague, generic, or hype-heavy.
+You avoid language that sounds unbelievable.
+${copywritingPrompt ? `\nCLIENT-SPECIFIC COPYWRITING RULES:\n${copywritingPrompt}\n\nFollow these rules strictly for all variations.` : ""}
+Respond ONLY with valid JSON — no preamble, no markdown fences, no commentary.`;
 
-    const data = await response.json();
+    const userPrompt = `Here is the current Facebook ad copy that is running:
 
-    if (!response.ok || !data.variations) {
+${source.clientName ? `CLIENT: ${source.clientName}` : ""}
+${source.sourceCampaignName ? `CAMPAIGN: ${source.sourceCampaignName}` : ""}
+
+CURRENT HOOK: ${source.hook || "(not provided)"}
+
+CURRENT BODY:
+${source.bodyText || "(not provided)"}
+
+CURRENT CTA: ${source.callToAction || "Learn More"}
+
+${source.imageHeadline ? `IMAGE HEADLINE: ${source.imageHeadline}` : ""}
+${enrichedNotes ? `\nNOTES FROM MEDIA BUYER:\n${enrichedNotes}` : ""}
+
+Generate exactly 3 ad copy variations. Each must take a DIFFERENT angle:
+1. "outcome_led" — open with the result/outcome the customer most desires
+2. "problem_first" — name the specific pain before presenting the solution
+3. "social_proof" — open with a credibility signal or community validation
+
+IMPORTANT — Match the LENGTH and STYLE of the current ad copy above:
+- If the current body is long-form (200+ words, storytelling, testimonial-style), write LONG-FORM variations of similar length
+- If the current body is short (under 100 words), write short variations
+- Match the tone, narrative style, and pacing of the original
+- Long-form ads should tell a COMPLETE STORY with a beginning, middle, and end
+- Use paragraph breaks for readability (include \\n\\n between paragraphs)
+- The hook should stop the scroll in the first line
+- The body should be a full narrative that builds emotional connection before the pitch
+- End the body with a natural transition to the CTA
+
+Requirements for EACH variation:
+- hook: 1–2 sentences, scroll-stopping opening line. Must NOT start with the same word as the other hooks.
+- body: Full ad body text — match the length of the original copy. For long-form ads, write 200-400 words with paragraph breaks.
+- callToAction: 3–10 words, natural invitation to click
+
+Respond ONLY with this JSON array (no text outside):
+[
+  {"title": "Variation A — Outcome-Led", "hook": "...", "body": "...", "callToAction": "..."},
+  {"title": "Variation B — Problem-First", "hook": "...", "body": "...", "callToAction": "..."},
+  {"title": "Variation C — Social Proof", "hook": "...", "body": "...", "callToAction": "..."}
+]`;
+
+    // Call AI provider directly
+    const result = await callAiProvider(provider, systemPrompt, userPrompt);
+
+    if (!result.ok) {
       return {
         ok: false,
         variations: [],
         provider,
         error: {
           code: "provider_failure",
-          message: data.error || "Copy generation failed",
+          message: result.error || "Copy generation failed",
           retryable: true,
-          details: data.rawAiResponse,
         },
       };
     }
 
-    // Map API response to candidates
-    const variations: CopyVariationCandidate[] = (data.variations as Array<{
-      title?: string;
-      hook?: string;
-      body?: string;
-      callToAction?: string;
-      angle?: string;
-    }>)
+    const variations: CopyVariationCandidate[] = result.variations
       .slice(0, variationCount)
       .map((v, i) => ({
         title: v.title || `Variation ${i + 1}`,
@@ -115,8 +142,8 @@ export async function generateCopyVariationsFromSource(
     return {
       ok: true,
       variations,
-      provider: data.provider || provider,
-      tokensUsed: data.tokensUsed,
+      provider: result.provider || provider,
+      tokensUsed: result.tokensUsed,
     };
   } catch (err) {
     return {
@@ -132,6 +159,156 @@ export async function generateCopyVariationsFromSource(
   }
 }
 
+// ── AI Provider calls ─────────────────────────────────────────────────────
+
+async function callAiProvider(
+  provider: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<{
+  ok: boolean;
+  variations: Array<{ title?: string; hook?: string; body?: string; callToAction?: string; angle?: string }>;
+  provider?: string;
+  tokensUsed?: number;
+  error?: string;
+}> {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  if (provider === "anthropic" && anthropicKey) {
+    return callAnthropic(anthropicKey, systemPrompt, userPrompt);
+  }
+  if (provider === "openai" && openaiKey) {
+    return callOpenAI(openaiKey, systemPrompt, userPrompt);
+  }
+  if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt);
+  if (openaiKey) return callOpenAI(openaiKey, systemPrompt, userPrompt);
+
+  return { ok: false, variations: [], error: "No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY." };
+}
+
+async function callAnthropic(apiKey: string, system: string, user: string) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+      max_tokens: 8192,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+
+  if (res.status === 429) {
+    return { ok: false, variations: [], error: "Rate limited by Anthropic. Wait a moment and try again." };
+  }
+
+  const data = await res.json();
+  if (!res.ok) {
+    return { ok: false, variations: [], error: data?.error?.message ?? `Anthropic HTTP ${res.status}` };
+  }
+
+  const text = data?.content?.[0]?.text ?? "";
+  const variations = parseVariations(text);
+  return {
+    ok: variations.length > 0,
+    variations,
+    provider: "anthropic",
+    tokensUsed: (data?.usage?.input_tokens ?? 0) + (data?.usage?.output_tokens ?? 0),
+    error: variations.length === 0 ? "AI returned invalid format" : undefined,
+  };
+}
+
+async function callOpenAI(apiKey: string, system: string, user: string) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o",
+      max_tokens: 8192,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+
+  if (res.status === 429) {
+    return { ok: false, variations: [], error: "Rate limited by OpenAI. Wait a moment and try again." };
+  }
+
+  const data = await res.json();
+  if (!res.ok) {
+    return { ok: false, variations: [], error: data?.error?.message ?? `OpenAI HTTP ${res.status}` };
+  }
+
+  const text = data?.choices?.[0]?.message?.content ?? "";
+  const variations = parseVariations(text);
+  return {
+    ok: variations.length > 0,
+    variations,
+    provider: "openai",
+    tokensUsed: (data?.usage?.prompt_tokens ?? 0) + (data?.usage?.completion_tokens ?? 0),
+    error: variations.length === 0 ? "AI returned invalid format" : undefined,
+  };
+}
+
+// ── Parse helpers ─────────────────────────────────────────────────────────
+
+function parseVariations(text: string): Array<{
+  title: string; hook: string; body: string; callToAction: string; angle?: string;
+}> {
+  const cleaned = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  let parsed: unknown;
+  try { parsed = JSON.parse(cleaned); } catch { /* continue */ }
+
+  if (Array.isArray(parsed)) return validateVariations(parsed);
+
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).variations)) {
+    return validateVariations((parsed as Record<string, unknown>).variations as unknown[]);
+  }
+
+  const arrStart = cleaned.indexOf("[");
+  const arrEnd = cleaned.lastIndexOf("]");
+  if (arrStart >= 0 && arrEnd > arrStart) {
+    try {
+      const extracted = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+      if (Array.isArray(extracted)) return validateVariations(extracted);
+    } catch { /* give up */ }
+  }
+
+  return [];
+}
+
+function validateVariations(arr: unknown[]): Array<{
+  title: string; hook: string; body: string; callToAction: string;
+}> {
+  return arr
+    .filter((item): item is Record<string, unknown> =>
+      item !== null && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).hook === "string" &&
+      typeof (item as Record<string, unknown>).body === "string"
+    )
+    .map((item) => ({
+      title: String(item.title ?? "Variation"),
+      hook: String(item.hook),
+      body: String(item.body),
+      callToAction: String(item.callToAction ?? item.cta ?? "Learn More"),
+    }));
+}
+
 // ── Prompt enrichment ───────────────────────────────────────────────────────
 
 function buildEnrichedNotes(
@@ -139,11 +316,8 @@ function buildEnrichedNotes(
   userNotes?: string
 ): string {
   const parts: string[] = [];
-
-  // User-provided notes first
   if (userNotes) parts.push(userNotes);
 
-  // Performance context
   if (ctx.performance) {
     const perf = ctx.performance;
     const perfParts: string[] = [];
@@ -151,27 +325,18 @@ function buildEnrichedNotes(
     if (perf.roas !== undefined) perfParts.push(`ROAS: ${perf.roas.toFixed(2)}x`);
     if (perf.cpa !== undefined) perfParts.push(`CPA: $${perf.cpa.toFixed(2)}`);
     if (perf.frequency !== undefined) perfParts.push(`Frequency: ${perf.frequency.toFixed(1)}x`);
-    if (perfParts.length > 0) {
-      parts.push(`Current performance: ${perfParts.join(", ")}`);
-    }
+    if (perfParts.length > 0) parts.push(`Current performance: ${perfParts.join(", ")}`);
     if (perf.fatigueStatus && perf.fatigueStatus !== "healthy") {
       parts.push(`Fatigue status: ${perf.fatigueStatus}. This creative needs fresh angles.`);
     }
   }
 
-  // Learning insights
   if (ctx.learnings.length > 0) {
     const topLearnings = ctx.learnings
       .slice(0, 5)
       .map((l) => `- ${l.insightText}`)
       .join("\n");
     parts.push(`Proven learnings to apply:\n${topLearnings}`);
-  }
-
-  // Client-specific copywriting prompt (already handled by the quick-generate route
-  // via client lookup, but we note it here if present)
-  if (ctx.clientCopywritingPrompt) {
-    parts.push(`Additional client guidelines already loaded.`);
   }
 
   return parts.join("\n\n");

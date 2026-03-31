@@ -1,13 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Image Variation Generator
 // ─────────────────────────────────────────────────────────────────────────────
-// Generates image variation concepts and optionally renders them using the
-// existing Flux Pro / DALL-E providers wired up in the quick-generate images
-// API routes. This module:
-//   1. Calls the concept generation API (Anthropic/OpenAI) to get 3 concepts
-//   2. Optionally renders each concept into an actual image via Flux/DALL-E
+// Generates image variation concepts by calling Anthropic/OpenAI directly.
+// Eliminates the self-fetch pattern that fails on Vercel serverless.
+// Rendering individual concepts still uses the /api route (client-side call).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { prisma } from "../../lib/db";
 import type {
   VariationSourceContext,
   ImageVariationCandidate,
@@ -23,12 +22,6 @@ interface ImageGenerationResult {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-/**
- * Generate image variation concepts from a fully-assembled source context.
- * Calls the existing quick-generate/images API to reuse provider logic.
- *
- * Returns concepts that can later be individually rendered via renderImageConcept().
- */
 export async function generateImageVariationsFromSource(
   ctx: VariationSourceContext,
   options: {
@@ -42,12 +35,10 @@ export async function generateImageVariationsFromSource(
     provider = "anthropic",
     variationCount = 3,
     notes,
-    baseUrl = "",
   } = options;
 
   const { source } = ctx;
 
-  // Validate: need an image to vary on
   if (!source.imageUrl) {
     return {
       ok: false,
@@ -62,61 +53,96 @@ export async function generateImageVariationsFromSource(
   }
 
   try {
-    // Build enriched description with context
     const imageDescription = buildImageDescription(ctx, notes);
 
-    // Call the existing image concept generation API
-    const response = await fetch(`${baseUrl}/api/creative-lab/quick-generate/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentImageDescription: imageDescription,
-        productName: source.clientName || "Product",
-        adCopy: [source.hook, source.bodyText].filter(Boolean).join(" — "),
-        clientAccountId: source.clientAccountId,
-        clientName: source.clientName || "",
-        notes: notes || "",
-      }),
-    });
+    // Load client brand context and image directions
+    let brandContext = "";
+    let imageDirections = "";
+    if (source.clientAccountId) {
+      const client = await prisma.clientAccount.findUnique({
+        where: { id: source.clientAccountId },
+        select: { copywritingPrompt: true, imagePromptDirections: true, brandName: true },
+      });
+      if (client?.copywritingPrompt) {
+        brandContext = `\nBRAND CONTEXT:\n${client.copywritingPrompt}`;
+      }
+      if (client?.imagePromptDirections) {
+        imageDirections = `\nCLIENT IMAGE DIRECTIONS (follow these strictly):\n${client.imagePromptDirections}`;
+      }
+    }
 
-    const data = await response.json();
+    const systemPrompt = `You are a senior direct-response creative director specializing in Meta (Facebook/Instagram) ad imagery.
+You design high-converting static image ads that stop the scroll and drive clicks.
+You understand that the image is the #1 factor in ad performance — it must earn attention in under 0.5 seconds.
+${brandContext}${imageDirections}
+Respond ONLY with valid JSON — no preamble, no markdown fences, no commentary.`;
 
-    if (!response.ok || !data.concepts) {
+    const adCopy = [source.hook, source.bodyText].filter(Boolean).join(" — ");
+
+    const userPrompt = `${source.clientName ? `CLIENT: ${source.clientName}` : ""}
+${source.clientName ? `PRODUCT: ${source.clientName}` : ""}
+
+CURRENT AD IMAGE:
+${imageDescription || "No description provided — generate concepts based on the product/brand context."}
+
+${adCopy ? `AD COPY (for context — the image should complement this message):\n${adCopy}\n` : ""}
+${notes ? `CREATIVE DIRECTOR NOTES:\n${notes}\n` : ""}
+
+Generate exactly 3 high-converting image variation concepts for a Facebook/Instagram feed ad.
+Each concept should take a DIFFERENT visual approach:
+
+1. "clean_hero" — Single product hero shot with maximum clarity. Clean background, strong lighting, product dominates the frame.
+
+2. "lifestyle_proof" — Product in a real-life context showing the result/transformation. Human element, natural setting, emotional connection.
+
+3. "pattern_interrupt" — Bold, unexpected visual that breaks the scroll pattern. Striking contrast, unusual composition, or provocative visual hook.
+
+For EACH concept provide:
+- title: Short name (e.g. "Clean Hero — Bottle Close-Up")
+- concept: 2-3 sentences describing exactly what the image shows.
+- whyItWorks: 1 sentence — the direct-response psychology behind this visual approach.
+- textOverlay: Suggested text overlay on the image (5-7 words max or "none").
+- colorDirection: Primary color palette direction.
+
+Respond ONLY with this JSON array:
+[
+  {"title": "...", "concept": "...", "whyItWorks": "...", "textOverlay": "...", "colorDirection": "..."},
+  {"title": "...", "concept": "...", "whyItWorks": "...", "textOverlay": "...", "colorDirection": "..."},
+  {"title": "...", "concept": "...", "whyItWorks": "...", "textOverlay": "...", "colorDirection": "..."}
+]`;
+
+    // Call AI provider directly
+    const result = await callAiProvider(provider, systemPrompt, userPrompt);
+
+    if (!result.ok) {
       return {
         ok: false,
         variations: [],
         provider,
         error: {
           code: "provider_failure",
-          message: data.error || "Image concept generation failed",
+          message: result.error || "Image concept generation failed",
           retryable: true,
         },
       };
     }
 
-    // Map API response to candidates
-    const variations: ImageVariationCandidate[] = (data.concepts as Array<{
-      title?: string;
-      concept?: string;
-      whyItWorks?: string;
-      textOverlay?: string;
-      colorDirection?: string;
-    }>)
+    const variations: ImageVariationCandidate[] = result.concepts
       .slice(0, variationCount)
       .map((c, i) => ({
-        title: c.title || `Concept ${i + 1}`,
-        conceptSummary: c.concept || "",
-        visualChanges: c.whyItWorks || "",
-        goal: "Improve engagement through visual differentiation",
-        textOverlay: c.textOverlay,
-        colorDirection: c.colorDirection,
+        title: String(c.title || `Concept ${i + 1}`),
+        conceptSummary: String(c.concept || ""),
+        visualChanges: String(c.whyItWorks || ""),
+        goal: "variation",
+        textOverlay: String(c.textOverlay || ""),
+        colorDirection: String(c.colorDirection || ""),
         rendered: false,
       }));
 
     return {
       ok: true,
       variations,
-      provider: data.provider || provider,
+      provider: result.provider || provider,
     };
   } catch (err) {
     return {
@@ -132,70 +158,131 @@ export async function generateImageVariationsFromSource(
   }
 }
 
-/**
- * Render a single image concept into an actual image using Flux Pro / DALL-E.
- * Called individually per concept (since rendering is expensive).
- */
-export async function renderImageConcept(
-  concept: ImageVariationCandidate,
-  source: {
-    imageUrl?: string;
-    clientAccountId: string;
-    clientName?: string;
-  },
-  options: { baseUrl?: string } = {}
+// ── AI Provider calls ─────────────────────────────────────────────────────
+
+async function callAiProvider(
+  provider: string,
+  systemPrompt: string,
+  userPrompt: string
 ): Promise<{
   ok: boolean;
-  imageUrl?: string;
-  error?: CreativeVariationError;
+  concepts: Array<Record<string, unknown>>;
+  provider?: string;
+  error?: string;
 }> {
-  const { baseUrl = "" } = options;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
 
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/creative-lab/quick-generate/images/generate`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          concept: concept.conceptSummary,
-          title: concept.title,
-          textOverlay: concept.textOverlay || "",
-          colorDirection: concept.colorDirection || "",
-          productName: source.clientName || "Product",
-          productImageUrl: source.imageUrl || "",
-          clientAccountId: source.clientAccountId,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.imageUrl) {
-      return {
-        ok: false,
-        error: {
-          code: "provider_failure",
-          message: data.error || "Image rendering failed",
-          retryable: true,
-        },
-      };
-    }
-
-    return { ok: true, imageUrl: data.imageUrl };
-  } catch (err) {
-    return {
-      ok: false,
-      error: {
-        code: "provider_failure",
-        message: err instanceof Error ? err.message : "Image rendering failed",
-        retryable: true,
-      },
-    };
+  if (provider === "anthropic" && anthropicKey) {
+    return callAnthropic(anthropicKey, systemPrompt, userPrompt);
   }
+  if (provider === "openai" && openaiKey) {
+    return callOpenAI(openaiKey, systemPrompt, userPrompt);
+  }
+  if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt);
+  if (openaiKey) return callOpenAI(openaiKey, systemPrompt, userPrompt);
+
+  return { ok: false, concepts: [], error: "No AI provider configured." };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+async function callAnthropic(apiKey: string, system: string, user: string) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+      max_tokens: 4096,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+
+  if (res.status === 429) {
+    return { ok: false, concepts: [], error: "Rate limited. Wait a moment and try again." };
+  }
+
+  const data = await res.json();
+  if (!res.ok) {
+    return { ok: false, concepts: [], error: data?.error?.message ?? `HTTP ${res.status}` };
+  }
+
+  const text = data?.content?.[0]?.text ?? "";
+  const concepts = parseJsonArray(text);
+  return {
+    ok: concepts.length > 0,
+    concepts,
+    provider: "anthropic",
+    error: concepts.length === 0 ? "AI returned invalid format" : undefined,
+  };
+}
+
+async function callOpenAI(apiKey: string, system: string, user: string) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o",
+      max_tokens: 4096,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+
+  if (res.status === 429) {
+    return { ok: false, concepts: [], error: "Rate limited. Wait a moment and try again." };
+  }
+
+  const data = await res.json();
+  if (!res.ok) {
+    return { ok: false, concepts: [], error: data?.error?.message ?? `OpenAI HTTP ${res.status}` };
+  }
+
+  const text = data?.choices?.[0]?.message?.content ?? "";
+  const concepts = parseJsonArray(text);
+  return {
+    ok: concepts.length > 0,
+    concepts,
+    provider: "openai",
+    error: concepts.length === 0 ? "AI returned invalid format" : undefined,
+  };
+}
+
+// ── Parse helpers ─────────────────────────────────────────────────────────
+
+function parseJsonArray(text: string): Array<Record<string, unknown>> {
+  const cleaned = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed as Record<string, unknown>[];
+  } catch { /* continue */ }
+
+  const arrStart = cleaned.indexOf("[");
+  const arrEnd = cleaned.lastIndexOf("]");
+  if (arrStart >= 0 && arrEnd > arrStart) {
+    try {
+      const extracted = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+      if (Array.isArray(extracted)) return extracted as Record<string, unknown>[];
+    } catch { /* give up */ }
+  }
+
+  return [];
+}
+
+// ── Context enrichment ──────────────────────────────────────────────────────
 
 function buildImageDescription(
   ctx: VariationSourceContext,
@@ -203,23 +290,25 @@ function buildImageDescription(
 ): string {
   const parts: string[] = [];
 
-  if (ctx.source.imageDescription) {
-    parts.push(ctx.source.imageDescription);
-  } else {
-    parts.push("Current ad image for direct-response advertising.");
+  if (ctx.source.imageUrl) {
+    parts.push(`Source image URL: ${ctx.source.imageUrl}`);
+  }
+  if (ctx.source.imageHeadline) {
+    parts.push(`Image headline: ${ctx.source.imageHeadline}`);
   }
 
-  if (ctx.performance?.fatigueStatus && ctx.performance.fatigueStatus !== "healthy") {
-    parts.push(
-      `This creative shows ${ctx.performance.fatigueStatus} — the visual needs fresh differentiation.`
-    );
+  if (ctx.performance) {
+    const perf = ctx.performance;
+    if (perf.fatigueStatus && perf.fatigueStatus !== "healthy") {
+      parts.push(`Creative is showing fatigue (frequency: ${perf.frequency?.toFixed(1)}x). Needs fresh visual approach.`);
+    }
   }
 
   if (ctx.clientImageDirections) {
-    parts.push(`Brand image guidelines: ${ctx.clientImageDirections}`);
+    parts.push(`Client image directions: ${ctx.clientImageDirections}`);
   }
 
   if (userNotes) parts.push(userNotes);
 
-  return parts.join(" ");
+  return parts.join("\n");
 }
