@@ -74,6 +74,8 @@ const NAV: NavEntry[] = [
     children: [
       { kind: "leaf", href: "/creative-lab/quick-generate", label: "Quick Generate"       },
       { kind: "leaf", href: "/creative-lab/upload",          label: "Upload Asset"         },
+      { kind: "leaf", href: "/creative-lab/variations",    label: "Generate Variations"  },
+      { kind: "leaf", href: "/creative-lab/quick-review",  label: "Quick Review"         },
       { kind: "leaf", href: "/creative-lab/workspace",    label: "Review Workspace"     },
       { kind: "leaf", href: "/creative-lab",              label: "Creative Lab"         },
       { kind: "leaf", href: "/creative-lab/publish-prep", label: "Publish Prep"        },
