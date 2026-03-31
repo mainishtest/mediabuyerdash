@@ -24,6 +24,19 @@ interface SourceAsset {
   clientAccountId: string;
 }
 
+interface ExistingAd {
+  adId: string;
+  adName: string;
+  status: string;
+  campaignName: string;
+  hook: string;
+  body: string;
+  hasCopy: boolean;
+  cta: string;
+  imageUrl: string | null;
+  creativeName: string | null;
+}
+
 interface CopyCandidate {
   id?: string;
   title: string;
@@ -76,6 +89,11 @@ export function VariationGeneratorView() {
   const [clients, setClients] = useState<Client[]>([]);
   const [sourceAssets, setSourceAssets] = useState<SourceAsset[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState("");
+
+  // Existing ads state
+  const [existingAds, setExistingAds] = useState<ExistingAd[]>([]);
+  const [adSearch, setAdSearch] = useState("");
+  const [loadingAds, setLoadingAds] = useState(false);
 
   // Source creative fields (editable)
   const [imageUrl, setImageUrl] = useState("");
@@ -141,6 +159,19 @@ export function VariationGeneratorView() {
       .catch(() => {});
   }, [clientAccountId]);
 
+  // ── Load existing ads when client changes ──
+  useEffect(() => {
+    if (!clientAccountId) { setExistingAds([]); return; }
+    setLoadingAds(true);
+    fetch(`/api/creative-lab/quick-generate/ads?clientId=${clientAccountId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.ads) setExistingAds(data.ads);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingAds(false));
+  }, [clientAccountId]);
+
   // ── Select a source asset ──
   const selectAsset = useCallback((asset: SourceAsset) => {
     setSelectedAssetId(asset.id);
@@ -149,6 +180,16 @@ export function VariationGeneratorView() {
     if (asset.bodyText) setBodyText(asset.bodyText);
     if (asset.callToAction) setCta(asset.callToAction);
     if (asset.imageHeadline) setImageHeadline(asset.imageHeadline);
+  }, []);
+
+  // ── Select an existing ad ──
+  const selectExistingAd = useCallback((ad: ExistingAd) => {
+    setSourceAdId(ad.adId);
+    setSourceAdName(ad.adName);
+    if (ad.imageUrl) setImageUrl(ad.imageUrl);
+    if (ad.hook) setHook(ad.hook);
+    if (ad.body) setBodyText(ad.body);
+    if (ad.cta) setCta(ad.cta);
   }, []);
 
   // ── Generate variations ──
@@ -376,29 +417,105 @@ export function VariationGeneratorView() {
           </div>
         )}
 
-        {/* Existing ad fields */}
-        {sourceMode === "existing_ad" && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Ad ID</label>
-              <input
-                type="text"
-                value={sourceAdId}
-                onChange={(e) => setSourceAdId(e.target.value)}
-                placeholder="Meta ad ID"
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Ad Name</label>
-              <input
-                type="text"
-                value={sourceAdName}
-                onChange={(e) => setSourceAdName(e.target.value)}
-                placeholder="Ad name"
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
-              />
-            </div>
+        {/* Existing ad picker */}
+        {sourceMode === "existing_ad" && clientAccountId && (
+          <div className="space-y-3">
+            {/* Search */}
+            <input
+              type="text"
+              value={adSearch}
+              onChange={(e) => setAdSearch(e.target.value)}
+              placeholder="Search ads by name or ID…"
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-600 focus:outline-none"
+            />
+
+            {loadingAds ? (
+              <div className="py-8 text-center text-sm text-slate-500">Loading ads…</div>
+            ) : existingAds.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
+                <p className="text-sm text-slate-500">
+                  No synced ads found for this client. Make sure the Meta ad account is connected and synced.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 max-h-[400px] overflow-y-auto pr-1">
+                {existingAds
+                  .filter((ad) => {
+                    if (!adSearch) return true;
+                    const q = adSearch.toLowerCase();
+                    return ad.adName.toLowerCase().includes(q) || ad.adId.includes(q);
+                  })
+                  .map((ad) => (
+                    <button
+                      key={ad.adId}
+                      onClick={() => selectExistingAd(ad)}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        sourceAdId === ad.adId
+                          ? "border-indigo-500 bg-indigo-950/30"
+                          : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                      }`}
+                    >
+                      {ad.imageUrl && (
+                        <div className="relative mb-2 aspect-video w-full overflow-hidden rounded-lg bg-slate-800">
+                          <Image
+                            src={ad.imageUrl}
+                            alt={ad.adName}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                      )}
+                      <p className="truncate text-sm font-medium text-slate-200">{ad.adName}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          ad.status === "ACTIVE" ? "bg-emerald-950/50 text-emerald-400" :
+                          ad.status === "PAUSED" ? "bg-amber-950/50 text-amber-400" :
+                          "bg-slate-800 text-slate-500"
+                        }`}>
+                          {ad.status}
+                        </span>
+                        {ad.campaignName && (
+                          <span className="truncate text-[10px] text-slate-600">{ad.campaignName}</span>
+                        )}
+                      </div>
+                      {ad.hook && (
+                        <p className="mt-1 line-clamp-1 text-xs text-slate-500">{ad.hook}</p>
+                      )}
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {/* Manual override fields (collapsed under the picker) */}
+            {sourceAdId && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2 border-t border-slate-800">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Selected Ad ID</label>
+                  <input
+                    type="text"
+                    value={sourceAdId}
+                    onChange={(e) => setSourceAdId(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-400 focus:border-indigo-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Ad Name</label>
+                  <input
+                    type="text"
+                    value={sourceAdName}
+                    onChange={(e) => setSourceAdName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-400 focus:border-indigo-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {sourceMode === "existing_ad" && !clientAccountId && (
+          <div className="rounded-lg border border-dashed border-slate-700 py-8 text-center">
+            <p className="text-sm text-slate-500">Select a client to see their existing ads.</p>
           </div>
         )}
 

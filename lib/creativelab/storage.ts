@@ -1,13 +1,9 @@
 // lib/creativelab/storage.ts
-// Handles writing uploaded image files to the local public/ directory.
+// Handles uploaded image files by converting them to base64 data URLs.
 //
-// v1: stores to public/uploads/creatives/[id].[ext]
-// Production upgrade path: swap writeImageFile() for an S3/R2/Cloudinary upload
-// without changing any callers.
-
-import { writeFile } from "fs/promises";
-import { join } from "path";
-import { existsSync, mkdirSync } from "fs";
+// v1: stored to public/uploads/creatives/[id].[ext] (broke on Vercel)
+// v2: converts to base64 data URL stored in database — works everywhere
+// Production upgrade path: swap for S3/R2/Cloudinary upload without changing callers.
 
 export const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -19,15 +15,15 @@ export const ALLOWED_MIME_TYPES = [
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export interface StorageResult {
-  storagePath: string;  // URL path served by Next.js: /uploads/creatives/[id].[ext]
+  storagePath: string;  // data URL (base64) or external URL
   fileName:    string;  // original file name from the upload
   mimeType:    string;
   fileSize:    number;  // bytes
 }
 
-/** Persist a File/Blob to disk and return storage metadata. */
+/** Convert a File/Blob to a base64 data URL and return storage metadata. */
 export async function writeImageFile(
-  imageId: string,
+  _imageId: string,
   file: File
 ): Promise<StorageResult> {
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
@@ -37,31 +33,14 @@ export async function writeImageFile(
     throw new Error(`File too large: ${file.size} bytes (max ${MAX_FILE_SIZE_BYTES})`);
   }
 
-  const ext = extensionFor(file.type);
-  const filename = `${imageId}.${ext}`;
-  const dir = join(process.cwd(), "public", "uploads", "creatives");
-
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(join(dir, filename), buffer);
+  const base64 = buffer.toString("base64");
+  const dataUrl = `data:${file.type};base64,${base64}`;
 
   return {
-    storagePath: `/uploads/creatives/${filename}`,
+    storagePath: dataUrl,
     fileName:    file.name,
     mimeType:    file.type,
     fileSize:    file.size,
   };
-}
-
-function extensionFor(mimeType: string): string {
-  switch (mimeType) {
-    case "image/jpeg":
-    case "image/jpg":  return "jpg";
-    case "image/png":  return "png";
-    case "image/webp": return "webp";
-    default:           return "bin";
-  }
 }

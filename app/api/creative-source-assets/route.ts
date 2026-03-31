@@ -1,13 +1,13 @@
 // API route for Creative Source Assets — list and create.
 // POST: Upload/create a new source asset
 // GET: List assets for a client
+//
+// Images are stored as base64 data URLs in the database.
+// This works on Vercel (read-only filesystem) and avoids needing S3/Blob storage.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma }                    from "../../../lib/db";
-import { writeFile, mkdir }          from "fs/promises";
-import path                          from "path";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "creatives");
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -67,15 +67,10 @@ export async function POST(req: NextRequest) {
           }, { status: 400 });
         }
 
-        // Write file to disk
-        await mkdir(UPLOAD_DIR, { recursive: true });
-        const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const filename = `${clientAccountId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const filePath = path.join(UPLOAD_DIR, filename);
+        // Convert to base64 data URL (works on Vercel's read-only filesystem)
         const buffer = Buffer.from(await file.arrayBuffer());
-        await writeFile(filePath, buffer);
-
-        imageUrl = `/uploads/creatives/${filename}`;
+        const base64 = buffer.toString("base64");
+        imageUrl = `data:${file.type};base64,${base64}`;
         imageMimeType = file.type;
         imageFileSize = file.size;
       }
