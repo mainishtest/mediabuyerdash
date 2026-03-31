@@ -4,10 +4,7 @@
 
 export { buildVariationSourceContext } from "./sourceContext";
 export { generateCopyVariationsFromSource } from "./copyGenerator";
-export {
-  generateImageVariationsFromSource,
-  renderImageConcept,
-} from "./imageGenerator";
+export { generateImageVariationsFromSource } from "./imageGenerator";
 export { generateUnifiedVariationSet } from "./unified";
 export {
   persistVariationCandidates,
