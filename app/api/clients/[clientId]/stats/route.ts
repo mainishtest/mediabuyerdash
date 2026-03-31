@@ -118,6 +118,22 @@ export async function GET(
   try {
     const startMs = Date.now();
 
+    // Historical data (endDate < today) is immutable — safe to cache.
+    // Today's data changes as syncs run, so no caching.
+    const todayStr = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone }).format(new Date());
+    const isHistorical = endDate < todayStr;
+
+    function withCacheHeaders(response: NextResponse): NextResponse {
+      if (isHistorical) {
+        // Historical: cache for 5 min in browser, 1 hour on CDN
+        response.headers.set("Cache-Control", "private, max-age=300, stale-while-revalidate=3600");
+      } else {
+        // Live: no cache
+        response.headers.set("Cache-Control", "private, no-cache");
+      }
+      return response;
+    }
+
     // ── Deep search mode ─────────────────────────────────────────────────
     if (deepSearch && search) {
       const result = await searchAllLevels(clientId, search, startDate, endDate, {
@@ -125,7 +141,7 @@ export async function GET(
         timezone,
       });
       console.log(`[Stats API] deep search "${search}" completed in ${Date.now() - startMs}ms`);
-      return NextResponse.json(result);
+      return withCacheHeaders(NextResponse.json(result));
     }
 
     // ── Standard level-based queries ─────────────────────────────────────
@@ -135,7 +151,7 @@ export async function GET(
       case "campaign": {
         const result = await getCampaignStats(clientId, startDate, endDate, options);
         console.log(`[Stats API] campaign stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
-        return NextResponse.json(result);
+        return withCacheHeaders(NextResponse.json(result));
       }
 
       case "adset": {
@@ -147,7 +163,7 @@ export async function GET(
         }
         const result = await getAdSetStats(clientId, parentId, startDate, endDate, options);
         console.log(`[Stats API] adset stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
-        return NextResponse.json(result);
+        return withCacheHeaders(NextResponse.json(result));
       }
 
       case "ad": {
@@ -159,7 +175,7 @@ export async function GET(
         }
         const result = await getAdStats(clientId, parentId, startDate, endDate, options);
         console.log(`[Stats API] ad stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
-        return NextResponse.json(result);
+        return withCacheHeaders(NextResponse.json(result));
       }
 
       default:

@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { StatsFilters } from "./StatsFilters";
 import { StatsTable } from "./StatsTable";
@@ -119,14 +119,19 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
   const [activeOnly, setActiveOnly] = useState(() => searchParams.get("active") === "1");
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
 
-  // Sync state → URL params (shallow, no navigation)
+  // Sync state → URL params (debounced to avoid 8 router.replace calls while typing)
+  const urlTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    const p = new URLSearchParams();
-    p.set("start", dateRange.startDate);
-    p.set("end", dateRange.endDate);
-    if (activeOnly) p.set("active", "1");
-    if (search) p.set("q", search);
-    router.replace(`?${p.toString()}`, { scroll: false });
+    clearTimeout(urlTimer.current);
+    urlTimer.current = setTimeout(() => {
+      const p = new URLSearchParams();
+      p.set("start", dateRange.startDate);
+      p.set("end", dateRange.endDate);
+      if (activeOnly) p.set("active", "1");
+      if (search) p.set("q", search);
+      router.replace(`?${p.toString()}`, { scroll: false });
+    }, 400);
+    return () => clearTimeout(urlTimer.current);
   }, [dateRange, activeOnly, search, router]);
 
   const data = useStatsData({ clientId, dateRange, activeOnly, search });

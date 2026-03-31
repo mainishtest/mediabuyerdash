@@ -1,9 +1,10 @@
 // Hierarchical expandable table — campaigns → ad sets → ads.
 // Flattens the tree into a sorted list with depth-based indentation.
+// Row is memoized to avoid re-rendering 1000s of rows on sort/expand changes.
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import type { StatsRow, StatsLevel } from "../../../../lib/stats/statsTypes";
 import { STATS_COLUMNS, type SortDirection } from "./StatsColumns";
 
@@ -22,7 +23,6 @@ interface Props {
 // ── Sort within a sibling group ─────────────────────────────────────────────
 
 function sortRows(rows: StatsRow[], column: string, direction: SortDirection): StatsRow[] {
-  // "name" sort
   if (column === "name") {
     return [...rows].sort((a, b) => {
       const cmp = a.name.localeCompare(b.name);
@@ -65,6 +65,23 @@ function Spinner() {
   );
 }
 
+// ── Search highlight (pre-lowercased search term for perf) ──────────────────
+
+function HighlightName({ name, searchLower }: { name: string; searchLower: string }) {
+  if (!searchLower) return <>{name}</>;
+  const idx = name.toLowerCase().indexOf(searchLower);
+  if (idx === -1) return <>{name}</>;
+  return (
+    <>
+      {name.slice(0, idx)}
+      <span className="rounded bg-amber-500/20 px-0.5 text-amber-300">
+        {name.slice(idx, idx + searchLower.length)}
+      </span>
+      {name.slice(idx + searchLower.length)}
+    </>
+  );
+}
+
 // ── Table header ────────────────────────────────────────────────────────────
 
 function Header({ sortColumn, sortDirection, onSort }: {
@@ -75,7 +92,6 @@ function Header({ sortColumn, sortDirection, onSort }: {
   return (
     <thead className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur-sm">
       <tr className="border-b border-slate-800">
-        {/* Name column — sortable */}
         <th
           onClick={() => onSort("name")}
           className={`cursor-pointer select-none pb-2.5 pl-3 pr-4 text-left text-[10px] font-semibold uppercase
@@ -112,12 +128,20 @@ function Header({ sortColumn, sortDirection, onSort }: {
   );
 }
 
-// ── Single row ──────────────────────────────────────────────────────────────
+// ── Memoized row ────────────────────────────────────────────────────────────
+// React.memo prevents re-rendering rows whose props haven't changed.
+// On a sort change, only the DOM order changes — individual row content is stable.
 
-function Row({ row, depth, expanded, expanding, onToggle, search }: {
-  row: StatsRow; depth: number; expanded: boolean; expanding: boolean;
-  onToggle: () => void; search?: string;
-}) {
+interface RowProps {
+  row: StatsRow;
+  depth: number;
+  expanded: boolean;
+  expanding: boolean;
+  onToggle: () => void;
+  searchLower: string;
+}
+
+const Row = memo(function Row({ row, depth, expanded, expanding, onToggle, searchLower }: RowProps) {
   const indent = depth * 24;
   const hasChildren = row.childCount > 0;
 
@@ -128,7 +152,6 @@ function Row({ row, depth, expanded, expanding, onToggle, search }: {
 
   return (
     <tr className={`border-b border-slate-800/40 transition-colors ${bg}`}>
-      {/* Name cell */}
       <td className="py-2 pl-3 pr-4">
         <div className="flex items-center gap-1.5" style={{ paddingLeft: indent }}>
           {hasChildren ? (
@@ -143,12 +166,11 @@ function Row({ row, depth, expanded, expanding, onToggle, search }: {
             <span className="h-5 w-5 flex-shrink-0" />
           )}
           <span className="truncate text-sm font-medium text-slate-200 leading-tight">
-            <HighlightName name={row.name} search={search} />
+            <HighlightName name={row.name} searchLower={searchLower} />
           </span>
         </div>
       </td>
 
-      {/* Metric cells */}
       {STATS_COLUMNS.map(col => (
         <td
           key={col.key}
@@ -161,41 +183,13 @@ function Row({ row, depth, expanded, expanding, onToggle, search }: {
       ))}
     </tr>
   );
-}
-
-// ── Search highlight ────────────────────────────────────────────────────────
-
-function HighlightName({ name, search }: { name: string; search?: string }) {
-  if (!search || search.length < 2) return <>{name}</>;
-  const idx = name.toLowerCase().indexOf(search.toLowerCase());
-  if (idx === -1) return <>{name}</>;
-  return (
-    <>
-      {name.slice(0, idx)}
-      <span className="rounded bg-amber-500/20 px-0.5 text-amber-300">
-        {name.slice(idx, idx + search.length)}
-      </span>
-      {name.slice(idx + search.length)}
-    </>
-  );
-}
+});
 
 // ── Empty state ─────────────────────────────────────────────────────────────
 
 function Empty({ search }: { search?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-2 text-2xl text-slate-700">
-        {search ? (
-          <svg className="mx-auto h-8 w-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-        ) : (
-          <svg className="mx-auto h-8 w-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-          </svg>
-        )}
-      </div>
       <p className="text-sm font-medium text-slate-400">
         {search ? "No results found" : "No campaigns found"}
       </p>
@@ -212,8 +206,13 @@ export function StatsTable({
   campaignRows, childrenMap, expandedIds, expandingIds,
   onToggleExpand, sortColumn, sortDirection, onSortColumn, search,
 }: Props) {
+  // Pre-lowercase the search term once — avoids N * toLowerCase() in HighlightName
+  const searchLower = useMemo(
+    () => (search && search.length >= 2 ? search.toLowerCase() : ""),
+    [search],
+  );
+
   // Flatten the 3-level tree into a sorted list with depth markers.
-  // Sort is applied per sibling group (campaigns among campaigns, etc.)
   const flat = useMemo(() => {
     const out: Array<{ row: StatsRow; depth: number }> = [];
 
@@ -238,6 +237,13 @@ export function StatsTable({
     return out;
   }, [campaignRows, childrenMap, expandedIds, sortColumn, sortDirection]);
 
+  // Stable toggle callbacks — one per row, memoized to prevent Row re-renders.
+  // useCallback with the row's identity as part of the inline closure.
+  const makeToggle = useCallback(
+    (externalId: string, level: StatsLevel) => () => onToggleExpand(externalId, level),
+    [onToggleExpand],
+  );
+
   if (campaignRows.length === 0) return <Empty search={search} />;
 
   return (
@@ -252,8 +258,8 @@ export function StatsTable({
               depth={depth}
               expanded={expandedIds.has(row.externalId)}
               expanding={expandingIds.has(row.externalId)}
-              onToggle={() => onToggleExpand(row.externalId, row.level)}
-              search={search}
+              onToggle={makeToggle(row.externalId, row.level)}
+              searchLower={searchLower}
             />
           ))}
         </tbody>

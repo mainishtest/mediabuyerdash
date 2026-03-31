@@ -1085,6 +1085,8 @@ model MetaSyncedAdSet {
   updatedAt           DateTime  @updatedAt
 
   @@index([workspaceId])
+  @@index([externalCampaignId])
+  @@index([externalAdAccountId, externalCampaignId])
 }
 
 // Ads synced from Meta. Upserted on externalAdId.
@@ -1104,6 +1106,9 @@ model MetaSyncedAd {
   updatedAt           DateTime  @updatedAt
 
   @@index([workspaceId])
+  @@index([externalAdSetId])
+  @@index([externalCampaignId])
+  @@index([externalAdAccountId, externalCampaignId])
 }
 
 // Creative metadata synced from Meta. Upserted on externalCreativeId.
@@ -1146,7 +1151,7 @@ model MetaSyncedInsight {
   updatedAt           DateTime @updatedAt
 
   @@unique([externalAdAccountId, level, externalCampaignId, externalAdSetId, externalAdId, dateStart])
-  @@index([externalAdAccountId, dateStart])
+  @@index([externalAdAccountId, level, dateStart])
   @@index([workspaceId, dateStart])
   @@index([externalCampaignId, level, dateStart])
   @@index([externalAdSetId, level, dateStart])

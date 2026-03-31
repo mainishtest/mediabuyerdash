@@ -435,6 +435,7 @@ export async function getAdSetStats(
     // ALL ads in the parent campaign — needed for revenue attribution.
     // Attribution is campaign-scoped: spend-share distributes across all
     // ads in the campaign, not just those in one ad set.
+    // Only fetch the 3 fields the attribution engine needs.
     prisma.metaSyncedAd.findMany({
       where: {
         externalCampaignId: parentCampaignId,
@@ -443,14 +444,13 @@ export async function getAdSetStats(
       select: {
         externalAdId: true,
         externalAdSetId: true,
-        externalCampaignId: true,
-        externalAdAccountId: true,
         name: true,
       },
     }),
 
     // Ad-level daily insight rows for the campaign — builds the
     // daily spend indexes needed by the attribution engine.
+    // Only fetch rows with actual spend to reduce attribution input.
     // Uses index: (externalCampaignId, level, dateStart)
     prisma.metaSyncedInsight.findMany({
       where: {
@@ -458,6 +458,7 @@ export async function getAdSetStats(
         level: "ad",
         dateStart: { gte: startDate, lte: endDate },
         externalAdId: { not: "" },
+        spend: { gt: 0 },
       },
       select: {
         externalAdId: true,
@@ -491,10 +492,11 @@ export async function getAdSetStats(
 
   const orders = mapOrdersForAttribution(shopifyOrders, tz);
 
+  // Campaign/account IDs are known in scope — no need to fetch them per-ad.
   const adsForAttribution: AdForAttribution[] = ads.map(a => ({
     externalAdId: a.externalAdId,
-    externalCampaignId: a.externalCampaignId,
-    externalAdAccountId: a.externalAdAccountId,
+    externalCampaignId: parentCampaignId,
+    externalAdAccountId: adAccountIds[0],
     name: a.name,
   }));
 
@@ -615,7 +617,8 @@ export async function getAdStats(
       _sum: { spend: true, impressions: true, clicks: true },
     }),
 
-    // ALL ads in the parent campaign — for campaign-scoped attribution
+    // ALL ads in the parent campaign — for campaign-scoped attribution.
+    // Only fetch the 3 fields the attribution engine needs.
     prisma.metaSyncedAd.findMany({
       where: {
         externalCampaignId: parentCampaignId,
@@ -624,13 +627,12 @@ export async function getAdStats(
       select: {
         externalAdId: true,
         externalAdSetId: true,
-        externalCampaignId: true,
-        externalAdAccountId: true,
         name: true,
       },
     }),
 
     // Ad-level daily insights for the entire parent campaign.
+    // Only rows with spend > 0 — reduces attribution input set.
     // Uses index: (externalCampaignId, level, dateStart)
     prisma.metaSyncedInsight.findMany({
       where: {
@@ -638,6 +640,7 @@ export async function getAdStats(
         level: "ad",
         dateStart: { gte: startDate, lte: endDate },
         externalAdId: { not: "" },
+        spend: { gt: 0 },
       },
       select: {
         externalAdId: true,
@@ -673,8 +676,8 @@ export async function getAdStats(
 
   const adsForAttribution: AdForAttribution[] = allCampaignAds.map(a => ({
     externalAdId: a.externalAdId,
-    externalCampaignId: a.externalCampaignId,
-    externalAdAccountId: a.externalAdAccountId,
+    externalCampaignId: parentCampaignId,
+    externalAdAccountId: adAccountIds[0],
     name: a.name,
   }));
 
@@ -761,10 +764,14 @@ export async function searchAllLevels(
   const nameFilter = { name: { contains: search, mode: "insensitive" as const } };
   const accountFilter = { externalAdAccountId: { in: adAccountIds } };
 
+  // Cap search results to avoid runaway queries on broad terms.
+  // 200 per level is enough to show meaningful results.
+  const SEARCH_LIMIT = 200;
+
   const [matchedCampaigns, matchedAdSets, matchedAds] = await Promise.all([
-    prisma.metaSyncedCampaign.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter } }),
-    prisma.metaSyncedAdSet.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter } }),
-    prisma.metaSyncedAd.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter } }),
+    prisma.metaSyncedCampaign.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter }, take: SEARCH_LIMIT }),
+    prisma.metaSyncedAdSet.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter }, take: SEARCH_LIMIT }),
+    prisma.metaSyncedAd.findMany({ where: { ...accountFilter, ...nameFilter, ...statusFilter }, take: SEARCH_LIMIT }),
   ]);
 
   // ── Collect ancestor IDs needed for hierarchy context ────────────────────

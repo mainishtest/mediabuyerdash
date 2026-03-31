@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, type MutableRefObject } from "react";
 import type { StatsRow, StatsApiResponse, StatsSearchResult, StatsLevel } from "../../../../lib/stats/statsTypes";
 
 export interface DateRange {
@@ -128,10 +128,17 @@ export function useStatsData({ clientId, dateRange, activeOnly, search }: Params
   }, [clientId, dateRange.startDate, dateRange.endDate, activeOnly, search]);
 
   // ── Expand / collapse ─────────────────────────────────────────────────────
+  // Uses refs for values that change on every expand (expandedIds, childrenMap)
+  // so the callback identity stays stable and doesn't re-render the entire table.
+  const childrenMapRef = useRef(childrenMap);
+  childrenMapRef.current = childrenMap;
+  const expandedIdsRef = useRef(expandedIds);
+  expandedIdsRef.current = expandedIds;
+
   const toggleExpand = useCallback(
     async (externalId: string, level: StatsLevel) => {
       // Collapse
-      if (expandedIds.has(externalId)) {
+      if (expandedIdsRef.current.has(externalId)) {
         setExpandedIds(prev => { const n = new Set(prev); n.delete(externalId); return n; });
         return;
       }
@@ -140,9 +147,9 @@ export function useStatsData({ clientId, dateRange, activeOnly, search }: Params
       setExpandedIds(prev => new Set(prev).add(externalId));
 
       // Already cached — nothing to fetch
-      if (childrenMap[externalId]) return;
+      if (childrenMapRef.current[externalId]) return;
 
-      // Fetch children
+      // Fetch children lazily
       const childLevel: StatsLevel = level === "campaign" ? "adset" : "ad";
       setExpandingIds(prev => new Set(prev).add(externalId));
 
@@ -167,7 +174,7 @@ export function useStatsData({ clientId, dateRange, activeOnly, search }: Params
         setExpandingIds(prev => { const n = new Set(prev); n.delete(externalId); return n; });
       }
     },
-    [childrenMap, dateRange, activeOnly, clientId, expandedIds],
+    [dateRange, activeOnly, clientId], // Stable — no expandedIds/childrenMap churn
   );
 
   // ── Sort ──────────────────────────────────────────────────────────────────
