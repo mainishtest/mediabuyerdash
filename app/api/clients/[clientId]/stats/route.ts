@@ -1,13 +1,25 @@
 // app/api/clients/[clientId]/stats/route.ts
+// ─────────────────────────────────────────────────────────────────────────────
 // GET handler for the Stats hierarchical view.
 //
-// Supports:
-//   ?level=campaign&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
-//   ?level=adset&parentId=<externalCampaignId>&startDate=...&endDate=...
-//   ?level=ad&parentId=<externalAdSetId>&startDate=...&endDate=...
-//   ?search=<term>&startDate=...&endDate=...    (deep search mode)
+// USAGE:
+//   Campaign list:  ?level=campaign&startDate=2026-03-01&endDate=2026-03-31
+//   Ad sets:        ?level=adset&parentId=<campaignId>&startDate=...&endDate=...
+//   Ads:            ?level=ad&parentId=<adSetId>&startDate=...&endDate=...
+//   Deep search:    ?deepSearch=true&search=<term>&startDate=...&endDate=...
 //
-// Optional: &activeOnly=true  &search=<name filter>
+// OPTIONAL PARAMS:
+//   &activeOnly=true   — filter to ACTIVE status only
+//   &search=<term>     — name substring filter (level-scoped or deep)
+//
+// RESPONSE:
+//   Level queries   → StatsApiResponse { rows: StatsRow[], totals: StatsTotals }
+//   Deep search     → StatsSearchResult { campaigns, adSets, ads, ancestorMap }
+//
+// TIMEZONE:
+//   Automatically resolved from the client's account timezone setting.
+//   All date boundaries are computed in the account timezone.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +32,18 @@ import {
   searchAllLevels,
 } from "../../../../../lib/stats/statsService";
 
+// ── Date validation ─────────────────────────────────────────────────────────
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().startsWith(s);
+}
+
+// ── Route handler ───────────────────────────────────────────────────────────
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { clientId: string } },
@@ -27,15 +51,17 @@ export async function GET(
   const { clientId } = params;
   const sp = req.nextUrl.searchParams;
 
-  const level = sp.get("level") as "campaign" | "adset" | "ad" | null;
-  const parentId = sp.get("parentId") ?? undefined;
-  const startDate = sp.get("startDate");
-  const endDate = sp.get("endDate");
+  // Parse query parameters
+  const level      = sp.get("level") as "campaign" | "adset" | "ad" | null;
+  const parentId   = sp.get("parentId") ?? undefined;
+  const startDate  = sp.get("startDate");
+  const endDate    = sp.get("endDate");
   const activeOnly = sp.get("activeOnly") === "true";
-  const search = sp.get("search") ?? undefined;
+  const search     = sp.get("search") ?? undefined;
   const deepSearch = sp.get("deepSearch") === "true";
 
-  // Validate required params
+  // ── Validate required params ─────────────────────────────────────────────
+
   if (!startDate || !endDate) {
     return NextResponse.json(
       { error: "startDate and endDate are required (YYYY-MM-DD)" },
@@ -43,36 +69,72 @@ export async function GET(
     );
   }
 
-  if (!deepSearch && !level) {
+  if (!isValidDate(startDate) || !isValidDate(endDate)) {
     return NextResponse.json(
-      { error: "level is required (campaign | adset | ad)" },
+      { error: "Invalid date format. Expected YYYY-MM-DD." },
       { status: 400 },
     );
   }
 
-  // Get client timezone
+  if (startDate > endDate) {
+    return NextResponse.json(
+      { error: "startDate must be before or equal to endDate" },
+      { status: 400 },
+    );
+  }
+
+  if (!deepSearch && !level) {
+    return NextResponse.json(
+      { error: "level is required (campaign | adset | ad) unless deepSearch=true" },
+      { status: 400 },
+    );
+  }
+
+  if (!deepSearch && level && !["campaign", "adset", "ad"].includes(level)) {
+    return NextResponse.json(
+      { error: "level must be one of: campaign, adset, ad" },
+      { status: 400 },
+    );
+  }
+
+  // ── Resolve client timezone ──────────────────────────────────────────────
+  // All date boundary calculations use the account timezone so that
+  // "today" and "yesterday" align with the user's local calendar.
+
   const client = await prisma.clientAccount.findUnique({
     where: { id: clientId },
     select: { timezone: true },
   });
-  const timezone = client?.timezone || "America/New_York";
+
+  if (!client) {
+    return NextResponse.json(
+      { error: "Client not found" },
+      { status: 404 },
+    );
+  }
+
+  const timezone = client.timezone || "America/New_York";
 
   try {
-    // Deep search mode: search across all levels
+    const startMs = Date.now();
+
+    // ── Deep search mode ─────────────────────────────────────────────────
     if (deepSearch && search) {
       const result = await searchAllLevels(clientId, search, startDate, endDate, {
         activeOnly,
         timezone,
       });
+      console.log(`[Stats API] deep search "${search}" completed in ${Date.now() - startMs}ms`);
       return NextResponse.json(result);
     }
 
-    // Standard level-based queries
+    // ── Standard level-based queries ─────────────────────────────────────
     const options = { activeOnly, search, timezone };
 
     switch (level) {
       case "campaign": {
         const result = await getCampaignStats(clientId, startDate, endDate, options);
+        console.log(`[Stats API] campaign stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
         return NextResponse.json(result);
       }
 
@@ -84,6 +146,7 @@ export async function GET(
           );
         }
         const result = await getAdSetStats(clientId, parentId, startDate, endDate, options);
+        console.log(`[Stats API] adset stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
         return NextResponse.json(result);
       }
 
@@ -95,6 +158,7 @@ export async function GET(
           );
         }
         const result = await getAdStats(clientId, parentId, startDate, endDate, options);
+        console.log(`[Stats API] ad stats: ${result.rows.length} rows in ${Date.now() - startMs}ms`);
         return NextResponse.json(result);
       }
 
