@@ -99,10 +99,10 @@ export function VariationGeneratorView() {
 
   // ── Load clients on mount ──
   useEffect(() => {
-    fetch("/api/clients")
+    fetch("/api/creative-lab/quick-generate/clients")
       .then((r) => r.json())
       .then((data) => {
-        if (data.clients) setClients(data.clients);
+        if (data.ok && data.clients) setClients(data.clients);
       })
       .catch(() => {});
   }, []);
