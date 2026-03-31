@@ -532,7 +532,7 @@ export function UploadSourceAssetView() {
       {clientAccountId && existingAssets.length > 0 && (
         <section>
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-slate-500">
-            {clients.find((c) => c.id === clientAccountId)?.name || "Client"}'s Assets
+            {clients.find((c) => c.id === clientAccountId)?.name || "Client"}&apos;s Assets
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {existingAssets.map((asset) => (
