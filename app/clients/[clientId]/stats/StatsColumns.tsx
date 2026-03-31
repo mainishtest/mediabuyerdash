@@ -1,5 +1,6 @@
-// app/clients/[clientId]/stats/StatsColumns.tsx
 // Column definitions and metric formatters for the Stats table.
+// Each column defines how to render and sort its values.
+// Column order matches the spec: Status, Revenue, Spend, ROAS, CPM, CTR, CPC, Conversions.
 
 import type { StatsRow } from "../../../../lib/stats/statsTypes";
 
@@ -14,40 +15,31 @@ export interface StatsColumn {
   sortValue: (row: StatsRow) => number | string;
 }
 
-// ---------------------------------------------------------------------------
-// Formatters
-// ---------------------------------------------------------------------------
+// ── Formatters ──────────────────────────────────────────────────────────────
 
 function fmtCurrency(v: number): string {
   if (v === 0) return "$0.00";
-  if (v >= 1000) return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return `$${v.toFixed(2)}`;
+  return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtRoas(v: number): string {
-  if (v === 0) return "0.00x";
   return `${v.toFixed(2)}x`;
 }
 
 function fmtPercent(v: number): string {
-  if (v === 0) return "0.00%";
   return `${v.toFixed(2)}%`;
 }
 
-function fmtNumber(v: number): string {
-  if (v === 0) return "0";
+function fmtInt(v: number): string {
   if (Number.isInteger(v)) return v.toLocaleString("en-US");
   return v.toFixed(1);
 }
 
 function fmtNullCurrency(v: number | null): string {
-  if (v === null) return "-";
-  return fmtCurrency(v);
+  return v === null ? "-" : fmtCurrency(v);
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
+// ── Status badge ────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const isActive = status === "ACTIVE";
@@ -64,45 +56,41 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Revenue source indicator
-// ---------------------------------------------------------------------------
+// ── Revenue source indicator ────────────────────────────────────────────────
 
-function RevenueIndicator({ source }: { source: string }) {
-  if (source === "crm") return null;
-  if (source === "none") return null;
+function SourceTag({ source }: { source: string }) {
+  if (source === "crm" || source === "none") return null;
   const label = source === "utmContent" ? "UTM" : "Est.";
+  const title = source === "utmContent"
+    ? "Attributed via UTM content match"
+    : "Estimated via spend-share distribution";
   return (
-    <span className="ml-1 text-[9px] font-medium uppercase text-slate-600" title={
-      source === "utmContent" ? "Attributed via UTM content match" : "Estimated via spend-share distribution"
-    }>
+    <span className="ml-1 text-[9px] font-medium uppercase text-slate-600" title={title}>
       {label}
     </span>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Column definitions
-// ---------------------------------------------------------------------------
+// ── Column definitions (matches spec order) ─────────────────────────────────
 
 export const STATS_COLUMNS: StatsColumn[] = [
   {
     key: "status",
     header: "Status",
     align: "left",
-    width: "w-20",
+    width: "w-24",
     render: (row) => <StatusBadge status={row.status} />,
-    sortValue: (row) => row.status,
+    sortValue: (row) => (row.status === "ACTIVE" ? 0 : 1), // ACTIVE sorts first
   },
   {
     key: "revenue",
-    header: "Revenue",
+    header: "Sales",
     align: "right",
     render: (row) => (
-      <span className="text-slate-200">
+      <>
         {fmtCurrency(row.revenue)}
-        <RevenueIndicator source={row.revenueSource} />
-      </span>
+        <SourceTag source={row.revenueSource} />
+      </>
     ),
     sortValue: (row) => row.revenue,
   },
@@ -110,7 +98,7 @@ export const STATS_COLUMNS: StatsColumn[] = [
     key: "spend",
     header: "Spend",
     align: "right",
-    render: (row) => <span className="text-slate-200">{fmtCurrency(row.spend)}</span>,
+    render: (row) => fmtCurrency(row.spend),
     sortValue: (row) => row.spend,
   },
   {
@@ -118,8 +106,11 @@ export const STATS_COLUMNS: StatsColumn[] = [
     header: "ROAS",
     align: "right",
     render: (row) => {
-      const color = row.roas >= 3 ? "text-emerald-400" : row.roas >= 1 ? "text-amber-400" : row.roas > 0 ? "text-red-400" : "text-slate-500";
-      return <span className={color}>{fmtRoas(row.roas)}</span>;
+      const c =
+        row.roas >= 3 ? "text-emerald-400" :
+        row.roas >= 1 ? "text-amber-400"   :
+        row.roas > 0  ? "text-red-400"     : "text-slate-500";
+      return <span className={c}>{fmtRoas(row.roas)}</span>;
     },
     sortValue: (row) => row.roas,
   },
@@ -127,32 +118,32 @@ export const STATS_COLUMNS: StatsColumn[] = [
     key: "cpm",
     header: "CPM",
     align: "right",
-    render: (row) => <span className="text-slate-300">{fmtNullCurrency(row.cpm)}</span>,
+    render: (row) => fmtNullCurrency(row.cpm),
     sortValue: (row) => row.cpm ?? 0,
   },
   {
     key: "ctr",
     header: "CTR",
     align: "right",
-    render: (row) => <span className="text-slate-300">{fmtPercent(row.ctr)}</span>,
+    render: (row) => fmtPercent(row.ctr),
     sortValue: (row) => row.ctr,
   },
   {
     key: "cpc",
     header: "CPC",
     align: "right",
-    render: (row) => <span className="text-slate-300">{fmtNullCurrency(row.cpc)}</span>,
+    render: (row) => fmtNullCurrency(row.cpc),
     sortValue: (row) => row.cpc ?? 0,
   },
   {
     key: "orders",
-    header: "Sales",
+    header: "Conv.",
     align: "right",
     render: (row) => (
-      <span className="text-slate-200">
-        {fmtNumber(row.orders)}
-        <RevenueIndicator source={row.revenueSource} />
-      </span>
+      <>
+        {fmtInt(row.orders)}
+        <SourceTag source={row.revenueSource} />
+      </>
     ),
     sortValue: (row) => row.orders,
   },

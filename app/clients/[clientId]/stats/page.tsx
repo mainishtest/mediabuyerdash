@@ -1,8 +1,9 @@
-// app/clients/[clientId]/stats/page.tsx
-// Server component — fetches client metadata and renders StatsView.
+// Server component — fetches client metadata, renders the Stats view.
+// Wrapped in Suspense because StatsView uses useSearchParams().
 
 export const dynamic = "force-dynamic";
 
+import { Suspense } from "react";
 import { prisma } from "../../../../lib/db";
 import { StatsView } from "./StatsView";
 import { redirect } from "next/navigation";
@@ -19,15 +20,15 @@ export default async function StatsPage({
     select: { id: true, name: true, timezone: true },
   });
 
-  if (!client) {
-    redirect("/dashboard");
-  }
+  if (!client) redirect("/dashboard");
 
   return (
-    <StatsView
-      clientId={client.id}
-      clientName={client.name}
-      timezone={client.timezone || "America/New_York"}
-    />
+    <Suspense>
+      <StatsView
+        clientId={client.id}
+        clientName={client.name}
+        timezone={client.timezone || "America/New_York"}
+      />
+    </Suspense>
   );
 }
