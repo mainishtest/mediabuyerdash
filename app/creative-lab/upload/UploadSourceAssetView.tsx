@@ -304,19 +304,9 @@ export function UploadSourceAssetView() {
         })
         .catch(() => {});
 
-      if (openInQuickGenerate) {
-        const imageUrl = savedAsset?.imageUrl || preview;
-        const queryParams = new URLSearchParams({
-          hook: hook || "",
-          body: bodyText || "",
-          cta: cta || "",
-          imageUrl: imageUrl || "",
-          imageHeadline: imageHeadline || "",
-          adName: label,
-        });
-
+      if (openInQuickGenerate && savedAsset?.id) {
         setTimeout(() => {
-          router.push(`/creative-lab/quick-generate?${queryParams.toString()}`);
+          router.push(`/creative-lab/variations?assetId=${savedAsset.id}&clientId=${clientAccountId}`);
         }, 500);
       }
     } catch (err) {
@@ -326,18 +316,9 @@ export function UploadSourceAssetView() {
     }
   };
 
-  // Handle using an existing asset in Quick Generate
+  // Handle using an existing asset in Generate Variations
   const handleUseInQuickGenerate = (asset: SourceAsset) => {
-    const queryParams = new URLSearchParams({
-      hook: asset.hook || "",
-      body: asset.bodyText || "",
-      cta: asset.callToAction || "",
-      imageUrl: asset.imageUrl || "",
-      imageHeadline: asset.imageHeadline || "",
-      adName: asset.label || "",
-    });
-
-    router.push(`/creative-lab/quick-generate?${queryParams.toString()}`);
+    router.push(`/creative-lab/variations?assetId=${asset.id}&clientId=${clientAccountId}`);
   };
 
   return (

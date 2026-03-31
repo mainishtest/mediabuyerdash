@@ -154,9 +154,17 @@ export function VariationGeneratorView() {
     fetch(`/api/creative-source-assets?clientId=${clientAccountId}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.assets) setSourceAssets(data.assets);
+        if (data.assets) {
+          setSourceAssets(data.assets);
+          // Auto-select asset if pre-populated from URL params
+          if (selectedAssetId) {
+            const match = (data.assets as SourceAsset[]).find((a) => a.id === selectedAssetId);
+            if (match) selectAsset(match);
+          }
+        }
       })
       .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientAccountId]);
 
   // ── Load existing ads when client changes ──
