@@ -7,7 +7,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { StatsFilters } from "./StatsFilters";
 import { StatsTable } from "./StatsTable";
+import { AdPreviewDrawer } from "./AdPreviewDrawer";
 import { useStatsData, type DateRange } from "./useStatsData";
+import type { StatsRow } from "../../../../lib/stats/statsTypes";
 
 interface Props {
   clientId: string;
@@ -151,6 +153,36 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
+// ── Ancestor name lookup for ad preview context ─────────────────────────────
+
+function findAncestorName(
+  ad: StatsRow,
+  campaigns: StatsRow[],
+  childrenMap: Record<string, StatsRow[]>,
+  target: "campaign" | "adset",
+): string | undefined {
+  // Walk the hierarchy: ad → adset (via parentExternalId) → campaign
+  const adSetParentId = ad.parentExternalId; // This is the adset's externalId
+
+  if (target === "adset") {
+    // Find the ad set in any campaign's children
+    for (const children of Object.values(childrenMap)) {
+      const adSet = children.find(r => r.level === "adset" && r.externalId === adSetParentId);
+      if (adSet) return adSet.name;
+    }
+    return undefined;
+  }
+
+  // target === "campaign" — find the campaign that owns this ad set
+  for (const campaign of campaigns) {
+    const adSets = childrenMap[campaign.externalId];
+    if (adSets?.some(as => as.externalId === adSetParentId)) {
+      return campaign.name;
+    }
+  }
+  return undefined;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function StatsView({ clientId, clientName, timezone }: Props) {
@@ -181,6 +213,11 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
   }, [dateRange, activeOnly, search, router]);
 
   const data = useStatsData({ clientId, dateRange, activeOnly, search });
+
+  // Ad preview drawer state
+  const [previewAd, setPreviewAd] = useState<StatsRow | null>(null);
+  const handlePreviewAd = useCallback((ad: StatsRow) => setPreviewAd(ad), []);
+  const handleClosePreview = useCallback(() => setPreviewAd(null), []);
 
   const handleRetry = useCallback(() => {
     setDateRange(prev => ({ ...prev }));
@@ -241,6 +278,7 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
               expandedIds={data.expandedIds}
               expandingIds={data.expandingIds}
               onToggleExpand={data.toggleExpand}
+              onPreviewAd={handlePreviewAd}
               sortColumn={data.sortColumn}
               sortDirection={data.sortDirection}
               onSortColumn={data.setSortColumn}
@@ -248,6 +286,17 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
             />
           )}
         </div>
+
+        {/* Ad creative preview drawer */}
+        {previewAd && (
+          <AdPreviewDrawer
+            ad={previewAd}
+            campaignName={findAncestorName(previewAd, data.campaignRows, data.childrenMap, "campaign")}
+            adSetName={findAncestorName(previewAd, data.campaignRows, data.childrenMap, "adset")}
+            open={!!previewAd}
+            onClose={handleClosePreview}
+          />
+        )}
       </div>
     </div>
   );

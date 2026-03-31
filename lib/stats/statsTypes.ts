@@ -60,6 +60,16 @@ export interface StatsRow {
 
   // ── Hierarchy ─────────────────────────────────────────────────────────────
   childCount: number;            // Number of direct children (for expand indicator)
+
+  // ── Creative preview (ad-level only) ──────────────────────────────────────
+  creative?: {
+    imageUrl: string | null;
+    thumbnailUrl: string | null;
+    body: string | null;         // Primary text / ad copy
+    title: string | null;        // Headline
+    callToAction: string | null; // CTA button text
+    creativeName: string | null;
+  };
 }
 
 /** Aggregate totals for the current view (rounded to 2 decimal places). */

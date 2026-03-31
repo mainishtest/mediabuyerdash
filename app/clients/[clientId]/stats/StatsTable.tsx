@@ -19,6 +19,7 @@ interface Props {
   expandedIds: Set<string>;
   expandingIds: Set<string>;
   onToggleExpand: (externalId: string, level: StatsLevel) => void;
+  onPreviewAd?: (ad: StatsRow) => void;
   sortColumn: string;
   sortDirection: SortDirection;
   onSortColumn: (col: string) => void;
@@ -149,10 +150,11 @@ interface RowProps {
   expanded: boolean;
   expanding: boolean;
   onToggle: () => void;
+  onPreview?: () => void;
   searchLower: string;
 }
 
-const Row = memo(function Row({ row, depth, expanded, expanding, onToggle, searchLower }: RowProps) {
+const Row = memo(function Row({ row, depth, expanded, expanding, onToggle, onPreview, searchLower }: RowProps) {
   const indent = depth * 20;
   const hasChildren = row.childCount > 0;
 
@@ -203,6 +205,21 @@ const Row = memo(function Row({ row, depth, expanded, expanding, onToggle, searc
               <span className="flex-shrink-0 text-[10px] text-slate-600">
                 {row.childCount}
               </span>
+            )}
+            {/* Preview button for ad rows */}
+            {depth === 2 && onPreview && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPreview(); }}
+                className="flex-shrink-0 rounded p-0.5 text-slate-600 opacity-0 group-hover:opacity-100
+                  hover:text-slate-300 hover:bg-slate-700/60 transition-all"
+                aria-label="Preview ad creative"
+                title="Preview creative"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
             )}
           </div>
         </div>
@@ -279,7 +296,7 @@ function Empty({ search }: { search?: string }) {
 
 export function StatsTable({
   campaignRows, childrenMap, expandedIds, expandingIds,
-  onToggleExpand, sortColumn, sortDirection, onSortColumn, search,
+  onToggleExpand, onPreviewAd, sortColumn, sortDirection, onSortColumn, search,
 }: Props) {
   const searchLower = useMemo(
     () => (search && search.length >= 2 ? search.toLowerCase() : ""),
@@ -339,6 +356,7 @@ export function StatsTable({
                 expanded={isExpanded}
                 expanding={isExpanding}
                 onToggle={makeToggle(row.externalId, row.level)}
+                onPreview={onPreviewAd && row.level === "ad" ? () => onPreviewAd(row) : undefined}
                 searchLower={searchLower}
               />
             );

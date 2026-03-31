@@ -37,10 +37,16 @@
 // Date range queries use timezone-aware boundaries (startOfDayInTz/endOfDayInTz)
 // to ensure "today" and "yesterday" align with the user's local calendar.
 //
+// INSIGHT LEVEL
+// ──────────────
+// Meta sync only stores ad-level insight rows (level: "ad"). Campaign-level
+// and adset-level rows do NOT exist. All queries aggregate from ad-level
+// rows using groupBy on externalCampaignId or externalAdSetId.
+//
 // INDEX SUPPORT
 // ─────────────
 // The following Prisma indexes support the groupBy queries:
-//   @@index([externalAdAccountId, dateStart])         — campaign-level insights
+//   @@index([externalAdAccountId, level, dateStart])   — campaign-level rollup
 //   @@index([externalCampaignId, level, dateStart])    — ad set & ad insights by campaign
 //   @@index([externalAdSetId, level, dateStart])       — ad insights by ad set
 // ─────────────────────────────────────────────────────────────────────────────
@@ -293,12 +299,15 @@ export async function getCampaignStats(
     }),
 
     // Spend/impressions/clicks aggregated by campaign.
-    // Uses index: (externalAdAccountId, dateStart)
+    // IMPORTANT: Meta sync only stores ad-level insight rows (level: "ad").
+    // Campaign-level rows do NOT exist in the DB. We aggregate ad-level
+    // rows grouped by externalCampaignId to derive campaign totals.
+    // Uses index: (externalCampaignId, level, dateStart)
     prisma.metaSyncedInsight.groupBy({
       by: ["externalCampaignId"],
       where: {
         externalAdAccountId: { in: adAccountIds },
-        level: "campaign",
+        level: "ad",
         dateStart: { gte: startDate, lte: endDate },
         externalCampaignId: { not: "" },
       },
@@ -413,13 +422,14 @@ export async function getAdSetStats(
       },
     }),
 
-    // Ad set-level insight aggregation.
+    // Ad set delivery metrics — aggregated from ad-level insight rows.
+    // Meta sync only stores ad-level rows; adset-level rows don't exist.
     // Uses index: (externalCampaignId, level, dateStart)
     prisma.metaSyncedInsight.groupBy({
       by: ["externalAdSetId"],
       where: {
         externalCampaignId: parentCampaignId,
-        level: "adset",
+        level: "ad",
         dateStart: { gte: startDate, lte: endDate },
         externalAdSetId: { not: "" },
       },
@@ -603,7 +613,8 @@ export async function getAdStats(
 
   // ── Parallel fetch ───────────────────────────────────────────────────────
   const [adsInAdSet, insightAggs, allCampaignAds, adInsightRows, shopifyOrders, campaign] = await Promise.all([
-    // Ads in this specific ad set (filtered by status/search)
+    // Ads in this specific ad set (filtered by status/search).
+    // Select externalCreativeId so we can join to MetaSyncedCreative.
     prisma.metaSyncedAd.findMany({
       where: {
         externalAdSetId: parentAdSetId,
@@ -678,6 +689,28 @@ export async function getAdStats(
     }),
   ]);
 
+  // ── Fetch creative metadata for ad preview (after we have adsInAdSet) ────
+  const creativeIds = adsInAdSet
+    .map(a => a.externalCreativeId)
+    .filter((id): id is string => !!id);
+
+  const creatives = creativeIds.length > 0
+    ? await prisma.metaSyncedCreative.findMany({
+        where: { externalCreativeId: { in: creativeIds } },
+        select: {
+          externalCreativeId: true,
+          name: true,
+          title: true,
+          body: true,
+          callToAction: true,
+          imageUrl: true,
+          thumbnailUrl: true,
+        },
+      })
+    : [];
+
+  const creativeMap = new Map(creatives.map(c => [c.externalCreativeId, c]));
+
   // ── Revenue attribution: orders → ads ────────────────────────────────────
   const { adDailySpend, campaignDailySpend } = buildDailySpendIndexes(adInsightRows);
 
@@ -715,7 +748,10 @@ export async function getAdStats(
     const insight = insightMap.get(ad.externalAdId) ?? { spend: 0, impressions: 0, clicks: 0 };
     const rev = adRevenueMap.get(ad.externalAdId);
 
-    return buildStatsRow({
+    // Join creative metadata for ad preview drawer
+    const cr = ad.externalCreativeId ? creativeMap.get(ad.externalCreativeId) : undefined;
+
+    const row = buildStatsRow({
       id: ad.id,
       externalId: ad.externalAdId,
       parentExternalId: parentAdSetId,
@@ -728,8 +764,21 @@ export async function getAdStats(
       revenue: rev?.revenue ?? 0,
       orders: rev?.orders ?? 0,
       revenueSource: rev?.revenueSource ?? "none",
-      childCount: 0, // Ads are leaf nodes — no children
+      childCount: 0,
     });
+
+    if (cr) {
+      row.creative = {
+        imageUrl: cr.imageUrl,
+        thumbnailUrl: cr.thumbnailUrl,
+        body: cr.body,
+        title: cr.title,
+        callToAction: cr.callToAction,
+        creativeName: cr.name,
+      };
+    }
+
+    return row;
   });
 
   rows.sort((a, b) => b.spend - a.spend);
@@ -824,11 +873,13 @@ export async function searchAllLevels(
   const allAdIds = matchedAds.map(a => a.externalAdId);
 
   const [campaignInsights, adSetInsights, adInsights, shopifyOrders, adSetCounts, adCounts] = await Promise.all([
+    // All three insight queries use level: "ad" since Meta sync only stores ad-level rows.
+    // Campaign and adset totals are derived by grouping ad-level rows.
     prisma.metaSyncedInsight.groupBy({
       by: ["externalCampaignId"],
       where: {
         externalCampaignId: { in: allCampaignIds },
-        level: "campaign",
+        level: "ad",
         dateStart: { gte: startDate, lte: endDate },
       },
       _sum: { spend: true, impressions: true, clicks: true },
@@ -839,7 +890,7 @@ export async function searchAllLevels(
           by: ["externalAdSetId"],
           where: {
             externalAdSetId: { in: allAdSetIdsList },
-            level: "adset",
+            level: "ad",
             dateStart: { gte: startDate, lte: endDate },
           },
           _sum: { spend: true, impressions: true, clicks: true },
