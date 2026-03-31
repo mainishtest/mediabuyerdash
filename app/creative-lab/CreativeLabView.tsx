@@ -1846,6 +1846,12 @@ export function CreativeLabView({ entries, jobsByAd, approvalMap, allJobs, provi
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <Link
+            href="/creative-lab/quick-generate"
+            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"
+          >
+            Quick Generate (with Flux Pro Images) →
+          </Link>
+          <Link
             href="/creative-history"
             className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700/60 hover:text-slate-100"
           >
