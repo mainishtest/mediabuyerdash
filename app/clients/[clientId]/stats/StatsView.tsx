@@ -9,6 +9,7 @@ import { StatsFilters } from "./StatsFilters";
 import { StatsTable } from "./StatsTable";
 import { AdPreviewDrawer } from "./AdPreviewDrawer";
 import { useStatsData, type DateRange } from "./useStatsData";
+import { runClientSyncAction } from "../syncActions";
 import type { StatsRow } from "../../../../lib/stats/statsTypes";
 
 interface Props {
@@ -219,6 +220,36 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
   const handlePreviewAd = useCallback((ad: StatsRow) => setPreviewAd(ad), []);
   const handleClosePreview = useCallback(() => setPreviewAd(null), []);
 
+  // Full sync (Meta + Shopify)
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await runClientSyncAction(clientId, "full");
+      if (res.success) {
+        setSyncResult({ ok: true, message: "Sync complete — refreshing data." });
+        // Trigger data reload by bumping dateRange reference
+        setDateRange(prev => ({ ...prev }));
+      } else {
+        setSyncResult({ ok: false, message: res.error });
+      }
+    } catch {
+      setSyncResult({ ok: false, message: "Sync failed unexpectedly." });
+    } finally {
+      setSyncing(false);
+    }
+  }, [clientId]);
+
+  // Auto-dismiss sync result after 5s
+  useEffect(() => {
+    if (!syncResult) return;
+    const t = setTimeout(() => setSyncResult(null), 5000);
+    return () => clearTimeout(t);
+  }, [syncResult]);
+
   const handleRetry = useCallback(() => {
     setDateRange(prev => ({ ...prev }));
   }, []);
@@ -228,17 +259,45 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="mx-auto max-w-[1800px] px-4 py-5 sm:px-6">
-        {/* Header — compact */}
-        <div className="mb-4 flex items-baseline justify-between gap-4">
-          <div>
-            <h1 className="text-base font-bold text-white">{clientName} <span className="font-normal text-slate-500">/ Stats</span></h1>
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="text-base font-bold text-white">{clientName} <span className="font-normal text-slate-500">/ Stats</span></h1>
+          <div className="flex items-center gap-3">
+            {!data.loading && !data.error && data.campaignRows.length > 0 && (
+              <span className="text-xs text-slate-600 tabular-nums">
+                {data.campaignRows.length} campaign{data.campaignRows.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5
+                text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg
+                className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+                fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+              </svg>
+              {syncing ? "Syncing..." : "Full Sync"}
+            </button>
           </div>
-          {!data.loading && !data.error && data.campaignRows.length > 0 && (
-            <span className="text-xs text-slate-600 tabular-nums">
-              {data.campaignRows.length} campaign{data.campaignRows.length !== 1 ? "s" : ""}
-            </span>
-          )}
         </div>
+
+        {/* Sync result toast */}
+        {syncResult && (
+          <div className={`mb-3 flex items-center justify-between rounded-lg border px-4 py-2.5 text-xs
+            ${syncResult.ok
+              ? "border-emerald-800/40 bg-emerald-950/20 text-emerald-400"
+              : "border-red-800/40 bg-red-950/20 text-red-400"}`}
+          >
+            <span>{syncResult.message}</span>
+            <button onClick={() => setSyncResult(null)} className="ml-3 opacity-60 hover:opacity-100">✕</button>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="mb-3">
