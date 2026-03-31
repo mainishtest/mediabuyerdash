@@ -318,10 +318,14 @@ export async function getCampaignStats(
       select: { utmCampaign: true, totalPrice: true },
     }),
 
-    // Count of ad sets per campaign (for the expand chevron indicator)
+    // Count of ad sets per campaign (for the expand chevron indicator).
+    // Respects activeOnly so the count matches what expanding will show.
     prisma.metaSyncedAdSet.groupBy({
       by: ["externalCampaignId"],
-      where: { externalAdAccountId: { in: adAccountIds } },
+      where: {
+        externalAdAccountId: { in: adAccountIds },
+        ...(activeOnly ? { status: "ACTIVE" } : {}),
+      },
       _count: true,
     }),
   ]);
@@ -422,12 +426,14 @@ export async function getAdSetStats(
       _sum: { spend: true, impressions: true, clicks: true },
     }),
 
-    // Count of ads per ad set (for expand chevron)
+    // Count of ads per ad set (for expand chevron).
+    // Respects activeOnly so the count matches what expanding will show.
     prisma.metaSyncedAd.groupBy({
       by: ["externalAdSetId"],
       where: {
         externalCampaignId: parentCampaignId,
         externalAdAccountId: { in: adAccountIds },
+        ...(activeOnly ? { status: "ACTIVE" } : {}),
       },
       _count: true,
     }),
@@ -590,7 +596,10 @@ export async function getAdStats(
     where: { externalAdSetId: parentAdSetId },
     select: { externalCampaignId: true },
   });
-  const parentCampaignId = parentAdSet?.externalCampaignId ?? "";
+
+  // If the ad set doesn't exist, return empty — don't silently query with ""
+  if (!parentAdSet) return EMPTY_RESPONSE;
+  const parentCampaignId = parentAdSet.externalCampaignId;
 
   // ── Parallel fetch ───────────────────────────────────────────────────────
   const [adsInAdSet, insightAggs, allCampaignAds, adInsightRows, shopifyOrders, campaign] = await Promise.all([
