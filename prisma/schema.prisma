@@ -1148,6 +1148,8 @@ model MetaSyncedInsight {
   @@unique([externalAdAccountId, level, externalCampaignId, externalAdSetId, externalAdId, dateStart])
   @@index([externalAdAccountId, dateStart])
   @@index([workspaceId, dateStart])
+  @@index([externalCampaignId, level, dateStart])
+  @@index([externalAdSetId, level, dateStart])
 }
 
 // ── Shopify CRM integration ───────────────────────────────────────────────────

@@ -478,6 +478,26 @@ export function ClientDetailView({
         </div>
       </section>
 
+      {/* Stats — Meta Ads Manager-style drill-down */}
+      <section className="mb-10">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Stats</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Drill down from campaigns to ad sets to ads. Sortable metrics, date filters, deep search.
+            </p>
+          </div>
+          <Link
+            href={`/clients/${account.id}/stats`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800
+              px-4 py-2 text-sm font-medium text-slate-200 transition-colors
+              hover:bg-slate-700 hover:text-white"
+          >
+            View Stats →
+          </Link>
+        </div>
+      </section>
+
       {/* Campaign Goals editor */}
       <section className="mb-10">
         <h2 className="mb-1 text-lg font-semibold text-slate-50">Campaign Goals</h2>
