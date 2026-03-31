@@ -31,35 +31,71 @@ function defaultDateRange(tz: string): DateRange {
   return { startDate: daysAgoInTz(6, tz), endDate: todayInTz(tz) };
 }
 
-// ── Totals bar ──────────────────────────────────────────────────────────────
+// ── Summary totals ──────────────────────────────────────────────────────────
+// All derived metrics use weighted calculations (not simple averages):
+//   ROAS = totalRevenue / totalSpend
+//   CPM  = (totalSpend / totalImpressions) * 1000     (spend-weighted)
+//   CTR  = (totalClicks / totalImpressions) * 100      (impression-weighted)
+//   CPC  = totalSpend / totalClicks                    (spend-weighted)
+//
+// These match Facebook Ads Manager's aggregate calculations. Weighted metrics
+// are the only correct way to aggregate rates — averaging per-row CPMs would
+// over-weight low-impression rows.
 
 function fmtCurrency(v: number): string {
   return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function TotalsBar({ totals }: { totals: { spend: number; revenue: number; orders: number; impressions: number; clicks: number } }) {
-  const roas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
-  const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+function fmtInt(v: number): string {
+  if (Number.isInteger(v)) return v.toLocaleString("en-US");
+  return v.toFixed(1);
+}
+
+interface Totals {
+  spend: number;
+  revenue: number;
+  orders: number;
+  impressions: number;
+  clicks: number;
+}
+
+function SummaryTotals({ totals }: { totals: Totals }) {
+  const { spend, revenue, orders, impressions, clicks } = totals;
+
+  const roas = spend > 0 ? revenue / spend : 0;
+  const cpm  = impressions > 0 ? (spend / impressions) * 1000 : null;
+  const ctr  = impressions > 0 ? (clicks / impressions) * 100 : null;
+  const cpc  = clicks > 0 ? spend / clicks : null;
+
+  const roasColor =
+    roas >= 3 ? "text-emerald-400" :
+    roas >= 1 ? "text-amber-400"   : undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-3">
-      <Stat label="Spend"       value={fmtCurrency(totals.spend)} />
-      <Stat label="Revenue"     value={fmtCurrency(totals.revenue)} />
-      <Stat label="ROAS"        value={`${roas.toFixed(2)}x`}
-            color={roas >= 3 ? "text-emerald-400" : roas >= 1 ? "text-amber-400" : undefined} />
-      <Stat label="Sales"       value={totals.orders.toLocaleString("en-US")} />
-      <Stat label="CTR"         value={`${ctr.toFixed(2)}%`} />
-      <Stat label="Impressions" value={totals.impressions.toLocaleString("en-US")} />
-      <Stat label="Clicks"      value={totals.clicks.toLocaleString("en-US")} />
+    <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800 sm:grid-cols-7">
+      <Cell label="Total Sales"  value={fmtCurrency(revenue)} />
+      <Cell label="Total Spend"  value={fmtCurrency(spend)} />
+      <Cell label="ROAS"         value={`${roas.toFixed(2)}x`} color={roasColor} />
+      <Cell label="CPM"          value={cpm !== null ? fmtCurrency(cpm) : "-"} sub="weighted" />
+      <Cell label="CTR"          value={ctr !== null ? `${ctr.toFixed(2)}%` : "-"} sub="weighted" />
+      <Cell label="CPC"          value={cpc !== null ? fmtCurrency(cpc) : "-"} sub="weighted" />
+      <Cell label="Conversions"  value={fmtInt(orders)} />
     </div>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+function Cell({ label, value, color, sub }: {
+  label: string; value: string; color?: string; sub?: string;
+}) {
   return (
-    <div>
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</div>
-      <div className={`text-sm font-semibold tabular-nums ${color ?? "text-slate-200"}`}>{value}</div>
+    <div className="bg-slate-900/80 px-4 py-3">
+      <div className="flex items-baseline gap-1">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</span>
+        {sub && <span className="text-[8px] text-slate-600">{sub}</span>}
+      </div>
+      <div className={`mt-0.5 text-sm font-semibold tabular-nums ${color ?? "text-slate-200"}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -174,10 +210,10 @@ export function StatsView({ clientId, clientName, timezone }: Props) {
           </div>
         )}
 
-        {/* Totals bar (hidden during loading / error) */}
+        {/* Summary totals (hidden during loading / error) */}
         {!data.loading && !data.error && (
           <div className="mb-4">
-            <TotalsBar totals={data.totals} />
+            <SummaryTotals totals={data.totals} />
           </div>
         )}
 
