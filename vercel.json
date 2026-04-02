@@ -5,7 +5,7 @@
     }
   },
   "crons": [
-    { "path": "/api/cron/sync-meta",    "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/sync-shopify", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/sync-meta",    "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/sync-shopify", "schedule": "*/15 * * * *" }
   ]
 }
