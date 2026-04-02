@@ -195,19 +195,11 @@ export async function POST(req: NextRequest) {
     let finalImageHash = imageHash ?? null;
     if (!finalImageHash && imageUrl) {
       try {
-        const imgRes = await metaPost(`${adAccountId}/adimages`, token, {
-          url: imageUrl,
-        });
+        const imgRes = await uploadAdImage(adAccountId, token, imageUrl);
         if (imgRes.error) {
-          // Image upload failed — continue without image, don't abort the launch
           results.errors.push(`Image upload failed: ${imgRes.error}`);
         } else {
-          // Response: { images: { bytes: { hash: "abc123" } } }
-          const images = imgRes.data?.images;
-          if (images && typeof images === "object") {
-            const firstKey = Object.keys(images)[0];
-            finalImageHash = (images as Record<string, { hash?: string }>)[firstKey]?.hash ?? null;
-          }
+          finalImageHash = imgRes.hash ?? null;
           if (!finalImageHash) {
             results.errors.push("Image uploaded but no hash returned — ads will be created without image");
           }
@@ -278,15 +270,9 @@ export async function POST(req: NextRequest) {
         let variationImageHash = finalImageHash;
         if (variation.imageUrl && !variationImageHash) {
           try {
-            const varImgRes = await metaPost(`${adAccountId}/adimages`, token, {
-              url: variation.imageUrl,
-            });
+            const varImgRes = await uploadAdImage(adAccountId, token, variation.imageUrl);
             if (!varImgRes.error) {
-              const imgs = varImgRes.data?.images;
-              if (imgs && typeof imgs === "object") {
-                const firstKey = Object.keys(imgs)[0];
-                variationImageHash = (imgs as Record<string, { hash?: string }>)[firstKey]?.hash ?? null;
-              }
+              variationImageHash = varImgRes.hash ?? null;
             } else {
               results.errors.push(`Image upload for "${variation.title}" failed: ${varImgRes.error}`);
             }
@@ -357,6 +343,71 @@ export async function POST(req: NextRequest) {
       error: `Launch failed: ${err instanceof Error ? err.message : String(err)}`,
     }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Image upload helper — handles both URLs and base64 data URIs
+// ---------------------------------------------------------------------------
+
+async function uploadAdImage(
+  adAccountId: string,
+  accessToken: string,
+  imageSource: string,
+): Promise<{ hash?: string; error?: string }> {
+  const isDataUrl = imageSource.startsWith("data:");
+
+  if (isDataUrl) {
+    // Extract raw base64 from data URI (strip "data:image/png;base64," prefix)
+    const commaIdx = imageSource.indexOf(",");
+    if (commaIdx === -1) return { error: "Invalid data URL format" };
+    const base64Data = imageSource.slice(commaIdx + 1);
+
+    // Meta adimages API accepts bytes as base64 via multipart form-data
+    const url = `${META_GRAPH_BASE}/${adAccountId}/adimages`;
+    const formData = new FormData();
+    formData.append("access_token", accessToken);
+
+    // Convert base64 to Blob for multipart upload
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+    // Detect mime type from data URL
+    const mimeMatch = imageSource.match(/^data:(image\/\w+)/);
+    const mime = mimeMatch?.[1] ?? "image/png";
+    const ext = mime.split("/")[1] ?? "png";
+    formData.append("filename", new Blob([bytes], { type: mime }), `upload.${ext}`);
+
+    const res = await fetch(url, { method: "POST", body: formData });
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const errMsg = json?.error?.error_user_msg ?? json?.error?.message ?? `HTTP ${res.status}`;
+      return { error: errMsg };
+    }
+
+    const images = json?.images;
+    if (images && typeof images === "object") {
+      const firstKey = Object.keys(images)[0];
+      const hash = (images as Record<string, { hash?: string }>)[firstKey]?.hash;
+      return hash ? { hash } : { error: "No hash in response" };
+    }
+    return { error: "Unexpected response format" };
+  }
+
+  // Regular URL — use existing approach
+  const imgRes = await metaPost(`${adAccountId}/adimages`, accessToken, {
+    url: imageSource,
+  });
+  if (imgRes.error) return { error: imgRes.error };
+
+  const images = imgRes.data?.images;
+  if (images && typeof images === "object") {
+    const firstKey = Object.keys(images)[0];
+    const hash = (images as Record<string, { hash?: string }>)[firstKey]?.hash;
+    return hash ? { hash } : { error: "No hash in response" };
+  }
+  return { error: "Unexpected response format" };
 }
 
 // ---------------------------------------------------------------------------
