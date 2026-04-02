@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, fetchMetaUserInfo } from "../../../../../lib/meta/auth";
 import { fetchAccessibleAdAccounts }               from "../../../../../lib/meta/accounts";
 import { upsertMetaConnection, syncAccessibleAdAccounts } from "../../../../../lib/meta/db";
+import { META_SCOPES } from "../../../../../lib/meta/config";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       userDisplayName: userInfo.name,
       accessToken:     tokenData.access_token,
       tokenExpiresAt,
-      scopes: "ads_read,business_management",
+      scopes: META_SCOPES,
     });
 
     // Fetch and sync accessible ad accounts
