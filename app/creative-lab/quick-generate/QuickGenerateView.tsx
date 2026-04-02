@@ -81,6 +81,7 @@ export function QuickGenerateView() {
 
   const [campaignDefaults, setCampaignDefaults] = useState<Record<string, string | null>>({});
   const [clientImages, setClientImages] = useState<Array<{ id: string; label: string; imageUrl: string }>>([]);
+  const [sourceAssetImages, setSourceAssetImages] = useState<Array<{ id: string; label: string; imageUrl: string }>>([]);
 
   // When client changes, load their copywriting prompt, campaign defaults, and images
   function handleClientChange(id: string) {
@@ -94,6 +95,7 @@ export function QuickGenerateView() {
       setCopywritingPrompt(null);
       setCampaignDefaults({});
       setClientImages([]);
+      setSourceAssetImages([]);
       return;
     }
     // Load campaign defaults
@@ -106,7 +108,29 @@ export function QuickGenerateView() {
       .then((r) => r.json())
       .then((data) => { if (data.ok) setClientImages(data.images ?? []); })
       .catch(() => {});
+    // Load source creative assets (uploaded images from variations page)
+    fetch(`/api/creative-source-assets?clientId=${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          const withImages = (data.assets ?? []).filter(
+            (a: { imageUrl?: string | null }) => a.imageUrl
+          );
+          setSourceAssetImages(withImages.map((a: { id: string; label?: string | null; imageUrl: string }) => ({
+            id: a.id,
+            label: a.label || "Source Creative",
+            imageUrl: a.imageUrl,
+          })));
+        }
+      })
+      .catch(() => {});
   }
+
+  // Combined image library: client images + source creative assets
+  const allImages = [
+    ...clientImages,
+    ...sourceAssetImages.filter((sa) => !clientImages.some((ci) => ci.imageUrl === sa.imageUrl)),
+  ];
 
   // Imported ad image
   const [importedImageUrl, setImportedImageUrl] = useState("");
@@ -588,6 +612,43 @@ export function QuickGenerateView() {
         </div>
       )}
 
+      {/* ── Source Images — pick from uploaded source creatives ────────── */}
+      {variations.length > 0 && allImages.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Select Ad Image
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Choose an image from your library or source creatives to use with your approved variations.
+            </p>
+          </div>
+          <div className="grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6">
+            {allImages.map((img) => (
+              <button
+                key={img.id}
+                type="button"
+                onClick={() => setImportedImageUrl(img.imageUrl)}
+                className={`rounded-lg border overflow-hidden text-left transition-all
+                  ${importedImageUrl === img.imageUrl
+                    ? "border-indigo-500 ring-1 ring-indigo-500/30"
+                    : "border-slate-700 hover:border-slate-600"
+                  }`}
+              >
+                <div className="aspect-square bg-slate-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.imageUrl} alt={img.label} className="h-full w-full object-cover" />
+                </div>
+                <p className="px-1.5 py-1 text-[10px] text-slate-400 truncate">{img.label}</p>
+              </button>
+            ))}
+          </div>
+          {importedImageUrl && (
+            <p className="text-xs text-emerald-400">Image selected — it will be used when you launch your test below.</p>
+          )}
+        </div>
+      )}
+
       {/* ── Approved + Launch Test ─────────────────────────────────────── */}
       {approved.length > 0 && (
         <LaunchTestSection
@@ -597,7 +658,8 @@ export function QuickGenerateView() {
           campaignName={campaignName}
           destinationUrl=""
           campaignDefaults={campaignDefaults}
-          clientImages={clientImages}
+          clientImages={allImages}
+          initialImageUrl={importedImageUrl}
         />
       )}
 
@@ -872,9 +934,9 @@ export function QuickGenerateView() {
             ))}
 
             {/* Image library picker for image test */}
-            {clientImages.length > 0 && (
+            {allImages.length > 0 && (
               <div className="grid gap-2 grid-cols-4 sm:grid-cols-6 lg:grid-cols-8">
-                {clientImages.map((img) => (
+                {allImages.map((img) => (
                   <button
                     key={img.id}
                     type="button"
@@ -961,6 +1023,7 @@ function LaunchTestSection({
   destinationUrl: inputUrl,
   campaignDefaults: cd,
   clientImages,
+  initialImageUrl,
 }: {
   approved: VariationWithStatus[];
   clientName: string;
@@ -969,6 +1032,7 @@ function LaunchTestSection({
   destinationUrl: string;
   campaignDefaults: Record<string, string | null>;
   clientImages: Array<{ id: string; label: string; imageUrl: string }>;
+  initialImageUrl?: string;
 }) {
   // Steps: configure → review → launched
   const [step, setStep] = useState<"configure" | "review" | "launching" | "done">("configure");
@@ -985,7 +1049,7 @@ function LaunchTestSection({
   const [dailyBudget, setDailyBudget]     = useState(cd.defaultDailyBudget ?? "20");
   const [destinationUrl, setDestinationUrl] = useState(cd.defaultDestinationUrl ?? inputUrl);
   const [adHeadline, setAdHeadline]       = useState(cd.defaultHeadline ?? "");
-  const [imageUrl, setImageUrl]           = useState("");
+  const [imageUrl, setImageUrl]           = useState(initialImageUrl ?? "");
   const [pixelId, setPixelId]             = useState(cd.defaultPixelId ?? "");
   const [optimizationGoal, setOptGoal]    = useState(cd.defaultOptGoal ?? "LINK_CLICKS");
   const [showImagePicker, setShowImagePicker] = useState(false);
