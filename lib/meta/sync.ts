@@ -97,6 +97,7 @@ async function syncAccount(
   counts.creativesSynced += await upsertCreatives(mappedCreatives);
 
   // Insights — last 7 days at ad level
+  // Only replace if we got data — prevents deleting good data on partial/failed syncs
   const { rows: rawInsights, since, until } = await fetchInsights(
     externalAdAccountId,
     accessToken,
@@ -106,12 +107,14 @@ async function syncAccount(
   const mappedInsights = rawInsights.map((r) =>
     mapInsight(r, externalAdAccountId, workspaceId)
   );
-  counts.insightRowsSynced += await replaceInsights(
-    externalAdAccountId,
-    since,
-    until,
-    mappedInsights
-  );
+  if (mappedInsights.length > 0) {
+    counts.insightRowsSynced += await replaceInsights(
+      externalAdAccountId,
+      since,
+      until,
+      mappedInsights
+    );
+  }
 }
 
 // ── Client-scoped orchestrator (exported for use by clientSync module) ────────
