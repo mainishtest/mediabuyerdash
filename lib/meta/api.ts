@@ -1,5 +1,51 @@
 import { META_GRAPH_BASE } from "./config";
 
+// ── Rate-limit aware fetcher ──────────────────────────────────────────────────
+// Meta API error code 80004 = "too many calls to this ad-account".
+// On rate limit (HTTP 400 with code 80004, or HTTP 429), we retry with
+// exponential backoff: 2s → 4s → 8s → 16s → 32s (5 attempts max).
+
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 2_000;
+
+function isRateLimitError(status: number, body: Record<string, unknown>): boolean {
+  if (status === 429) return true;
+  const err = body?.error as Record<string, unknown> | undefined;
+  return status === 400 && (err?.code === 80004 || err?.error_subcode === 2446079);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url: string): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, { cache: "no-store" });
+
+    if (res.ok) return res;
+
+    const body = await res.json().catch(() => ({}));
+
+    if (isRateLimitError(res.status, body) && attempt < MAX_RETRIES) {
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+      console.warn(
+        `[meta/api] Rate limited (attempt ${attempt + 1}/${MAX_RETRIES + 1}), ` +
+        `retrying in ${delay / 1000}s…`
+      );
+      await sleep(delay);
+      continue;
+    }
+
+    // Non-retryable error or exhausted retries
+    lastError = new Error(`Meta API ${res.status}: ${JSON.stringify(body)}`);
+    break;
+  }
+
+  throw lastError ?? new Error("Meta API request failed");
+}
+
 // ── Paged fetcher ─────────────────────────────────────────────────────────────
 
 async function fetchAllPages<T>(
@@ -13,11 +59,7 @@ async function fetchAllPages<T>(
   let page = 0;
 
   while (nextUrl && page < maxPages) {
-    const res = await fetch(nextUrl, { cache: "no-store" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`Meta API ${res.status}: ${JSON.stringify(body)}`);
-    }
+    const res = await fetchWithRetry(nextUrl);
     const json = (await res.json()) as {
       data: T[];
       paging?: { next?: string };
