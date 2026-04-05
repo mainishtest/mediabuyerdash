@@ -107,6 +107,7 @@ export function VariationGeneratorView() {
   // ── Generation state ──
   const [intent, setIntent] = useState<GenerationIntent>("both");
   const [provider, setProvider] = useState<"anthropic" | "openai">("anthropic");
+  const [imageProvider, setImageProvider] = useState<"flux" | "dalle">("flux");
   const [notes, setNotes] = useState("");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -291,6 +292,7 @@ export function VariationGeneratorView() {
           productName: clients.find((c) => c.id === clientAccountId)?.name || "Product",
           productImageUrl: imageUrl || "",
           clientAccountId,
+          imageProvider,
         }),
       });
 
@@ -619,7 +621,7 @@ export function VariationGeneratorView() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-400">AI Provider</label>
             <select
@@ -629,6 +631,17 @@ export function VariationGeneratorView() {
             >
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI (GPT-4o)</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Image Generator</label>
+            <select
+              value={imageProvider}
+              onChange={(e) => setImageProvider(e.target.value as "flux" | "dalle")}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-indigo-600 focus:outline-none"
+            >
+              <option value="flux">Flux Pro (fal.ai)</option>
+              <option value="dalle">DALL-E 3 (OpenAI)</option>
             </select>
           </div>
           <div>

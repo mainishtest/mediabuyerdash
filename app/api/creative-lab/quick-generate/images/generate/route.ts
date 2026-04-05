@@ -8,7 +8,7 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { concept, title, textOverlay, colorDirection, productName, productImageUrl, clientAccountId } = body as {
+  const { concept, title, textOverlay, colorDirection, productName, productImageUrl, clientAccountId, imageProvider } = body as {
     concept: string;
     title?: string;
     textOverlay?: string;
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     productName?: string;
     productImageUrl?: string;
     clientAccountId?: string;
+    imageProvider?: "flux" | "dalle";
   };
 
   // Load product reference image and image directions from client settings
@@ -51,18 +52,28 @@ export async function POST(req: NextRequest) {
 
   const falKey    = process.env.FAL_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
+  const preferDalle = imageProvider === "dalle";
 
-  // Primary: Flux Pro via fal.ai
-  if (falKey) {
-    const result = await generateWithFlux(falKey, prompt, title, referenceImageUrl);
-    if (result.ok) return NextResponse.json(result);
-    // If Flux fails, fall through to DALL-E
-    console.error("[image-gen] Flux failed, trying DALL-E fallback:", result.error);
-  }
-
-  // Fallback: DALL-E 3 via OpenAI
-  if (openaiKey) {
-    return NextResponse.json(await generateWithDallE(openaiKey, prompt, title));
+  if (preferDalle) {
+    // User chose DALL-E 3
+    if (openaiKey) {
+      const result = await generateWithDallE(openaiKey, prompt, title);
+      if (result.ok) return NextResponse.json(result);
+      console.error("[image-gen] DALL-E failed, trying Flux fallback:", result.error);
+    }
+    if (falKey) {
+      return NextResponse.json(await generateWithFlux(falKey, prompt, title, referenceImageUrl));
+    }
+  } else {
+    // Default: Flux Pro via fal.ai
+    if (falKey) {
+      const result = await generateWithFlux(falKey, prompt, title, referenceImageUrl);
+      if (result.ok) return NextResponse.json(result);
+      console.error("[image-gen] Flux failed, trying DALL-E fallback:", result.error);
+    }
+    if (openaiKey) {
+      return NextResponse.json(await generateWithDallE(openaiKey, prompt, title));
+    }
   }
 
   return NextResponse.json(
