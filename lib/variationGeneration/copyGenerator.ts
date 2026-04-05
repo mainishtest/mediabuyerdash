@@ -175,14 +175,25 @@ async function callAiProvider(
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  if (provider === "anthropic" && anthropicKey) {
-    return callAnthropic(anthropicKey, systemPrompt, userPrompt);
+  // Try preferred provider first, fall back to the other on rate limit
+  const primary = provider === "openai"
+    ? (openaiKey ? () => callOpenAI(openaiKey, systemPrompt, userPrompt) : null)
+    : (anthropicKey ? () => callAnthropic(anthropicKey, systemPrompt, userPrompt) : null);
+  const fallback = provider === "openai"
+    ? (anthropicKey ? () => callAnthropic(anthropicKey, systemPrompt, userPrompt) : null)
+    : (openaiKey ? () => callOpenAI(openaiKey, systemPrompt, userPrompt) : null);
+
+  if (primary) {
+    const result = await primary();
+    if (result.ok || !fallback) return result;
+    // If rate limited or failed, try fallback
+    if (result.error?.includes("Rate limited") || result.error?.includes("429")) {
+      console.warn(`[copy-gen] ${provider} rate limited, falling back to other provider`);
+      return fallback();
+    }
+    return result;
   }
-  if (provider === "openai" && openaiKey) {
-    return callOpenAI(openaiKey, systemPrompt, userPrompt);
-  }
-  if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt);
-  if (openaiKey) return callOpenAI(openaiKey, systemPrompt, userPrompt);
+  if (fallback) return fallback();
 
   return { ok: false, variations: [], error: "No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY." };
 }
