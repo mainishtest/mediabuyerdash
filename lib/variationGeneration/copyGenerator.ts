@@ -187,76 +187,100 @@ async function callAiProvider(
   return { ok: false, variations: [], error: "No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY." };
 }
 
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
 async function callAnthropic(apiKey: string, system: string, user: string) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
-      max_tokens: 8192,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+        max_tokens: 8192,
+        system,
+        messages: [{ role: "user", content: user }],
+      }),
+    });
 
-  if (res.status === 429) {
-    return { ok: false, variations: [], error: "Rate limited by Anthropic. Wait a moment and try again." };
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const delay = 2000 * Math.pow(2, attempt);
+      console.warn(`[copy-gen] Anthropic 429, retry ${attempt + 1}/${MAX_RETRIES} in ${delay / 1000}s`);
+      await sleep(delay);
+      continue;
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? `Anthropic HTTP ${res.status}`;
+      console.error(`[copy-gen] Anthropic error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
+      if (res.status === 429) {
+        return { ok: false, variations: [], error: "Rate limited by Anthropic. Wait a moment and try again." };
+      }
+      return { ok: false, variations: [], error: errMsg };
+    }
+
+    const text = data?.content?.[0]?.text ?? "";
+    const variations = parseVariations(text);
+    return {
+      ok: variations.length > 0,
+      variations,
+      provider: "anthropic",
+      tokensUsed: (data?.usage?.input_tokens ?? 0) + (data?.usage?.output_tokens ?? 0),
+      error: variations.length === 0 ? "AI returned invalid format" : undefined,
+    };
   }
-
-  const data = await res.json();
-  if (!res.ok) {
-    return { ok: false, variations: [], error: data?.error?.message ?? `Anthropic HTTP ${res.status}` };
-  }
-
-  const text = data?.content?.[0]?.text ?? "";
-  const variations = parseVariations(text);
-  return {
-    ok: variations.length > 0,
-    variations,
-    provider: "anthropic",
-    tokensUsed: (data?.usage?.input_tokens ?? 0) + (data?.usage?.output_tokens ?? 0),
-    error: variations.length === 0 ? "AI returned invalid format" : undefined,
-  };
+  return { ok: false, variations: [], error: "Rate limited by Anthropic after retries. Wait a moment and try again." };
 }
 
 async function callOpenAI(apiKey: string, system: string, user: string) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o",
-      max_tokens: 8192,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o",
+        max_tokens: 8192,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
 
-  if (res.status === 429) {
-    return { ok: false, variations: [], error: "Rate limited by OpenAI. Wait a moment and try again." };
-  }
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const delay = 2000 * Math.pow(2, attempt);
+      console.warn(`[copy-gen] OpenAI 429, retry ${attempt + 1}/${MAX_RETRIES} in ${delay / 1000}s`);
+      await sleep(delay);
+      continue;
+    }
 
-  const data = await res.json();
-  if (!res.ok) {
-    return { ok: false, variations: [], error: data?.error?.message ?? `OpenAI HTTP ${res.status}` };
-  }
+    const data = await res.json();
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? `OpenAI HTTP ${res.status}`;
+      console.error(`[copy-gen] OpenAI error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
+      if (res.status === 429) {
+        return { ok: false, variations: [], error: "Rate limited by OpenAI. Wait a moment and try again." };
+      }
+      return { ok: false, variations: [], error: errMsg };
+    }
 
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  const variations = parseVariations(text);
-  return {
-    ok: variations.length > 0,
-    variations,
-    provider: "openai",
-    tokensUsed: (data?.usage?.prompt_tokens ?? 0) + (data?.usage?.completion_tokens ?? 0),
-    error: variations.length === 0 ? "AI returned invalid format" : undefined,
+    const text = data?.choices?.[0]?.message?.content ?? "";
+    const variations = parseVariations(text);
+    return {
+      ok: variations.length > 0,
+      variations,
+      provider: "openai",
+      tokensUsed: (data?.usage?.prompt_tokens ?? 0) + (data?.usage?.completion_tokens ?? 0),
+      error: variations.length === 0 ? "AI returned invalid format" : undefined,
   };
 }
 
