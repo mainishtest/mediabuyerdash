@@ -281,7 +281,9 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
       provider: "openai",
       tokensUsed: (data?.usage?.prompt_tokens ?? 0) + (data?.usage?.completion_tokens ?? 0),
       error: variations.length === 0 ? "AI returned invalid format" : undefined,
-  };
+    };
+  }
+  return { ok: false, variations: [], error: "Rate limited by OpenAI after retries. Wait a moment and try again." };
 }
 
 // ── Parse helpers ─────────────────────────────────────────────────────────
