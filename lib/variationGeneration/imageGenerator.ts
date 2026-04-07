@@ -79,6 +79,33 @@ Respond ONLY with valid JSON — no preamble, no markdown fences, no commentary.
 
     const adCopy = [source.hook, source.bodyText].filter(Boolean).join(" — ");
 
+    // Pick 3 random angles from a larger pool so each generation feels fresh.
+    const ANGLE_POOL: Array<{ key: string; description: string }> = [
+      { key: "clean_hero", description: "Single product hero shot with maximum clarity. Clean background, strong lighting, product dominates the frame." },
+      { key: "lifestyle_proof", description: "Product in a real-life context showing the result/transformation. Human element, natural setting, emotional connection." },
+      { key: "pattern_interrupt", description: "Bold, unexpected visual that breaks the scroll pattern. Striking contrast, unusual composition, or provocative visual hook." },
+      { key: "before_after", description: "Side-by-side or split-frame before/after showing a clear, dramatic transformation the product enables." },
+      { key: "ugc_selfie", description: "Authentic, slightly imperfect user-generated style photo. Phone-camera feel, real person holding/using the product, looks like a friend's post." },
+      { key: "ingredient_spotlight", description: "Macro/close-up on a key ingredient, material, or component, with the product subtly framed. Communicates quality and craft." },
+      { key: "comparison_chart", description: "Visual comparison vs the alternative (old way / competitor / DIY), with checkmarks, X's, or labeled callouts." },
+      { key: "founder_story", description: "Founder or expert holding the product, looking at camera, warm and trustworthy. Feels editorial, not advertorial." },
+      { key: "in_use_action", description: "Action shot of the product mid-use, capturing motion, splash, steam, or a real moment of consumption." },
+      { key: "stat_overlay", description: "Strong product visual with a single huge statistic or claim overlaid as the dominant graphic element." },
+      { key: "social_proof_grid", description: "Collage / grid of multiple customers, reviews, or screenshots layered around the hero product." },
+      { key: "press_credibility", description: "Product framed alongside press logos, awards, or 'as seen in' badges. Magazine-cover feel." },
+      { key: "problem_visualized", description: "Dramatic visual of the painful problem the product solves — no product yet, pure tension." },
+      { key: "unboxing_flatlay", description: "Top-down flatlay of the product unboxed with all components arranged aesthetically. ASMR / styled feel." },
+      { key: "texture_macro", description: "Extreme macro of texture, surface, or finish. Sensual, tactile, makes you want to touch it." },
+      { key: "color_pop", description: "Monochromatic background in an unexpected bold color with the product as the contrast subject. Editorial, scroll-stopping." },
+      { key: "meme_format", description: "Plays with a recognizable internet/meme visual format applied to the product. Punchy, native to social." },
+      { key: "scarcity_urgency", description: "Visual cues of scarcity — 'last batch', stock counter, limited edition packaging — designed to trigger FOMO." },
+    ];
+
+    const shuffled = [...ANGLE_POOL].sort(() => Math.random() - 0.5).slice(0, 3);
+    const angleBlock = shuffled
+      .map((a, i) => `${i + 1}. "${a.key}" — ${a.description}`)
+      .join("\n\n");
+
     const userPrompt = `${source.clientName ? `CLIENT: ${source.clientName}` : ""}
 ${source.clientName ? `PRODUCT: ${source.clientName}` : ""}
 
@@ -89,13 +116,11 @@ ${adCopy ? `AD COPY (for context — the image should complement this message):\
 ${notes ? `CREATIVE DIRECTOR NOTES:\n${notes}\n` : ""}
 
 Generate exactly 3 high-converting image variation concepts for a Facebook/Instagram feed ad.
-Each concept should take a DIFFERENT visual approach:
+Be BOLD and SPECIFIC — avoid safe, generic ideas. Each concept must feel distinctly different from the others, with concrete visual details (props, setting, lighting, framing, expressions). Do not repeat ideas you have generated before.
 
-1. "clean_hero" — Single product hero shot with maximum clarity. Clean background, strong lighting, product dominates the frame.
+Use these three DIFFERENT visual approaches as your starting points, but bring your own creative interpretation:
 
-2. "lifestyle_proof" — Product in a real-life context showing the result/transformation. Human element, natural setting, emotional connection.
-
-3. "pattern_interrupt" — Bold, unexpected visual that breaks the scroll pattern. Striking contrast, unusual composition, or provocative visual hook.
+${angleBlock}
 
 For EACH concept provide:
 - title: Short name (e.g. "Clean Hero — Bottle Close-Up")
@@ -210,6 +235,7 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
         max_tokens: 4096,
+        temperature: 1.0,
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -253,6 +279,7 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL ?? "gpt-4o",
         max_tokens: 4096,
+        temperature: 1.1,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
