@@ -229,10 +229,7 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
     if (!res.ok) {
       const errMsg = data?.error?.message ?? `Anthropic HTTP ${res.status}`;
       console.error(`[copy-gen] Anthropic error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
-      if (res.status === 429) {
-        return { ok: false, variations: [], error: "Rate limited by Anthropic. Wait a moment and try again." };
-      }
-      return { ok: false, variations: [], error: errMsg };
+      return { ok: false, variations: [], error: `Anthropic ${res.status}: ${errMsg}` };
     }
 
     const text = data?.content?.[0]?.text ?? "";
@@ -245,7 +242,7 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
       error: variations.length === 0 ? "AI returned invalid format" : undefined,
     };
   }
-  return { ok: false, variations: [], error: "Rate limited by Anthropic after retries. Wait a moment and try again." };
+  return { ok: false, variations: [], error: "Anthropic rate limited after retries. Wait a moment and try again." };
 }
 
 async function callOpenAI(apiKey: string, system: string, user: string) {
@@ -278,10 +275,7 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
     if (!res.ok) {
       const errMsg = data?.error?.message ?? `OpenAI HTTP ${res.status}`;
       console.error(`[copy-gen] OpenAI error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
-      if (res.status === 429) {
-        return { ok: false, variations: [], error: "Rate limited by OpenAI. Wait a moment and try again." };
-      }
-      return { ok: false, variations: [], error: errMsg };
+      return { ok: false, variations: [], error: `OpenAI ${res.status}: ${errMsg}` };
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
@@ -294,7 +288,7 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
       error: variations.length === 0 ? "AI returned invalid format" : undefined,
     };
   }
-  return { ok: false, variations: [], error: "Rate limited by OpenAI after retries. Wait a moment and try again." };
+  return { ok: false, variations: [], error: "OpenAI rate limited after retries. Wait a moment and try again." };
 }
 
 // ── Parse helpers ─────────────────────────────────────────────────────────

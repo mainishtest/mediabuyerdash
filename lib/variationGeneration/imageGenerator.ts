@@ -226,10 +226,7 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
     if (!res.ok) {
       const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
       console.error(`[image-gen] Anthropic error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
-      if (res.status === 429) {
-        return { ok: false, concepts: [], error: "Rate limited. Wait a moment and try again." };
-      }
-      return { ok: false, concepts: [], error: errMsg };
+      return { ok: false, concepts: [], error: `Anthropic ${res.status}: ${errMsg}` };
     }
 
     const text = data?.content?.[0]?.text ?? "";
@@ -241,7 +238,7 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
       error: concepts.length === 0 ? "AI returned invalid format" : undefined,
     };
   }
-  return { ok: false, concepts: [], error: "Rate limited after retries. Wait a moment and try again." };
+  return { ok: false, concepts: [], error: "Anthropic rate limited after retries. Wait a moment and try again." };
 }
 
 async function callOpenAI(apiKey: string, system: string, user: string) {
@@ -272,12 +269,9 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
 
     const data = await res.json();
     if (!res.ok) {
-      const errMsg = data?.error?.message ?? `OpenAI HTTP ${res.status}`;
+      const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
       console.error(`[image-gen] OpenAI error ${res.status}:`, JSON.stringify(data?.error ?? data).slice(0, 500));
-      if (res.status === 429) {
-        return { ok: false, concepts: [], error: "Rate limited. Wait a moment and try again." };
-      }
-      return { ok: false, concepts: [], error: errMsg };
+      return { ok: false, concepts: [], error: `OpenAI ${res.status}: ${errMsg}` };
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
@@ -289,7 +283,7 @@ async function callOpenAI(apiKey: string, system: string, user: string) {
       error: concepts.length === 0 ? "AI returned invalid format" : undefined,
     };
   }
-  return { ok: false, concepts: [], error: "Rate limited after retries. Wait a moment and try again." };
+  return { ok: false, concepts: [], error: "OpenAI rate limited after retries. Wait a moment and try again." };
 }
 
 // ── Parse helpers ─────────────────────────────────────────────────────────
