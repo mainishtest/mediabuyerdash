@@ -321,7 +321,12 @@ function buildImageDescription(
   const parts: string[] = [];
 
   if (ctx.source.imageUrl) {
-    parts.push(`Source image URL: ${ctx.source.imageUrl}`);
+    // Don't include base64 data URLs in the prompt — they can be 500K+ chars
+    if (!ctx.source.imageUrl.startsWith("data:")) {
+      parts.push(`Source image URL: ${ctx.source.imageUrl}`);
+    } else {
+      parts.push("Source image: [uploaded image — base64 data, not shown]");
+    }
   }
   if (ctx.source.imageHeadline) {
     parts.push(`Image headline: ${ctx.source.imageHeadline}`);
