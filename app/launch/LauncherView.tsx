@@ -4,7 +4,7 @@ import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { executeLaunchAction } from "./actions";
-import type { LaunchPayload } from "./actions";
+import type { LaunchPayload } from "../../lib/meta/launch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -147,9 +147,7 @@ export function LauncherView({ options, prefill, assets }: Props) {
       setLaunchState("validating");
       setLaunchErrors([]);
 
-      // Build payload
-      const connection = await import("../../lib/meta/db").then(() => null).catch(() => null);
-      // We need the access token from the server side, so we pass through the action
+      // Build payload — access token is injected server-side by the action
       const payload: LaunchPayload = {
         campaignName,
         objective: objective as LaunchPayload["objective"],
