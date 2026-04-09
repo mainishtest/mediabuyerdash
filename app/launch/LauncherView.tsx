@@ -4,7 +4,7 @@ import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { executeLaunchAction } from "./actions";
-import type { LaunchPayload } from "../../lib/meta/launch";
+import type { LaunchPayload } from "./actions";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

@@ -16,6 +16,8 @@ import {
   type LaunchPayload,
 } from "../../lib/meta/launch";
 
+export type { LaunchPayload };
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface LaunchActionResult {
