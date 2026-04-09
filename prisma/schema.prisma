@@ -223,16 +223,18 @@ model AdSet {
 }
 
 model Ad {
-  id         String   @id @default(cuid())
-  adSetId    String
-  creativeId String
-  name       String
-  status     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
+  adSetId          String
+  creativeId       String
+  creativeAssetId  String?  // NEW: link to CreativeAsset (generated or imported)
+  name             String
+  status           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  adSet    AdSet    @relation(fields: [adSetId], references: [id], onDelete: Cascade)
-  creative Creative @relation(fields: [creativeId], references: [id])
+  adSet          AdSet          @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  creative       Creative       @relation(fields: [creativeId], references: [id])
+  creativeAsset  CreativeAsset? @relation(fields: [creativeAssetId], references: [id])
 }
 
 model Creative {
@@ -1975,4 +1977,300 @@ model CreativeSourceAsset {
   @@index([clientAccountId])
   @@index([workspaceId])
   @@index([assetType])
+}
+
+// ── Video Ad Generator ──────────────────────────────────────────────────────
+// Single-table MVP model for AI-generated video ad concepts. Generated
+// sections (hooks, script, shot list, CTAs, platform variants) are stored
+// as JSON strings for flexibility — they'll be normalized into relations
+// in a later phase.
+
+model VideoAdConcept {
+  id             String   @id @default(cuid())
+  title          String
+  status         String   @default("draft") // draft | approved | shot | live | killed
+  platform       String   @default("facebook") // facebook | rumble | both
+  adStyle        String   // ugc | founder_story | problem_solution | testimonial | vsl_lite | native_editorial | product_demo | before_after
+
+  // Inputs (the brief)
+  productName    String
+  offer          String   @db.Text
+  audience       String   @db.Text
+  painPoints     String   @db.Text
+  awarenessStage String   @default("problem_aware") // unaware | problem_aware | solution_aware | product_aware | most_aware
+  brandVoice     String?  @db.Text
+  extraNotes     String?  @db.Text
+
+  // V2 expanded inputs (all optional/defaulted for backward compat)
+  brandName            String?
+  marketSophistication Int      @default(3) // 1-5 Schwartz scale
+  keyClaims            String?  @db.Text     // JSON: ClaimProofPoint[]
+  ctaGoal              String?  @default("purchase")
+  visualStyle          String?               // cinematic | raw_ugc | polished_ugc | editorial | animation | mixed
+  referenceAssetUrls   String?  @db.Text     // JSON: string[]
+  engineVersion        String   @default("v1") // v1 = Anthropic pipeline, v2 = GPT strategy + Veo render
+
+  // V1 generated outputs (JSON strings — preserved for backward compat)
+  angle          String?  @db.Text
+  hooks          String?  @db.Text
+  script         String?  @db.Text
+  shotList       String?  @db.Text
+  ctas           String?  @db.Text
+  platformVariants String? @db.Text
+
+  notes          String?  @db.Text
+
+  // Workspace metadata
+  favoriteHookIndex    Int?
+  favoriteCtaIndex     Int?
+  winningTags          String?  @db.Text  // JSON: string[]
+  editorHandoffNotes   String?  @db.Text
+  creatorHandoffNotes  String?  @db.Text
+  approvedStructure    String?  @db.Text  // JSON: { hookIndex, ctaIndex, scriptVersion, notes }
+  duplicatedFromId     String?            // FK to parent concept (genealogy)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  strategyRuns   StrategyRun[]
+  creativeAssets CreativeAsset[]
+
+  @@index([status])
+  @@index([platform])
+  @@index([createdAt])
+  @@index([engineVersion])
+}
+
+// V2 — Immutable record of each GPT strategy generation run.
+// Versioned per concept so users can compare iterations.
+model StrategyRun {
+  id              String    @id @default(cuid())
+  conceptId       String
+  version         Int       // auto-increment per concept: 1, 2, 3...
+  status          String    @default("pending") // pending | running | completed | failed
+  mode            String    @default("storyboard_only") // strategy_only | storyboard_only | render_ready
+  tier            String    @default("premium") // premium | standard
+  model           String    // e.g. gpt-5.4, gpt-4.1-mini
+
+  inputSnapshot   String    @db.Text // JSON: ExpandedConceptBrief at time of run
+
+  // Strategy outputs (each a JSON string, null until generated)
+  angleSet             String?  @db.Text
+  hookSet              String?  @db.Text
+  scriptSet            String?  @db.Text
+  shotList             String?  @db.Text
+  onScreenText         String?  @db.Text
+  ctaVariants          String?  @db.Text
+  editorNotes          String?  @db.Text
+  platformAdjustments  String?  @db.Text
+
+  // Audit trail
+  promptSnapshots String?  @db.Text // JSON: { step, system, user, model, tokens }[]
+  errorMessage    String?  @db.Text
+  durationMs      Int?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  concept         VideoAdConcept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  renderRuns      RenderRun[]
+
+  @@unique([conceptId, version])
+  @@index([conceptId])
+  @@index([status])
+}
+
+// V2 — Compiled render brief (deterministic transformation of strategy output).
+// Versioned per strategy run so re-compilation is tracked.
+model RenderRun {
+  id              String    @id @default(cuid())
+  strategyRunId   String
+  version         Int       // auto-increment per strategy run
+  status          String    @default("pending") // pending | compiled | render_queued | rendering | completed | failed
+
+  renderBrief     String?   @db.Text // JSON: FullRenderBrief
+  veoJobs         String?   @db.Text // JSON: VeoJobStatus[]
+  compilerVersion String    // "1.0.0" — bump when compiler logic changes
+
+  errorMessage    String?   @db.Text
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  strategyRun     StrategyRun @relation(fields: [strategyRunId], references: [id], onDelete: Cascade)
+  videoAssets     VideoAsset[]
+
+  @@unique([strategyRunId, version])
+  @@index([strategyRunId])
+  @@index([status])
+}
+
+// V2 — Individual generated video clip per scene.
+model VideoAsset {
+  id            String    @id @default(cuid())
+  renderRunId   String
+  sceneNumber   Int
+  status        String    @default("pending") // pending | generating | completed | failed
+
+  veoJobId      String?   // external Veo job ID
+  veoModel      String?   // veo-3.1 | veo-3.1-lite
+
+  videoUrl      String?
+  thumbnailUrl  String?
+  durationMs    Int?
+  aspectRatio   String?   // 9:16 | 16:9 | 4:5 | 1:1
+
+  errorMessage  String?   @db.Text
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  renderRun     RenderRun @relation(fields: [renderRunId], references: [id], onDelete: Cascade)
+
+  @@unique([renderRunId, sceneNumber])
+  @@index([renderRunId])
+  @@index([status])
+}
+
+// ── Creative Asset (standalone, source-agnostic) ─────────────────────────────
+// Bridges concepts → campaigns. An asset can be AI-generated, imported from
+// file upload, or linked from an external URL. This is what gets attached to Ads.
+
+model CreativeAsset {
+  id              String    @id @default(cuid())
+  name            String
+  type            String    // video | image | carousel | text
+  sourceType      String    // generated | imported | external_url
+  status          String    @default("draft") // draft | ready | in_use | archived
+
+  // Source tracking (nullable — only one path applies)
+  conceptId       String?   // FK to VideoAdConcept if generated from strategy pipeline
+  renderRunId     String?   // FK to RenderRun if compiled from render pipeline
+  videoAssetId    String?   // FK to VideoAsset if from a specific scene
+
+  // Provider tracking (for generated assets)
+  provider        String?   // anthropic | openai | google | stability | manual
+  providerJobId   String?   // external job ID from the AI provider
+  generationMeta  String?   @db.Text // JSON: provider-specific metadata
+
+  // The actual asset
+  url             String?   @db.Text  // final asset URL (CDN, S3, external)
+  thumbnailUrl    String?
+  mimeType        String?   // video/mp4, image/png, etc.
+  fileSizeBytes   Int?
+  durationMs      Int?      // for video/audio
+  width           Int?      // pixels
+  height          Int?      // pixels
+  aspectRatio     String?   // 9:16 | 16:9 | 4:5 | 1:1
+
+  // Creative metadata
+  headline        String?
+  body            String?   @db.Text
+  callToAction    String?
+  tags            String?   @db.Text // JSON: string[]
+  notes           String?   @db.Text
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  concept         VideoAdConcept? @relation(fields: [conceptId], references: [id])
+  ads             Ad[]
+
+  @@index([conceptId])
+  @@index([type])
+  @@index([sourceType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ── AI Provider Registry ──────────────────────────────────────────────────────
+// Tracks which AI providers are configured and available. The app reads API keys
+// from env vars (never stored in DB). This model enables provider selection UI
+// and capability routing.
+
+model AIProvider {
+  id              String    @id @default(cuid())
+  provider        String    @unique // anthropic | openai | google | stability | elevenlabs
+  displayName     String    // "Anthropic Claude" | "OpenAI GPT" | etc.
+  isActive        Boolean   @default(false) // true if API key is configured
+  capabilities    String    @db.Text // JSON: ("text_generation" | "image_generation" | "video_generation" | "voice_generation")[]
+  apiKeyEnvVar    String    // env var name: ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+  defaultModel    String?   // claude-sonnet-4-20250514, gpt-4.1, etc.
+  config          String?   @db.Text // JSON: provider-specific settings
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ── Campaign Launch Record ───────────────────────────────────────────────────
+// Tracks every campaign launch attempt through the Meta API.
+// Stores the full payload snapshot, entity IDs, and error details.
+
+model CampaignLaunch {
+  id                  String    @id @default(cuid())
+  status              String    @default("draft") // draft | validating | launching | success | failed | partial
+
+  // Meta entity IDs (populated as each entity is created)
+  externalAdAccountId String?
+  externalCampaignId  String?
+  externalAdSetId     String?
+  externalCreativeId  String?
+  externalAdId        String?
+
+  // Internal references
+  creativeAssetId     String?   // FK to CreativeAsset if launched from asset library
+  conceptId           String?   // FK to VideoAdConcept if launched from concept
+
+  // Launch configuration snapshot
+  campaignName        String
+  adSetName           String
+  adName              String
+  objective           String
+  dailyBudget         Float
+  destinationUrl      String?
+  primaryText         String?   @db.Text
+  headline            String?
+  ctaType             String?
+  pageId              String?
+  pixelId             String?
+  conversionEvent     String?
+  targetingSnapshot   String?   @db.Text // JSON: full targeting config
+
+  // Result tracking
+  launchPayload       String?   @db.Text // JSON: full LaunchPayload
+  launchResult        String?   @db.Text // JSON: full LaunchResult
+  errorMessages       String?   @db.Text // JSON: error array
+  rollbackStatus      String    @default("none") // none | requested | completed | failed
+
+  launchedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([externalAdAccountId])
+}
+
+// ── Agent Framework ─────────────────────────────────────────────────────────
+
+model AgentJob {
+  id                  String    @id @default(cuid())
+  agentType           String    // launch | optimization | audit
+  status              String    @default("pending") // AgentJobStatus
+  riskMode            String    @default("balanced")
+  trigger             String    // user_prompt | scheduled | rule_triggered
+  prompt              String?   @db.Text
+  parametersJson      String?   @db.Text // JSON
+  recommendationsJson String?   @db.Text // JSON — AgentRecommendation[]
+  draftJson           String?   @db.Text // JSON — agent-specific draft
+  summary             String?   @db.Text
+  dataSourcesUsed     String?   @db.Text // JSON string[]
+  stepsJson           String?   @db.Text // JSON — AgentJobStep[]
+  warningsJson        String?   @db.Text // JSON string[]
+  errorsJson          String?   @db.Text // JSON string[]
+  approvalRequired    Boolean   @default(false)
+  approvedAt          DateTime?
+  durationMs          Int?
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  @@index([agentType])
+  @@index([status])
+  @@index([createdAt])
 }
