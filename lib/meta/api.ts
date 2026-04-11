@@ -8,10 +8,14 @@ import { META_GRAPH_BASE } from "./config";
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 2_000;
 
-function isRateLimitError(status: number, body: Record<string, unknown>): boolean {
+function isRetryableError(status: number, body: Record<string, unknown>): boolean {
   if (status === 429) return true;
   const err = body?.error as Record<string, unknown> | undefined;
-  return status === 400 && (err?.code === 80004 || err?.error_subcode === 2446079);
+  // 80004 = too many calls, 2446079 = rate limit sub-code
+  if (status === 400 && (err?.code === 80004 || err?.error_subcode === 2446079)) return true;
+  // Code 1 with 500 = transient "reduce the amount of data" (retrying often succeeds)
+  if (status === 500 && err?.code === 1) return true;
+  return false;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -28,7 +32,7 @@ async function fetchWithRetry(url: string): Promise<Response> {
 
     const body = await res.json().catch(() => ({}));
 
-    if (isRateLimitError(res.status, body) && attempt < MAX_RETRIES) {
+    if (isRetryableError(res.status, body) && attempt < MAX_RETRIES) {
       const delay = BASE_DELAY_MS * Math.pow(2, attempt);
       console.warn(
         `[meta/api] Rate limited (attempt ${attempt + 1}/${MAX_RETRIES + 1}), ` +
@@ -172,8 +176,10 @@ export async function fetchAds(
   externalAdAccountId: string,
   accessToken: string
 ): Promise<RawMetaAd[]> {
+  // Lower limit (50) because the embedded creative{} expansion significantly
+  // increases per-record payload size.
   const url = `${META_GRAPH_BASE}/${externalAdAccountId}/ads` +
-    `?fields=${AD_FIELDS}&limit=100`;
+    `?fields=${AD_FIELDS}&limit=50`;
   return fetchAllPages<RawMetaAd>(url, accessToken);
 }
 
@@ -236,15 +242,30 @@ export async function fetchInsights(
   const since = dateInTz(sinceDate);
   const until = dateInTz(untilDate);
 
-  const params = new URLSearchParams({
-    fields:         INSIGHT_FIELDS,
-    level:          "ad",
-    time_range:     JSON.stringify({ since, until }),
-    time_increment: "1",
-    limit:          "500",
-  });
+  // Fetch day-by-day to avoid Meta API error code 1 ("reduce the amount of
+  // data you're asking for") on accounts with many ads. Each single-day
+  // request stays well under the response-size limit.
+  const allRows: RawMetaInsight[] = [];
 
-  const url = `${META_GRAPH_BASE}/${externalAdAccountId}/insights?${params}`;
-  const rows = await fetchAllPages<RawMetaInsight>(url, accessToken, 50);
-  return { rows, since, until };
+  for (let d = 0; d < dayRange; d++) {
+    const dayDate = new Date(sinceDate);
+    dayDate.setDate(sinceDate.getDate() + d);
+    const dayStr = dateInTz(dayDate);
+
+    const params = new URLSearchParams({
+      fields:     INSIGHT_FIELDS,
+      level:      "ad",
+      time_range: JSON.stringify({ since: dayStr, until: dayStr }),
+      filtering:  JSON.stringify([
+        { field: "ad.impressions", operator: "GREATER_THAN", value: "0" },
+      ]),
+      limit:      "200",
+    });
+
+    const url = `${META_GRAPH_BASE}/${externalAdAccountId}/insights?${params}`;
+    const rows = await fetchAllPages<RawMetaInsight>(url, accessToken, 20);
+    allRows.push(...rows);
+  }
+
+  return { rows: allRows, since, until };
 }
