@@ -30,61 +30,66 @@ export async function persistReconciliationMatches(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  await prisma.$transaction(
-    async (tx) => {
-      for (const row of rows) {
-        await tx.reconciliationMatch.upsert({
-          where: {
-            clientAccountId_matchKey: {
-              clientAccountId: row.clientAccountId,
-              matchKey:        row.matchKey,
+  // Process in chunks of 50 to keep each transaction well under the timeout.
+  const CHUNK = 50;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    await prisma.$transaction(
+      async (tx) => {
+        for (const row of chunk) {
+          await tx.reconciliationMatch.upsert({
+            where: {
+              clientAccountId_matchKey: {
+                clientAccountId: row.clientAccountId,
+                matchKey:        row.matchKey,
+              },
             },
-          },
-          update: {
-            date:                  row.date,
-            attributionWindowDays: row.attributionWindowDays,
-            metaCampaignId:        row.metaCampaignId  ?? null,
-            metaAdSetId:           row.metaAdSetId     ?? null,
-            metaAdId:              row.metaAdId        ?? null,
-            utmCampaign:           row.utmCampaign     ?? null,
-            utmContent:            row.utmContent      ?? null,
-            utmTerm:               row.utmTerm         ?? null,
-            metaSpend:             row.metaSpend,
-            metaClicks:            row.metaClicks      ?? null,
-            metaImpressions:       row.metaImpressions ?? null,
-            crmOrders:             row.crmOrders,
-            crmRevenue:            row.crmRevenue,
-            evaluatedCpa:          row.evaluatedCpa    ?? null,
-            evaluatedRoas:         row.evaluatedRoas   ?? null,
-            matchStatus:           row.matchStatus,
-          },
-          create: {
-            clientAccountId:       row.clientAccountId,
-            matchKey:              row.matchKey,
-            date:                  row.date,
-            attributionWindowDays: row.attributionWindowDays,
-            metaCampaignId:        row.metaCampaignId  ?? null,
-            metaAdSetId:           row.metaAdSetId     ?? null,
-            metaAdId:              row.metaAdId        ?? null,
-            utmCampaign:           row.utmCampaign     ?? null,
-            utmContent:            row.utmContent      ?? null,
-            utmTerm:               row.utmTerm         ?? null,
-            metaSpend:             row.metaSpend,
-            metaClicks:            row.metaClicks      ?? null,
-            metaImpressions:       row.metaImpressions ?? null,
-            crmOrders:             row.crmOrders,
-            crmRevenue:            row.crmRevenue,
-            evaluatedCpa:          row.evaluatedCpa    ?? null,
-            evaluatedRoas:         row.evaluatedRoas   ?? null,
-            matchStatus:           row.matchStatus,
-          },
-        });
+            update: {
+              date:                  row.date,
+              attributionWindowDays: row.attributionWindowDays,
+              metaCampaignId:        row.metaCampaignId  ?? null,
+              metaAdSetId:           row.metaAdSetId     ?? null,
+              metaAdId:              row.metaAdId        ?? null,
+              utmCampaign:           row.utmCampaign     ?? null,
+              utmContent:            row.utmContent      ?? null,
+              utmTerm:               row.utmTerm         ?? null,
+              metaSpend:             row.metaSpend,
+              metaClicks:            row.metaClicks      ?? null,
+              metaImpressions:       row.metaImpressions ?? null,
+              crmOrders:             row.crmOrders,
+              crmRevenue:            row.crmRevenue,
+              evaluatedCpa:          row.evaluatedCpa    ?? null,
+              evaluatedRoas:         row.evaluatedRoas   ?? null,
+              matchStatus:           row.matchStatus,
+            },
+            create: {
+              clientAccountId:       row.clientAccountId,
+              matchKey:              row.matchKey,
+              date:                  row.date,
+              attributionWindowDays: row.attributionWindowDays,
+              metaCampaignId:        row.metaCampaignId  ?? null,
+              metaAdSetId:           row.metaAdSetId     ?? null,
+              metaAdId:              row.metaAdId        ?? null,
+              utmCampaign:           row.utmCampaign     ?? null,
+              utmContent:            row.utmContent      ?? null,
+              utmTerm:               row.utmTerm         ?? null,
+              metaSpend:             row.metaSpend,
+              metaClicks:            row.metaClicks      ?? null,
+              metaImpressions:       row.metaImpressions ?? null,
+              crmOrders:             row.crmOrders,
+              crmRevenue:            row.crmRevenue,
+              evaluatedCpa:          row.evaluatedCpa    ?? null,
+              evaluatedRoas:         row.evaluatedRoas   ?? null,
+              matchStatus:           row.matchStatus,
+            },
+          });
+        }
+      },
+      {
+        timeout: 30000, // 30s per chunk of 50
       }
-    },
-    {
-      timeout: 15000, // 15 seconds for large reconciliation batches
-    }
-  );
+    );
+  }
 }
 
 /**
@@ -144,51 +149,55 @@ export async function persistCampaignPerformance(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  await prisma.$transaction(
-    async (tx) => {
-      for (const row of rows) {
-        await tx.reconciledCampaignPerformance.upsert({
-          where: {
-            clientAccountId_externalCampaignId_dateFrom_dateTo: {
+  const CHUNK = 50;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    await prisma.$transaction(
+      async (tx) => {
+        for (const row of chunk) {
+          await tx.reconciledCampaignPerformance.upsert({
+            where: {
+              clientAccountId_externalCampaignId_dateFrom_dateTo: {
+                clientAccountId,
+                externalCampaignId: row.externalCampaignId,
+                dateFrom,
+                dateTo,
+              },
+            },
+            update: {
+              campaignName:          row.campaignName,
+              metaSpend:             row.metaSpend,
+              attributedRevenue:     row.attributedRevenue,
+              attributedOrders:      row.attributedOrders,
+              calculatedRoas:        row.calculatedRoas    ?? null,
+              calculatedCpa:         row.calculatedCpa     ?? null,
+              utmMatchedOrders:      row.utmMatchedOrders,
+              windowMatchedOrders:   row.windowMatchedOrders,
+              attributionWindowDays: row.attributionWindowDays,
+            },
+            create: {
               clientAccountId,
-              externalCampaignId: row.externalCampaignId,
+              externalCampaignId:    row.externalCampaignId,
+              campaignName:          row.campaignName,
               dateFrom,
               dateTo,
+              metaSpend:             row.metaSpend,
+              attributedRevenue:     row.attributedRevenue,
+              attributedOrders:      row.attributedOrders,
+              calculatedRoas:        row.calculatedRoas    ?? null,
+              calculatedCpa:         row.calculatedCpa     ?? null,
+              utmMatchedOrders:      row.utmMatchedOrders,
+              windowMatchedOrders:   row.windowMatchedOrders,
+              attributionWindowDays: row.attributionWindowDays,
             },
-          },
-          update: {
-            campaignName:          row.campaignName,
-            metaSpend:             row.metaSpend,
-            attributedRevenue:     row.attributedRevenue,
-            attributedOrders:      row.attributedOrders,
-            calculatedRoas:        row.calculatedRoas    ?? null,
-            calculatedCpa:         row.calculatedCpa     ?? null,
-            utmMatchedOrders:      row.utmMatchedOrders,
-            windowMatchedOrders:   row.windowMatchedOrders,
-            attributionWindowDays: row.attributionWindowDays,
-          },
-          create: {
-            clientAccountId,
-            externalCampaignId:    row.externalCampaignId,
-            campaignName:          row.campaignName,
-            dateFrom,
-            dateTo,
-            metaSpend:             row.metaSpend,
-            attributedRevenue:     row.attributedRevenue,
-            attributedOrders:      row.attributedOrders,
-            calculatedRoas:        row.calculatedRoas    ?? null,
-            calculatedCpa:         row.calculatedCpa     ?? null,
-            utmMatchedOrders:      row.utmMatchedOrders,
-            windowMatchedOrders:   row.windowMatchedOrders,
-            attributionWindowDays: row.attributionWindowDays,
-          },
-        });
+          });
+        }
+      },
+      {
+        timeout: 30000, // 30s per chunk of 50
       }
-    },
-    {
-      timeout: 15000, // 15 seconds for large reconciliation batches
-    }
-  );
+    );
+  }
 }
 
 /**
