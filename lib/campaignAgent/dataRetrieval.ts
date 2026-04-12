@@ -355,6 +355,7 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
         type: a.type as "image" | "video",
         url: a.url,
         thumbnailUrl: a.thumbnailUrl,
+        source: "internal_asset" as const,
       }));
       warnings.push(`No creatives matched "${intent.brandOrProduct}". Using ${anyReady.length} most recent asset(s).`);
     }
