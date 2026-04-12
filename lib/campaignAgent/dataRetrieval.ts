@@ -49,12 +49,24 @@ export async function getTopPerformingAds(
     take: 100, // Get more than needed, we'll filter/rank
   });
 
-  // Enrich with ad metadata
+  // Enrich with ad metadata + creative content check
   const adIds = insights.map((i) => i.externalAdId);
   const ads = await prisma.metaSyncedAd.findMany({
     where: { externalAdId: { in: adIds } },
   });
   const adMap = new Map(ads.map((a) => [a.externalAdId, a]));
+
+  // Pre-fetch creatives to check which ads have actual content (image, copy)
+  const creativeIds = ads
+    .map((a) => a.externalCreativeId)
+    .filter((id): id is string => id != null);
+  const creatives = await prisma.metaSyncedCreative.findMany({
+    where: { externalCreativeId: { in: creativeIds } },
+    select: { externalCreativeId: true, imageUrl: true, body: true, title: true },
+  });
+  const creativeContentMap = new Map(
+    creatives.map((c) => [c.externalCreativeId, c])
+  );
 
   // Get campaign names
   const campaignIds = [...new Set(ads.map((a) => a.externalCampaignId))];
@@ -62,6 +74,16 @@ export async function getTopPerformingAds(
     where: { externalCampaignId: { in: campaignIds } },
   });
   const campaignMap = new Map(campaigns.map((c) => [c.externalCampaignId, c.name]));
+
+  // Helper: does this ad have usable creative content?
+  const hasCreativeContent = (externalAdId: string): boolean => {
+    const ad = adMap.get(externalAdId);
+    if (!ad?.externalCreativeId) return false;
+    const creative = creativeContentMap.get(ad.externalCreativeId);
+    if (!creative) return false;
+    // Must have at least an image OR body text (skip template/catalog ads)
+    return !!(creative.imageUrl || creative.body);
+  };
 
   // Build ranked list
   let ranked: PerformingAd[] = insights
@@ -111,6 +133,13 @@ export async function getTopPerformingAds(
     default: // roas, conversions — fall back to spend efficiency
       ranked.sort((a, b) => b.spend - a.spend);
   }
+
+  // Prefer ads that have actual creative content (image, copy, headline).
+  // Template/catalog ads ({{product.name}}) have no usable creative data.
+  const withContent = ranked.filter((a) => hasCreativeContent(a.id));
+  const withoutContent = ranked.filter((a) => !hasCreativeContent(a.id));
+  // Use content-rich ads first, then backfill with others if not enough
+  ranked = [...withContent, ...withoutContent];
 
   // Re-rank and annotate
   return ranked.slice(0, count).map((a, i) => ({

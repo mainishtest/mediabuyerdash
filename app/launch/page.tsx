@@ -1,4 +1,4 @@
-import { getMetaLaunchOptionsAction, getConceptPrefillAction, getAssetPrefillAction, getAvailableAssetsAction } from "./actions";
+import { getMetaLaunchOptionsAction, getConceptPrefillAction, getAssetPrefillAction, getDraftPrefillAction, getAvailableAssetsAction } from "./actions";
 import { LauncherView } from "./LauncherView";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 interface Props {
-  searchParams: Promise<{ conceptId?: string; assetId?: string }>;
+  searchParams: Promise<{ conceptId?: string; assetId?: string; draftId?: string }>;
 }
 
 export default async function LaunchPage({ searchParams }: Props) {
@@ -18,9 +18,11 @@ export default async function LaunchPage({ searchParams }: Props) {
     getAvailableAssetsAction(),
   ]);
 
-  // Prefill from concept or asset if provided
+  // Prefill from operator agent draft, concept, or asset
   let prefill = null;
-  if (params.conceptId) {
+  if (params.draftId) {
+    prefill = await getDraftPrefillAction(params.draftId);
+  } else if (params.conceptId) {
     prefill = await getConceptPrefillAction(params.conceptId);
   } else if (params.assetId) {
     prefill = await getAssetPrefillAction(params.assetId);

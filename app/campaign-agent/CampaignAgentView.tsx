@@ -37,6 +37,7 @@ export function CampaignAgentView() {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [draft, setDraft] = useState<CampaignDraft | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [launchErrors, setLaunchErrors] = useState<string[]>([]);
   const [launchResult, setLaunchResult] = useState<{ campaignId?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -73,6 +74,7 @@ export function CampaignAgentView() {
 
       if (result.ok && result.draft) {
         setDraft(result.draft);
+        setCurrentJobId(result.jobId ?? null);
         setStep("ready_for_review");
         const draftMsg: AgentMessage = {
           role: "agent",
@@ -233,7 +235,7 @@ export function CampaignAgentView() {
 
           {/* Draft review */}
           {draft && step === "ready_for_review" && (
-            <DraftReview draft={draft} onApprove={handleApprove} isPending={isPending} />
+            <DraftReview draft={draft} onApprove={handleApprove} isPending={isPending} jobId={currentJobId} />
           )}
 
           {/* Launch errors */}
@@ -390,10 +392,12 @@ function DraftReview({
   draft,
   onApprove,
   isPending,
+  jobId,
 }: {
   draft: CampaignDraft;
   onApprove: () => void;
   isPending: boolean;
+  jobId?: string | null;
 }) {
   const objectiveLabels: Record<string, string> = {
     OUTCOME_SALES: "Sales",
@@ -550,7 +554,7 @@ function DraftReview({
           </div>
         </div>
         <div className="flex gap-2">
-          <Link href={`/launch?${draft.adAccount ? `adAccountId=${draft.adAccount.externalId}` : ""}`}
+          <Link href={`/launch?${jobId ? `draftId=${jobId}` : draft.adAccount ? `adAccountId=${draft.adAccount.externalId}` : ""}`}
             className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium text-slate-400 transition-colors hover:text-white">
             Edit in Launcher
           </Link>

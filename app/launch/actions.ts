@@ -271,3 +271,52 @@ export async function getAvailableAssetsAction() {
     },
   });
 }
+
+// ── Prefill from Operator Agent draft ───────────────────────────────────────
+
+export async function getDraftPrefillAction(jobId: string) {
+  const job = await prisma.agentJob.findUnique({ where: { id: jobId } });
+  if (!job || !job.draftJson) return null;
+
+  try {
+    const draft = JSON.parse(job.draftJson);
+    const firstAd = draft.ads?.[0];
+
+    return {
+      source: "operator_draft" as const,
+      campaignName: draft.campaignName ?? "",
+      objective: draft.objective ?? "",
+      adSetName: `${draft.campaignName ?? ""} — Ad Set`,
+      adName: firstAd?.adName ?? `${draft.campaignName ?? ""} — Ad`,
+      primaryText: firstAd?.primaryText ?? "",
+      headline: firstAd?.headline ?? "",
+      ctaText: firstAd?.ctaType ?? "",
+      destinationUrl: firstAd?.destinationUrl ?? "",
+      dailyBudget: draft.dailyBudget ?? 20,
+      // Targeting
+      countries: draft.targeting?.locations?.join(",") ?? "US",
+      ageMin: draft.targeting?.ageMin ?? 18,
+      ageMax: draft.targeting?.ageMax ?? 65,
+      gender: draft.targeting?.gender === "male" ? 1 : draft.targeting?.gender === "female" ? 2 : 0,
+      // Ad account & page
+      adAccountId: draft.adAccount?.externalId ?? "",
+      pageId: draft.page?.id ?? "",
+      pixelId: draft.pixel?.id ?? "",
+      // Creative
+      mediaUrl: firstAd?.creative?.url ?? "",
+      mediaType: firstAd?.creative?.type ?? "image",
+      // All ads (for multi-ad drafts)
+      allAds: (draft.ads ?? []).map((ad: Record<string, unknown>) => ({
+        adName: ad.adName ?? "",
+        primaryText: ad.primaryText ?? "",
+        headline: ad.headline ?? "",
+        ctaType: ad.ctaType ?? "",
+        destinationUrl: ad.destinationUrl ?? "",
+        mediaUrl: (ad.creative as Record<string, unknown>)?.url ?? "",
+        mediaType: (ad.creative as Record<string, unknown>)?.type ?? "image",
+      })),
+    };
+  } catch {
+    return null;
+  }
+}

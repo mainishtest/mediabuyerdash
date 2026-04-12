@@ -29,6 +29,7 @@ interface LaunchOptions {
 }
 
 interface Prefill {
+  source?: "operator_draft" | string;
   conceptId?: string;
   assetId?: string;
   conceptTitle?: string;
@@ -43,6 +44,19 @@ interface Prefill {
   campaignName?: string;
   adSetName?: string;
   adName?: string;
+  // Operator Agent draft fields
+  objective?: string;
+  dailyBudget?: number;
+  destinationUrl?: string;
+  countries?: string;
+  ageMin?: number;
+  ageMax?: number;
+  gender?: number;
+  adAccountId?: string;
+  pageId?: string;
+  pixelId?: string;
+  mediaUrl?: string;
+  mediaType?: string;
 }
 
 interface Props {
@@ -93,30 +107,30 @@ export function LauncherView({ options, prefill, assets }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // ── Form state ─────────────────────────────────────────────────────────
+  // ── Form state (prefilled from operator agent draft, concept, or asset) ─
   const [campaignName, setCampaignName] = useState(prefill?.campaignName ?? "");
-  const [adAccountId, setAdAccountId] = useState(options.adAccounts[0]?.externalId ?? "");
-  const [pageId, setPageId] = useState(options.pages[0]?.id ?? "");
+  const [adAccountId, setAdAccountId] = useState(prefill?.adAccountId || options.adAccounts[0]?.externalId ?? "");
+  const [pageId, setPageId] = useState(prefill?.pageId || options.pages[0]?.id ?? "");
   const [igAccountId, setIgAccountId] = useState(options.instagramAccounts[0]?.id ?? "");
-  const [objective, setObjective] = useState("OUTCOME_SALES");
+  const [objective, setObjective] = useState(prefill?.objective || "OUTCOME_SALES");
   const [specialAdCategories, setSpecialAdCategories] = useState<string[]>(["NONE"]);
 
   // Conversion & destination
   const [adSetName, setAdSetName] = useState(prefill?.adSetName ?? "");
   const [optimizationGoal, setOptimizationGoal] = useState("OFFSITE_CONVERSIONS");
-  const [pixelId, setPixelId] = useState(options.pixels[0]?.id ?? "");
+  const [pixelId, setPixelId] = useState(prefill?.pixelId || options.pixels[0]?.id ?? "");
   const [conversionEvent, setConversionEvent] = useState("PURCHASE");
-  const [destinationUrl, setDestinationUrl] = useState("");
+  const [destinationUrl, setDestinationUrl] = useState(prefill?.destinationUrl ?? "");
 
   // Audience
   const [advantageAudience, setAdvantageAudience] = useState(true);
-  const [countries, setCountries] = useState("US");
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(65);
-  const [gender, setGender] = useState(0); // 0 = all
+  const [countries, setCountries] = useState(prefill?.countries ?? "US");
+  const [ageMin, setAgeMin] = useState(prefill?.ageMin ?? 18);
+  const [ageMax, setAgeMax] = useState(prefill?.ageMax ?? 65);
+  const [gender, setGender] = useState(prefill?.gender ?? 0); // 0 = all
 
   // Budget
-  const [dailyBudget, setDailyBudget] = useState(20);
+  const [dailyBudget, setDailyBudget] = useState(prefill?.dailyBudget ?? 20);
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState("");
 
