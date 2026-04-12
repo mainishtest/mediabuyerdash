@@ -111,13 +111,14 @@ export async function upsertCreatives(
       where:  { externalCreativeId: c.externalCreativeId },
       create: c,
       update: {
-        workspaceId:  c.workspaceId,
-        name:         c.name,
-        title:        c.title,
-        body:         c.body,
-        callToAction: c.callToAction,
-        imageUrl:     c.imageUrl,
-        thumbnailUrl: c.thumbnailUrl,
+        workspaceId:    c.workspaceId,
+        name:           c.name,
+        title:          c.title,
+        body:           c.body,
+        callToAction:   c.callToAction,
+        imageUrl:       c.imageUrl,
+        thumbnailUrl:   c.thumbnailUrl,
+        destinationUrl: c.destinationUrl,
       },
     });
   }

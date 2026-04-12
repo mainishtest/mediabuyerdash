@@ -40,17 +40,18 @@ export function buildCampaignDraft(
   // Budget — risk-mode-adjusted from account data or intent
   const dailyBudget = resolveBudget(intent, accountSnapshot, riskConfig.budgetMultiplier);
 
-  // Build ads from resolved creatives
+  // Build ads from resolved creatives — pull copy/headline/URL from synced data
+  const defaultCta = intent.campaignType === "retargeting" ? "SHOP_NOW" : "LEARN_MORE";
   const ads = data.creatives.map((creative, i) => ({
     adName: DEFAULT_PLAYBOOK.namingConvention.ad
       .replace("{brand}", brandName)
       .replace("{creative}", creative.name)
       .replace("{index}", String(i + 1)),
     creative,
-    primaryText: "",
-    headline: creative.name,
-    ctaType: intent.campaignType === "retargeting" ? "SHOP_NOW" : "LEARN_MORE",
-    destinationUrl: "",
+    primaryText: creative.body ?? "",
+    headline: creative.headline ?? creative.name,
+    ctaType: creative.callToAction ?? defaultCta,
+    destinationUrl: creative.destinationUrl ?? "",
   }));
 
   // Build reasoning

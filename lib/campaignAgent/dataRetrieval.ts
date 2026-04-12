@@ -161,6 +161,11 @@ async function resolveCreativesFromPerformance(
       url: creative?.imageUrl ?? null,
       thumbnailUrl: creative?.thumbnailUrl ?? null,
       source: "meta_synced" as const,
+      // Pull copy, headline, CTA, and destination URL from the synced creative
+      body: creative?.body ?? null,
+      headline: creative?.title ?? null,
+      callToAction: creative?.callToAction ?? null,
+      destinationUrl: creative?.destinationUrl ?? null,
       performanceData: ad,
     };
   });

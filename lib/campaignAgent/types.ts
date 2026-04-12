@@ -68,6 +68,11 @@ export interface ResolvedCreative {
   url: string | null;
   thumbnailUrl: string | null;
   source: "meta_synced" | "internal_asset" | "concept";
+  // Copy & creative details pulled from Meta synced creatives
+  body?: string | null;           // primary text / ad copy
+  headline?: string | null;       // title shown below image in link ads
+  callToAction?: string | null;   // e.g. "SHOP_NOW", "LEARN_MORE"
+  destinationUrl?: string | null; // landing page URL
   performanceData?: PerformingAd;
 }
 

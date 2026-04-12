@@ -53,6 +53,7 @@ export interface MappedCreative {
   callToAction:       string | null;
   imageUrl:           string | null;
   thumbnailUrl:       string | null;
+  destinationUrl:     string | null;
 }
 
 export interface MappedInsight {
@@ -140,6 +141,13 @@ export function mapCreative(
     ?? raw.object_story_spec?.photo_data?.message
     ?? null;
 
+  // Destination URL: link_data.link (most common), video CTA link, or photo link
+  const destinationUrl =
+    raw.object_story_spec?.link_data?.link
+    ?? raw.object_story_spec?.video_data?.call_to_action?.value?.link
+    ?? raw.object_story_spec?.photo_data?.link
+    ?? null;
+
   return {
     workspaceId,
     externalCreativeId: raw.id,
@@ -149,6 +157,7 @@ export function mapCreative(
     callToAction:       raw.call_to_action_type ?? null,
     imageUrl:           raw.image_url          ?? null,
     thumbnailUrl:       raw.thumbnail_url      ?? null,
+    destinationUrl,
   };
 }
 

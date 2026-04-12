@@ -105,9 +105,9 @@ export interface RawMetaCreativeEmbedded {
   image_url?:           string;
   thumbnail_url?:       string;
   object_story_spec?:   {
-    link_data?: { message?: string };
-    video_data?: { message?: string };
-    photo_data?: { message?: string };
+    link_data?: { message?: string; link?: string; name?: string; description?: string };
+    video_data?: { message?: string; call_to_action?: { value?: { link?: string } } };
+    photo_data?: { message?: string; link?: string };
   };
 }
 
