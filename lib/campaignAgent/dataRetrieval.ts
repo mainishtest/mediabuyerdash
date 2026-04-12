@@ -5,6 +5,7 @@
 
 import { prisma } from "../db";
 import { getConnectionForSync } from "../meta/db";
+import { fetchPages, fetchPixels } from "../meta/prerequisites";
 import type {
   CampaignIntent,
   PerformingAd,
@@ -241,7 +242,7 @@ export function resolveAudienceRules(intent: CampaignIntent): ResolvedAudience {
 export async function resolveIntentData(intent: CampaignIntent): Promise<IntentData> {
   const warnings: string[] = [];
 
-  // 1. Get Meta connection defaults
+  // 1. Get Meta connection + ad account
   const connection = await getConnectionForSync();
   let adAccount = null;
   let page = null;
@@ -255,11 +256,61 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
       name: first.accessibleAdAccount.accountName,
       currency: first.accessibleAdAccount.currency,
     };
+
+    // 2. Fetch Facebook Pages and Pixels from Meta API
+    try {
+      const [pages, pixels] = await Promise.all([
+        fetchPages(connection.accessToken),
+        fetchPixels(
+          first.accessibleAdAccount.externalAdAccountId,
+          connection.accessToken
+        ),
+      ]);
+
+      if (pages.length > 0) {
+        page = { id: pages[0].id, name: pages[0].name };
+      } else {
+        warnings.push("No Facebook Pages found. You need a Page to run ads.");
+      }
+
+      if (pixels.length > 0) {
+        pixel = { id: pixels[0].id, name: pixels[0].name };
+      } else if (
+        intent.objective === "OUTCOME_SALES" ||
+        intent.objective === "OUTCOME_LEADS"
+      ) {
+        warnings.push(
+          "No Meta Pixel found. Sales/Leads objectives require a pixel for conversion tracking."
+        );
+      }
+    } catch (err) {
+      console.error("[campaignAgent] Failed to fetch pages/pixels:", err);
+      warnings.push("Could not fetch Pages/Pixels from Meta. Check your connection.");
+    }
+
+    // 3. Fall back to ClientAccount defaults if Meta API didn't return results
+    if (!page || !pixel) {
+      const clientAccount = await prisma.clientAccount.findFirst({
+        where: {
+          metaAdAccountId: first.accessibleAdAccount.externalAdAccountId,
+        },
+        select: { defaultPageId: true, defaultPixelId: true },
+      });
+
+      if (clientAccount) {
+        if (!page && clientAccount.defaultPageId) {
+          page = { id: clientAccount.defaultPageId, name: "Default Page" };
+        }
+        if (!pixel && clientAccount.defaultPixelId) {
+          pixel = { id: clientAccount.defaultPixelId, name: "Default Pixel" };
+        }
+      }
+    }
   } else {
     warnings.push("No Meta ad account connected. You'll need to connect one before launching.");
   }
 
-  // 2. Resolve creatives
+  // 4. Resolve creatives
   let creatives: ResolvedCreative[] = [];
   let performanceSnapshot: PerformingAd[] = [];
   const count = intent.creativeSelection.count ?? 3;
@@ -280,10 +331,31 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
   } else if (intent.creativeSelection.strategy === "by_name") {
     creatives = await resolveCreativesFromAssets(intent.creativeSelection.nameFilter, count);
   } else {
+    // Default: try to find any ready assets matching the brand
     creatives = await resolveCreativesFromAssets(intent.brandOrProduct, count);
   }
 
-  // 3. Resolve audience
+  // If still no creatives, try fetching any ready assets regardless of name
+  if (creatives.length === 0) {
+    const anyReady = await prisma.creativeAsset.findMany({
+      where: { status: { in: ["ready", "in_use"] } },
+      orderBy: { createdAt: "desc" },
+      take: count,
+      select: { id: true, name: true, type: true, url: true, thumbnailUrl: true },
+    });
+    if (anyReady.length > 0) {
+      creatives = anyReady.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type as "image" | "video",
+        url: a.url,
+        thumbnailUrl: a.thumbnailUrl,
+      }));
+      warnings.push(`No creatives matched "${intent.brandOrProduct}". Using ${anyReady.length} most recent asset(s).`);
+    }
+  }
+
+  // 5. Resolve audience
   const audience = resolveAudienceRules(intent);
 
   return {
