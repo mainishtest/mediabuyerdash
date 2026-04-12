@@ -297,7 +297,7 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
     if (!page || !pixel) {
       const clientAccount = await prisma.clientAccount.findFirst({
         where: {
-          metaAdAccountId: first.accessibleAdAccount.externalAdAccountId,
+          defaultAdAccountId: first.accessibleAdAccount.externalAdAccountId,
         },
         select: { defaultPageId: true, defaultPixelId: true },
       });
