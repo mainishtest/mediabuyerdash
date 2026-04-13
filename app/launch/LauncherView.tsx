@@ -109,8 +109,8 @@ export function LauncherView({ options, prefill, assets }: Props) {
 
   // ── Form state (prefilled from operator agent draft, concept, or asset) ─
   const [campaignName, setCampaignName] = useState(prefill?.campaignName ?? "");
-  const [adAccountId, setAdAccountId] = useState(prefill?.adAccountId || options.adAccounts[0]?.externalId ?? "");
-  const [pageId, setPageId] = useState(prefill?.pageId || options.pages[0]?.id ?? "");
+  const [adAccountId, setAdAccountId] = useState(prefill?.adAccountId || (options.adAccounts[0]?.externalId ?? ""));
+  const [pageId, setPageId] = useState(prefill?.pageId || (options.pages[0]?.id ?? ""));
   const [igAccountId, setIgAccountId] = useState(options.instagramAccounts[0]?.id ?? "");
   const [objective, setObjective] = useState(prefill?.objective || "OUTCOME_SALES");
   const [specialAdCategories, setSpecialAdCategories] = useState<string[]>(["NONE"]);
@@ -118,7 +118,7 @@ export function LauncherView({ options, prefill, assets }: Props) {
   // Conversion & destination
   const [adSetName, setAdSetName] = useState(prefill?.adSetName ?? "");
   const [optimizationGoal, setOptimizationGoal] = useState("OFFSITE_CONVERSIONS");
-  const [pixelId, setPixelId] = useState(prefill?.pixelId || options.pixels[0]?.id ?? "");
+  const [pixelId, setPixelId] = useState(prefill?.pixelId || (options.pixels[0]?.id ?? ""));
   const [conversionEvent, setConversionEvent] = useState("PURCHASE");
   const [destinationUrl, setDestinationUrl] = useState(prefill?.destinationUrl ?? "");
 
