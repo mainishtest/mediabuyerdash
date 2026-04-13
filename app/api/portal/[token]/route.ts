@@ -217,9 +217,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     }
   }
 
-  // ── Shopify orders (direct) ───────────────────────────────────────────────
+  // ── Shopify orders (Facebook-attributed via UTM) ─────────────────────────
   // Always query Shopify orders so revenue/orders appear even when
   // reconciliation hasn't run yet (e.g. today / yesterday).
+  // Filter to Facebook-attributed orders only (matching executive Quick View).
   function startOfDayInTz(dateStr: string, tzId: string): Date {
     const noon = new Date(dateStr + "T12:00:00.000Z");
     const localStr = noon.toLocaleString("en-US", { timeZone: tzId });
@@ -239,6 +240,11 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         gte: startOfDayInTz(from, tz),
         lte: endOfDayInTz(to, tz),
       },
+      OR: [
+        { utmSource: { contains: "facebook", mode: "insensitive" } },
+        { utmSource: { contains: "fb", mode: "insensitive" } },
+        { utmSource: { equals: "meta", mode: "insensitive" } },
+      ],
     },
     select: { orderCreatedAt: true, totalPrice: true, utmCampaign: true },
   });
