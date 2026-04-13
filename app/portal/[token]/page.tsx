@@ -54,7 +54,7 @@ type Summary = {
 };
 
 type PortalData = {
-  client: { name: string; brandName: string; currency: string };
+  client: { name: string; brandName: string; currency: string; timezone?: string };
   dateRange: { from: string; to: string };
   dataSource?: "reconciled" | "utm_reconciled" | "meta_insights";
   summary: Summary;
@@ -62,6 +62,16 @@ type PortalData = {
   campaignRows: CampaignRow[];
   adRows: AdRow[];
 };
+
+const TIMEZONE_OPTIONS = [
+  { value: "",                      label: "Default" },
+  { value: "America/New_York",      label: "Eastern" },
+  { value: "America/Chicago",       label: "Central" },
+  { value: "America/Denver",        label: "Mountain" },
+  { value: "America/Los_Angeles",   label: "Pacific" },
+  { value: "America/Phoenix",       label: "Arizona" },
+  { value: "UTC",                   label: "UTC" },
+] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -451,6 +461,7 @@ export default function ClientPortalPage({ params }: PageProps) {
 
   const [fromDate,       setFromDate]       = useState(daysAgo(7));
   const [toDate,         setToDate]         = useState(today());
+  const [timezone,       setTimezone]       = useState("");
   const [data,           setData]           = useState<PortalData | null>(null);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<string | null>(null);
@@ -458,11 +469,14 @@ export default function ClientPortalPage({ params }: PageProps) {
   const [needsPassword,  setNeedsPassword]  = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
 
-  const fetchData = useCallback(async (from: string, to: string) => {
+  const fetchData = useCallback(async (from: string, to: string, tz?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/portal/${token}?from=${from}&to=${to}`);
+      const tzParam = tz ?? timezone;
+      const params = new URLSearchParams({ from, to });
+      if (tzParam) params.set("tz", tzParam);
+      const res = await fetch(`/api/portal/${token}?${params}`);
       if (res.status === 401) {
         const body = await res.json();
         if (body.requiresPassword) { setNeedsPassword(true); setLoading(false); return; }
@@ -478,7 +492,7 @@ export default function ClientPortalPage({ params }: PageProps) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, timezone]);
 
   useEffect(() => {
     fetchData(fromDate, toDate);
@@ -565,6 +579,21 @@ export default function ClientPortalPage({ params }: PageProps) {
                 className="bg-transparent text-xs text-slate-300 outline-none"
               />
             </div>
+            <select
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs
+                         text-slate-300 outline-none focus:border-emerald-600"
+              title="Reporting timezone"
+            >
+              {TIMEZONE_OPTIONS.map(tz => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.value === "" && data?.client.timezone
+                    ? `${TIMEZONE_OPTIONS.find(o => o.value === data.client.timezone)?.label ?? data.client.timezone}`
+                    : tz.label}
+                </option>
+              ))}
+            </select>
             <button
               onClick={async () => {
                 setRefreshing(true);
@@ -732,6 +761,7 @@ export default function ClientPortalPage({ params }: PageProps) {
           </p>
           <p className="mt-1 text-xs text-slate-700">
             Report generated {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            {data.client.timezone && ` · Timezone: ${TIMEZONE_OPTIONS.find(o => o.value === data.client.timezone)?.label ?? data.client.timezone}`}
           </p>
         </div>
       </div>

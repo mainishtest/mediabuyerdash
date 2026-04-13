@@ -43,8 +43,14 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   const url = new URL(req.url);
 
-  // Use the client's timezone so "today" matches the user's local calendar
-  const tz = account.timezone || "America/New_York";
+  // Use the client's timezone so "today" matches the user's local calendar.
+  // Allow an explicit ?tz= override from the portal UI.
+  const VALID_TZ = new Set([
+    "America/New_York", "America/Chicago", "America/Denver",
+    "America/Los_Angeles", "America/Phoenix", "UTC",
+  ]);
+  const tzParam  = url.searchParams.get("tz");
+  const tz = (tzParam && VALID_TZ.has(tzParam)) ? tzParam : (account.timezone || "America/New_York");
   const dateInTz = (d: Date) => new Intl.DateTimeFormat("en-CA", {
     timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
   }).format(d);
@@ -389,6 +395,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       name:      account.name,
       brandName: account.brandName ?? account.name,
       currency:  account.currency,
+      timezone:  tz,
     },
     dateRange:    { from, to },
     dataSource,
