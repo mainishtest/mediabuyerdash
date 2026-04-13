@@ -131,23 +131,21 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
 
   const budgetCents = Math.round(payload.dailyBudget * 100);
 
-  // Filter out "NONE" from special_ad_categories — Meta API doesn't accept it
-  const validCategories = (payload.specialAdCategories ?? []).filter(
-    (c) => c !== "NONE"
-  );
-
   try {
-    // 2. Create Campaign (budget goes on the ad set, not campaign)
+    // 2. Create Campaign (with CBO — budget at campaign level)
     result.status = "creating_campaign";
     const campaign = await createCampaign(payload.adAccountId, payload.accessToken, {
       name: payload.campaignName,
       objective: payload.objective,
       status: payload.campaignStatus,
-      special_ad_categories: validCategories,
+      special_ad_categories: payload.specialAdCategories?.length
+        ? payload.specialAdCategories
+        : ["NONE"],
+      daily_budget: budgetCents,
     });
     result.campaignId = campaign.id;
 
-    // 3. Create Ad Set (budget at ad set level)
+    // 3. Create Ad Set (no budget — CBO handles it at campaign level)
     result.status = "creating_adset";
     const adSet = await createAdSet(payload.adAccountId, payload.accessToken, {
       name: payload.adSetName,
@@ -155,7 +153,6 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
       status: payload.adStatus,
       billing_event: payload.billingEvent,
       optimization_goal: payload.optimizationGoal,
-      daily_budget: budgetCents,
       targeting: payload.targeting,
       ...(payload.startTime ? { start_time: payload.startTime } : {}),
       ...(payload.endTime ? { end_time: payload.endTime } : {}),

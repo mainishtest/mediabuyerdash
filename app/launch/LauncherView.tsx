@@ -141,6 +141,8 @@ export function LauncherView({ options, prefill, assets }: Props) {
   const [ctaType, setCtaType] = useState("SHOP_NOW");
   const [creativeTab, setCreativeTab] = useState<CreativeTab>("edit");
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(prefill?.assetId ?? null);
+  const [externalMediaUrl, setExternalMediaUrl] = useState<string | null>(prefill?.mediaUrl ?? null);
+  const [externalMediaType, setExternalMediaType] = useState<string>(prefill?.mediaType ?? "image");
   const [showAssetPicker, setShowAssetPicker] = useState(false);
 
   // Launch state
@@ -153,7 +155,10 @@ export function LauncherView({ options, prefill, assets }: Props) {
   const ctaTypes = options.ctaTypes.length > 0 ? options.ctaTypes : DEFAULT_CTA_TYPES;
   const events = options.conversionEvents.length > 0 ? options.conversionEvents : DEFAULT_EVENTS;
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) ?? null;
-  const mediaCount = selectedAsset ? 1 : 0;
+  const effectiveMediaUrl = selectedAsset?.url ?? externalMediaUrl;
+  const effectiveMediaType = (selectedAsset?.type ?? externalMediaType) as "image" | "video" | undefined;
+  const effectiveThumbnail = selectedAsset?.thumbnailUrl ?? externalMediaUrl;
+  const mediaCount = effectiveMediaUrl ? 1 : 0;
 
   // ── Launch handler ─────────────────────────────────────────────────────
   const handleLaunch = useCallback(() => {
@@ -165,7 +170,7 @@ export function LauncherView({ options, prefill, assets }: Props) {
       const payload: LaunchPayload = {
         campaignName,
         objective: objective as LaunchPayload["objective"],
-        specialAdCategories: specialAdCategories.filter((c) => c !== "NONE") as LaunchPayload["specialAdCategories"],
+        specialAdCategories: specialAdCategories as LaunchPayload["specialAdCategories"],
         campaignStatus: "PAUSED",
         adSetName,
         optimizationGoal: optimizationGoal as LaunchPayload["optimizationGoal"],
@@ -188,8 +193,8 @@ export function LauncherView({ options, prefill, assets }: Props) {
         headline: headline || undefined,
         ctaType,
         destinationUrl,
-        mediaUrl: selectedAsset?.url ?? undefined,
-        mediaType: (selectedAsset?.type as "image" | "video") ?? undefined,
+        mediaUrl: effectiveMediaUrl ?? undefined,
+        mediaType: effectiveMediaType ?? undefined,
         adName,
         adStatus: "PAUSED",
         adAccountId,
@@ -435,6 +440,18 @@ export function LauncherView({ options, prefill, assets }: Props) {
                         </div>
                         <button onClick={() => setSelectedAssetId(null)} className="text-xs text-slate-500 hover:text-red-400">Remove</button>
                       </div>
+                    ) : externalMediaUrl ? (
+                      <div className="flex items-center gap-4">
+                        <div className="h-20 w-20 shrink-0 rounded-lg border border-slate-700 bg-slate-950 flex items-center justify-center overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={externalMediaUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white truncate">Synced from Meta</p>
+                          <p className="text-[11px] text-slate-500 uppercase">{externalMediaType} &middot; imported</p>
+                        </div>
+                        <button onClick={() => setExternalMediaUrl(null)} className="text-xs text-slate-500 hover:text-red-400">Remove</button>
+                      </div>
                     ) : (
                       <div className="text-center py-4">
                         <svg className="mx-auto h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -504,9 +521,9 @@ export function LauncherView({ options, prefill, assets }: Props) {
                     <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
                       {/* Media placeholder */}
                       <div className="aspect-square bg-slate-900 flex items-center justify-center">
-                        {selectedAsset?.url ? (
+                        {effectiveMediaUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={selectedAsset.thumbnailUrl ?? selectedAsset.url} alt="" className="h-full w-full object-cover" />
+                          <img src={effectiveThumbnail ?? effectiveMediaUrl} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <div className="text-center">
                             <svg className="mx-auto h-12 w-12 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">

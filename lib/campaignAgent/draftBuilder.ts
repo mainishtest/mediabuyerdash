@@ -63,7 +63,7 @@ export function buildCampaignDraft(
     status: "ready_for_review",
     campaignName,
     objective,
-    specialAdCategories: [],
+    specialAdCategories: ["NONE"],
     dailyBudget,
     startDate: intent.startDate,
     endDate: intent.endDate,

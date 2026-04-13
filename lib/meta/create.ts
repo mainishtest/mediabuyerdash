@@ -13,6 +13,9 @@ export interface MetaApiError {
   type: string;
   code: number;
   error_subcode?: number;
+  error_user_msg?: string;
+  error_user_title?: string;
+  error_data?: Record<string, unknown>;
   fbtrace_id?: string;
 }
 
@@ -170,8 +173,13 @@ async function metaPost<T = MetaCreateResult>(
     );
     console.error(`[meta/create] POST ${endpoint} failed:`, JSON.stringify(err, null, 2));
     console.error(`[meta/create] Params sent:`, JSON.stringify(debugParams, null, 2));
+    // Build detailed error message including user-facing details from Meta
+    const parts = [err?.message ?? `Meta API ${res.status}`];
+    if (err?.error_user_msg) parts.push(err.error_user_msg);
+    if (err?.error_user_title) parts.push(`(${err.error_user_title})`);
+
     throw new MetaCreateError(
-      err?.message ?? `Meta API ${res.status}`,
+      parts.join(" — "),
       err?.code ?? res.status,
       err?.error_subcode,
       err?.fbtrace_id
