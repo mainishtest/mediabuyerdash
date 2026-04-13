@@ -132,7 +132,7 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
   const budgetCents = Math.round(payload.dailyBudget * 100);
 
   try {
-    // 2. Create Campaign (with CBO — budget at campaign level)
+    // 2. Create Campaign (ABO — budget on ad set, not campaign)
     result.status = "creating_campaign";
     const campaign = await createCampaign(payload.adAccountId, payload.accessToken, {
       name: payload.campaignName,
@@ -141,11 +141,10 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
       special_ad_categories: payload.specialAdCategories?.length
         ? payload.specialAdCategories
         : ["NONE"],
-      daily_budget: budgetCents,
     });
     result.campaignId = campaign.id;
 
-    // 3. Create Ad Set (no budget — CBO handles it at campaign level)
+    // 3. Create Ad Set (ABO — budget lives here)
     result.status = "creating_adset";
     // Extract advantage_audience from targeting (it's an ad set param, not a targeting field)
     const { advantage_audience, ...cleanTargeting } = payload.targeting as AdSetTargeting & { advantage_audience?: number };
@@ -155,6 +154,7 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
       status: payload.adStatus,
       billing_event: payload.billingEvent,
       optimization_goal: payload.optimizationGoal,
+      daily_budget: budgetCents,
       targeting: cleanTargeting,
       ...(payload.startTime ? { start_time: payload.startTime } : {}),
       ...(payload.endTime ? { end_time: payload.endTime } : {}),
