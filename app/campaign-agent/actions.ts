@@ -208,6 +208,7 @@ export async function launchApprovedDraftAction(draft: CampaignDraft): Promise<L
     pixelId: draft.pixel?.id,
     conversionEvent: draft.conversionEvent ?? undefined,
     pageId: draft.page?.id ?? "",
+    // First ad fields (backwards compatibility)
     primaryText: firstAd.primaryText,
     headline: firstAd.headline,
     ctaType: firstAd.ctaType,
@@ -216,6 +217,16 @@ export async function launchApprovedDraftAction(draft: CampaignDraft): Promise<L
     mediaType: firstAd.creative.type,
     adName: firstAd.adName,
     adStatus: draft.launchMode === "active" ? "ACTIVE" : "PAUSED",
+    // All ads from the draft
+    ads: draft.ads.map((ad) => ({
+      adName: ad.adName,
+      primaryText: ad.primaryText,
+      headline: ad.headline,
+      ctaType: ad.ctaType,
+      destinationUrl: ad.destinationUrl,
+      mediaUrl: ad.creative.url ?? undefined,
+      mediaType: ad.creative.type as "image" | "video" | undefined,
+    })),
     adAccountId: draft.adAccount.externalId,
     accessToken: connection.accessToken,
   };

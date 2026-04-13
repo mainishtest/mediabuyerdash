@@ -47,7 +47,7 @@ export interface LaunchPayload {
     timezone_type: "USER" | "ADVERTISER";
   }>;
 
-  // Ad Creative
+  // Ad Creative (single ad — used when ads[] is not provided)
   pageId: string;
   instagramAccountId?: string;
   primaryText: string;
@@ -61,6 +61,17 @@ export interface LaunchPayload {
   // Ad
   adName: string;
   adStatus: AdStatus;
+
+  // Multiple ads (overrides single ad fields above when present)
+  ads?: Array<{
+    adName: string;
+    primaryText: string;
+    headline?: string;
+    ctaType: string;
+    destinationUrl: string;
+    mediaUrl?: string;
+    mediaType?: "image" | "video";
+  }>;
 
   // Meta connection
   adAccountId: string; // act_XXXXXXXXXX
@@ -126,6 +137,8 @@ export interface LaunchResult {
   adSetId?: string;
   creativeId?: string;
   adId?: string;
+  // Multiple ads created
+  createdAds?: Array<{ adName: string; creativeId: string; adId: string }>;
   errors: Array<{ step: string; message: string; code?: number }>;
   startedAt: string;
   completedAt?: string;
@@ -199,41 +212,68 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
     });
     result.adSetId = adSet.id;
 
-    // 4. Create Ad Creative
-    result.status = "creating_creative";
-    const creative = await createAdCreative(payload.adAccountId, payload.accessToken, {
-      name: `${payload.adName} Creative`,
-      object_story_spec: {
-        page_id: payload.pageId,
-        ...(payload.instagramAccountId
-          ? { instagram_actor_id: payload.instagramAccountId }
-          : {}),
-        link_data: {
-          link: payload.destinationUrl,
-          message: payload.primaryText,
-          ...(payload.headline ? { name: payload.headline } : {}),
-          ...(payload.description ? { description: payload.description } : {}),
-          call_to_action: {
-            type: payload.ctaType,
-            value: { link: payload.destinationUrl },
-          },
-          ...(payload.mediaUrl && payload.mediaType === "image"
-            ? { picture: payload.mediaUrl }
-            : {}),
-        },
-      },
-    });
-    result.creativeId = creative.id;
+    // 4–5. Create Ad Creatives + Ads (supports multiple ads)
+    const adsToCreate = payload.ads && payload.ads.length > 0
+      ? payload.ads
+      : [{
+          adName: payload.adName,
+          primaryText: payload.primaryText,
+          headline: payload.headline,
+          ctaType: payload.ctaType,
+          destinationUrl: payload.destinationUrl,
+          mediaUrl: payload.mediaUrl,
+          mediaType: payload.mediaType,
+        }];
 
-    // 5. Create Ad
-    result.status = "creating_ad";
-    const ad = await createAd(payload.adAccountId, payload.accessToken, {
-      name: payload.adName,
-      adset_id: adSet.id,
-      creative: { creative_id: creative.id },
-      status: payload.adStatus,
-    });
-    result.adId = ad.id;
+    result.createdAds = [];
+
+    for (let i = 0; i < adsToCreate.length; i++) {
+      const adDef = adsToCreate[i];
+      const adLabel = adsToCreate.length > 1 ? ` (${i + 1}/${adsToCreate.length})` : "";
+
+      // Create creative
+      result.status = "creating_creative";
+      const creative = await createAdCreative(payload.adAccountId, payload.accessToken, {
+        name: `${adDef.adName} Creative`,
+        object_story_spec: {
+          page_id: payload.pageId,
+          ...(payload.instagramAccountId
+            ? { instagram_actor_id: payload.instagramAccountId }
+            : {}),
+          link_data: {
+            link: adDef.destinationUrl,
+            message: adDef.primaryText,
+            ...(adDef.headline ? { name: adDef.headline } : {}),
+            ...(payload.description ? { description: payload.description } : {}),
+            call_to_action: {
+              type: adDef.ctaType,
+              value: { link: adDef.destinationUrl },
+            },
+            ...(adDef.mediaUrl && adDef.mediaType === "image"
+              ? { picture: adDef.mediaUrl }
+              : {}),
+          },
+        },
+      });
+
+      // Create ad
+      result.status = "creating_ad";
+      const ad = await createAd(payload.adAccountId, payload.accessToken, {
+        name: adDef.adName,
+        adset_id: adSet.id,
+        creative: { creative_id: creative.id },
+        status: payload.adStatus,
+      });
+
+      result.createdAds.push({ adName: adDef.adName, creativeId: creative.id, adId: ad.id });
+      console.log(`[meta/launch] Created ad${adLabel}: "${adDef.adName}" (${ad.id})`);
+
+      // Keep first ad IDs for backwards compatibility
+      if (i === 0) {
+        result.creativeId = creative.id;
+        result.adId = ad.id;
+      }
+    }
 
     // Success
     result.status = "success";
