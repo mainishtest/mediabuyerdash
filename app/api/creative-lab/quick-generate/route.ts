@@ -138,8 +138,8 @@ async function generateWithAnthropic(apiKey: string, system: string, user: strin
       }),
     });
 
-    if (res.status === 429) {
-      return NextResponse.json({ ok: false, error: "Rate limited by Anthropic. Wait a moment and try again." }, { status: 429 });
+    if (res.status === 429 || res.status === 529) {
+      return NextResponse.json({ ok: false, error: res.status === 529 ? "Anthropic API is temporarily overloaded. Try again shortly." : "Rate limited by Anthropic. Wait a moment and try again." }, { status: res.status === 529 ? 503 : 429 });
     }
 
     const data = await res.json();

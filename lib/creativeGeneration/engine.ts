@@ -379,12 +379,14 @@ export async function generateCreativeDrafts(
 
     const latencyMs = Date.now() - startedAt;
 
-    if (res.status === 429) {
+    if (res.status === 429 || res.status === 529) {
       return {
         ok:    false,
         error: {
           code:      "api_error",
-          message:   "Anthropic rate limit reached. Try again in a moment.",
+          message:   res.status === 529
+            ? "Anthropic API is temporarily overloaded. Try again shortly."
+            : "Anthropic rate limit reached. Try again in a moment.",
           retryable: true,
         },
       };

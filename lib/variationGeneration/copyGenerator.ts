@@ -187,7 +187,7 @@ async function callAiProvider(
     const result = await primary();
     if (result.ok || !fallback) return result;
     // If rate limited or failed, try fallback
-    if (result.error?.includes("Rate limited") || result.error?.includes("429")) {
+    if (result.error?.includes("Rate limited") || result.error?.includes("429") || result.error?.includes("529") || result.error?.includes("Overloaded")) {
       console.warn(`[copy-gen] ${provider} rate limited, falling back to other provider`);
       return fallback();
     }
@@ -218,9 +218,9 @@ async function callAnthropic(apiKey: string, system: string, user: string) {
       }),
     });
 
-    if (res.status === 429 && attempt < MAX_RETRIES) {
+    if ((res.status === 429 || res.status === 529) && attempt < MAX_RETRIES) {
       const delay = 2000 * Math.pow(2, attempt);
-      console.warn(`[copy-gen] Anthropic 429, retry ${attempt + 1}/${MAX_RETRIES} in ${delay / 1000}s`);
+      console.warn(`[copy-gen] Anthropic ${res.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${delay / 1000}s`);
       await sleep(delay);
       continue;
     }

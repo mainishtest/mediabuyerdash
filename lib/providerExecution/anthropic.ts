@@ -49,7 +49,7 @@ export async function executeAnthropicCopyRequest(
 
     const latencyMs = Date.now() - start;
 
-    if (res.status === 429) {
+    if (res.status === 429 || res.status === 529) {
       const retryAfter = res.headers.get("retry-after");
       return {
         provider:     "anthropic_text",
@@ -61,7 +61,7 @@ export async function executeAnthropicCopyRequest(
           latencyMs
         },
         warnings:     [],
-        errors:       ["Rate limited. Try again later."]
+        errors:       [res.status === 529 ? "Anthropic API is temporarily overloaded. Try again shortly." : "Rate limited. Try again later."]
       };
     }
 
