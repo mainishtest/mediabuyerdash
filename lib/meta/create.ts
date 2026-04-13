@@ -81,6 +81,13 @@ export interface AdSetCreateParams {
   targeting_automation?: {
     advantage_audience?: number; // 1 = on, 0 = off
   };
+  lifetime_budget?: number; // in cents — required when using adset_schedule
+  adset_schedule?: Array<{
+    start_minute: number; // 0–1440
+    end_minute: number;   // 0–1440
+    days: number[];       // 0=Sun, 1=Mon … 6=Sat
+    timezone_type: "USER" | "ADVERTISER";
+  }>;
 }
 
 export interface AdSetTargeting {
@@ -235,12 +242,14 @@ export async function createAdSet(
     billing_event: params.billing_event,
     optimization_goal: params.optimization_goal,
     ...(params.daily_budget != null ? { daily_budget: params.daily_budget } : {}),
+    ...(params.lifetime_budget != null ? { lifetime_budget: params.lifetime_budget } : {}),
     ...(params.bid_amount != null ? { bid_amount: params.bid_amount } : {}),
     ...(params.start_time ? { start_time: params.start_time } : {}),
     ...(params.end_time ? { end_time: params.end_time } : {}),
     targeting: params.targeting,
     ...(params.promoted_object ? { promoted_object: params.promoted_object } : {}),
     ...(params.targeting_automation ? { targeting_automation: params.targeting_automation } : {}),
+    ...(params.adset_schedule ? { adset_schedule: params.adset_schedule } : {}),
   });
 }
 

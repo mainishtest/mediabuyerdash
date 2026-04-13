@@ -34,11 +34,18 @@ export interface LaunchPayload {
   optimizationGoal: OptimizationGoal;
   billingEvent: BillingEvent;
   dailyBudget: number; // in dollars (converted to cents internally)
+  lifetimeBudget?: number; // in dollars — used when dayparting is enabled
   startTime?: string;
   endTime?: string;
   targeting: AdSetTargeting;
   pixelId?: string;
   conversionEvent?: string;
+  adsetSchedule?: Array<{
+    start_minute: number;
+    end_minute: number;
+    days: number[];
+    timezone_type: "USER" | "ADVERTISER";
+  }>;
 
   // Ad Creative
   pageId: string;
@@ -85,6 +92,19 @@ export function validateLaunchPayload(payload: LaunchPayload): ValidationError[]
     errors.push({ field: "destinationUrl", message: "Destination URL must start with http:// or https://" });
   }
 
+  // Dayparting requires lifetime budget + end date
+  if (payload.adsetSchedule && payload.adsetSchedule.length > 0) {
+    if (!payload.lifetimeBudget || payload.lifetimeBudget < 1) {
+      errors.push({ field: "lifetimeBudget", message: "Lifetime budget is required when using dayparting" });
+    }
+    if (!payload.endTime) {
+      errors.push({ field: "endTime", message: "End date is required when using dayparting (lifetime budget)" });
+    }
+    if (!payload.startTime) {
+      errors.push({ field: "startTime", message: "Start date is required when using dayparting (lifetime budget)" });
+    }
+  }
+
   // Sales/leads objective requires pixel
   if (
     (payload.objective === "OUTCOME_SALES" || payload.objective === "OUTCOME_LEADS") &&
@@ -129,7 +149,11 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
     return result;
   }
 
+  const hasDayparting = payload.adsetSchedule && payload.adsetSchedule.length > 0;
   const budgetCents = Math.round(payload.dailyBudget * 100);
+  const lifetimeBudgetCents = payload.lifetimeBudget
+    ? Math.round(payload.lifetimeBudget * 100)
+    : undefined;
 
   try {
     // 2. Create Campaign (ABO — budget on ad set, not campaign)
@@ -154,10 +178,15 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
       status: payload.adStatus,
       billing_event: payload.billingEvent,
       optimization_goal: payload.optimizationGoal,
-      daily_budget: budgetCents,
+      // Dayparting requires lifetime_budget; otherwise use daily_budget
+      ...(hasDayparting && lifetimeBudgetCents
+        ? { lifetime_budget: lifetimeBudgetCents }
+        : { daily_budget: budgetCents }),
       targeting: cleanTargeting,
+      // start_time & end_time required for lifetime_budget
       ...(payload.startTime ? { start_time: payload.startTime } : {}),
       ...(payload.endTime ? { end_time: payload.endTime } : {}),
+      ...(hasDayparting ? { adset_schedule: payload.adsetSchedule } : {}),
       ...(payload.pixelId && payload.conversionEvent
         ? {
             promoted_object: {

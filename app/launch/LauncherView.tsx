@@ -70,6 +70,40 @@ type CreativeTab = "edit" | "preview";
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Convert the 7×24 boolean grid into Meta's adset_schedule format */
+function buildAdsetSchedule(grid: boolean[][]) {
+  const schedule: Array<{ start_minute: number; end_minute: number; days: number[]; timezone_type: "USER" }> = [];
+
+  for (let day = 0; day < 7; day++) {
+    let blockStart: number | null = null;
+    for (let hour = 0; hour <= 24; hour++) {
+      const active = hour < 24 && grid[day][hour];
+      if (active && blockStart === null) {
+        blockStart = hour * 60;
+      } else if (!active && blockStart !== null) {
+        schedule.push({ start_minute: blockStart, end_minute: hour * 60, days: [day], timezone_type: "USER" });
+        blockStart = null;
+      }
+    }
+  }
+
+  // Merge identical time blocks across days
+  const merged: typeof schedule = [];
+  for (const entry of schedule) {
+    const existing = merged.find(
+      (m) => m.start_minute === entry.start_minute && m.end_minute === entry.end_minute
+    );
+    if (existing) {
+      existing.days.push(...entry.days);
+    } else {
+      merged.push({ ...entry });
+    }
+  }
+  return merged;
+}
+
 const DEFAULT_OBJECTIVES: Objective[] = [
   { value: "OUTCOME_SALES", label: "Sales", description: "Drive purchases or conversions" },
   { value: "OUTCOME_LEADS", label: "Leads", description: "Generate leads" },
@@ -134,6 +168,14 @@ export function LauncherView({ options, prefill, assets }: Props) {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState("");
 
+  // Dayparting
+  const [daypartingEnabled, setDaypartingEnabled] = useState(false);
+  const [lifetimeBudget, setLifetimeBudget] = useState(0);
+  // Schedule grid: 7 days × 24 hours, true = active
+  const [scheduleGrid, setScheduleGrid] = useState<boolean[][]>(() =>
+    Array.from({ length: 7 }, () => Array(24).fill(true) as boolean[])
+  );
+
   // Ad creative
   const [adName, setAdName] = useState(prefill?.adName ?? "");
   const [primaryText, setPrimaryText] = useState(prefill?.primaryText ?? "");
@@ -176,6 +218,7 @@ export function LauncherView({ options, prefill, assets }: Props) {
         optimizationGoal: optimizationGoal as LaunchPayload["optimizationGoal"],
         billingEvent: "IMPRESSIONS",
         dailyBudget,
+        ...(daypartingEnabled ? { lifetimeBudget, adsetSchedule: buildAdsetSchedule(scheduleGrid) } : {}),
         startTime: startDate ? new Date(startDate).toISOString() : undefined,
         endTime: endDate ? new Date(endDate).toISOString() : undefined,
         targeting: {
@@ -383,24 +426,135 @@ export function LauncherView({ options, prefill, assets }: Props) {
               </div>
             </Section>
 
-            {/* ══ Section 4: Budget ══ */}
-            <Section title="Budget" number={4}>
+            {/* ══ Section 4: Budget & Schedule ══ */}
+            <Section title="Budget & Schedule" number={4}>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Daily Budget" required>
+                <Field label={daypartingEnabled ? "Daily Budget (reference)" : "Daily Budget"} required={!daypartingEnabled}>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
                     <input type="number" value={dailyBudget} onChange={(e) => setDailyBudget(Number(e.target.value))} min={1} step={1}
                       className={`${INPUT} pl-7`} />
                   </div>
                 </Field>
-                <Field label="Start Date">
+                <Field label="Start Date" required={daypartingEnabled}>
                   <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={INPUT} />
                 </Field>
-                <Field label="End Date (optional)">
+                <Field label={daypartingEnabled ? "End Date" : "End Date (optional)"} required={daypartingEnabled}>
                   <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={INPUT} />
                 </Field>
               </div>
-              <p className="mt-3 text-[11px] text-slate-600">Budget will be managed directly on Meta after launch. Campaign launches in PAUSED state.</p>
+
+              {/* Dayparting toggle */}
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">Day Parting</p>
+                    <p className="text-[11px] text-slate-500">Schedule ads to run only during specific hours/days. Requires lifetime budget.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !daypartingEnabled;
+                      setDaypartingEnabled(next);
+                      if (next && !lifetimeBudget && dailyBudget && endDate && startDate) {
+                        const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000));
+                        setLifetimeBudget(dailyBudget * days);
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${daypartingEnabled ? "bg-emerald-600" : "bg-slate-700"}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${daypartingEnabled ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                </div>
+
+                {daypartingEnabled && (
+                  <div className="mt-4 space-y-4">
+                    {/* Lifetime budget */}
+                    <Field label="Lifetime Budget" required>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+                        <input type="number" value={lifetimeBudget} onChange={(e) => setLifetimeBudget(Number(e.target.value))} min={1} step={1}
+                          className={`${INPUT} pl-7`} />
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-600">Total budget for the campaign duration. Required when using day parting.</p>
+                    </Field>
+
+                    {/* Schedule grid */}
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium text-slate-400">Schedule (click to toggle hours)</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => setScheduleGrid(Array.from({ length: 7 }, () => Array(24).fill(true) as boolean[]))}
+                            className="text-[10px] text-emerald-500 hover:text-emerald-400">All On</button>
+                          <button onClick={() => setScheduleGrid(Array.from({ length: 7 }, () => Array(24).fill(false) as boolean[]))}
+                            className="text-[10px] text-slate-500 hover:text-slate-400">All Off</button>
+                          <button onClick={() => {
+                            // Business hours preset: Mon-Fri 8am-9pm
+                            const grid = Array.from({ length: 7 }, (_, day) =>
+                              Array.from({ length: 24 }, (_, hr) =>
+                                day >= 1 && day <= 5 && hr >= 8 && hr < 21
+                              )
+                            );
+                            setScheduleGrid(grid);
+                          }}
+                            className="text-[10px] text-blue-500 hover:text-blue-400">Business Hours</button>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-lg border border-slate-800">
+                        <table className="w-full border-collapse text-[10px]">
+                          <thead>
+                            <tr>
+                              <th className="sticky left-0 z-10 bg-slate-900 px-2 py-1 text-left text-slate-500 font-medium w-10"></th>
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <th key={i} className="px-0 py-1 text-center text-slate-600 font-normal min-w-[24px]">
+                                  {i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {DAY_LABELS.map((day, dayIdx) => (
+                              <tr key={day}>
+                                <td className="sticky left-0 z-10 bg-slate-900 px-2 py-0.5 text-slate-400 font-medium">
+                                  <button
+                                    onClick={() => {
+                                      const allOn = scheduleGrid[dayIdx].every(Boolean);
+                                      setScheduleGrid((prev) => prev.map((row, i) => i === dayIdx ? row.map(() => !allOn) : row));
+                                    }}
+                                    className="hover:text-white transition-colors"
+                                  >{day}</button>
+                                </td>
+                                {scheduleGrid[dayIdx].map((active, hr) => (
+                                  <td key={hr} className="px-0 py-0.5">
+                                    <button
+                                      onClick={() => setScheduleGrid((prev) => prev.map((row, i) =>
+                                        i === dayIdx ? row.map((v, j) => (j === hr ? !v : v)) : row
+                                      ))}
+                                      className={`block w-full h-5 rounded-sm transition-colors ${active ? "bg-emerald-600 hover:bg-emerald-500" : "bg-slate-800 hover:bg-slate-700"}`}
+                                      title={`${day} ${hr === 0 ? "12am" : hr < 12 ? `${hr}am` : hr === 12 ? "12pm" : `${hr - 12}pm`}`}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-2 flex items-center gap-3 text-[10px] text-slate-600">
+                        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600" /> Active</span>
+                        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-800" /> Paused</span>
+                        <span className="ml-auto">Times in user&apos;s local timezone</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-3 text-[11px] text-slate-600">
+                {daypartingEnabled
+                  ? "Using lifetime budget with ad scheduling. Start and end dates are required."
+                  : "Budget will be managed directly on Meta after launch. Campaign launches in PAUSED state."}
+              </p>
             </Section>
 
             {/* ══ Section 5: Ad Creative ══ */}
