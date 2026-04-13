@@ -18,16 +18,18 @@ type DateMode = "yesterday" | "today" | "custom";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function toLocalDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function getYesterday(): string {
-  return toISODate(new Date(Date.now() - 864e5));
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toLocalDate(d);
 }
 
 function getToday(): string {
-  return toISODate(new Date());
+  return toLocalDate(new Date());
 }
 
 function fmtCurrency(v: number): string {

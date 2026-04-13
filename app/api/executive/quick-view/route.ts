@@ -15,13 +15,19 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sp       = req.nextUrl.searchParams;
-  const dateFrom = sp.get("from") ?? new Date().toISOString().slice(0, 10);
-  const dateTo   = sp.get("to")   ?? dateFrom;
   const clientId = sp.get("clientId") ?? undefined;
 
-  // ── Resolve ad-account IDs for client filtering on insights ────────────────
+  // Resolve client timezone so date defaults match MetaSyncedInsight's stored
+  // dates (which use the ad account / client timezone, not UTC).
+  let clientTz = "America/New_York";
   let adAccountFilter: object = {};
   if (clientId) {
+    const clientAccount = await prisma.clientAccount.findUnique({
+      where:  { id: clientId },
+      select: { timezone: true },
+    });
+    if (clientAccount?.timezone) clientTz = clientAccount.timezone;
+
     const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
       where: { clientAccountId: clientId },
       include: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
@@ -37,6 +43,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const todayInTz = new Intl.DateTimeFormat("en-CA", {
+    timeZone: clientTz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const dateFrom = sp.get("from") ?? todayInTz;
+  const dateTo   = sp.get("to")   ?? dateFrom;
+
   // ── Facebook spend from MetaSyncedInsight ──────────────────────────────────
   const insightAgg = await prisma.metaSyncedInsight.aggregate({
     where: {
@@ -48,11 +60,24 @@ export async function GET(req: NextRequest) {
   const fbSpend = insightAgg._sum.spend ?? 0;
 
   // ── Shopify revenue + orders (Facebook-attributed via UTM) ────────────────
+  // Convert date boundaries to the client's timezone so order bucketing matches
+  function startOfDayInTz(dateStr: string, tzId: string): Date {
+    const noon = new Date(dateStr + "T12:00:00.000Z");
+    const localStr = noon.toLocaleString("en-US", { timeZone: tzId });
+    const localDate = new Date(localStr);
+    const offsetMs = noon.getTime() - localDate.getTime();
+    const midnight = new Date(dateStr + "T00:00:00.000Z");
+    return new Date(midnight.getTime() + offsetMs);
+  }
+  function endOfDayInTz(dateStr: string, tzId: string): Date {
+    return new Date(startOfDayInTz(dateStr, tzId).getTime() + 24 * 60 * 60 * 1000 - 1);
+  }
+
   const shopifyAgg = await prisma.shopifyOrder.aggregate({
     where: {
       orderCreatedAt: {
-        gte: new Date(dateFrom + "T00:00:00Z"),
-        lte: new Date(dateTo + "T23:59:59Z"),
+        gte: startOfDayInTz(dateFrom, clientTz),
+        lte: endOfDayInTz(dateTo, clientTz),
       },
       OR: [
         { utmSource: { contains: "facebook", mode: "insensitive" } },
