@@ -78,6 +78,9 @@ export interface AdSetCreateParams {
     page_id?: string;
     application_id?: string;
   };
+  targeting_automation?: {
+    advantage_audience?: number; // 1 = on, 0 = off
+  };
 }
 
 export interface AdSetTargeting {
@@ -90,7 +93,6 @@ export interface AdSetTargeting {
   age_max?: number;
   genders?: number[]; // 0 = all, 1 = male, 2 = female
   targeting_optimization?: string;
-  advantage_audience?: number; // 1 = on
 }
 
 export interface AdCreativeCreateParams {
@@ -238,6 +240,7 @@ export async function createAdSet(
     ...(params.end_time ? { end_time: params.end_time } : {}),
     targeting: params.targeting,
     ...(params.promoted_object ? { promoted_object: params.promoted_object } : {}),
+    ...(params.targeting_automation ? { targeting_automation: params.targeting_automation } : {}),
   });
 }
 

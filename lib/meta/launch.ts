@@ -147,13 +147,15 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
 
     // 3. Create Ad Set (no budget — CBO handles it at campaign level)
     result.status = "creating_adset";
+    // Extract advantage_audience from targeting (it's an ad set param, not a targeting field)
+    const { advantage_audience, ...cleanTargeting } = payload.targeting as AdSetTargeting & { advantage_audience?: number };
     const adSet = await createAdSet(payload.adAccountId, payload.accessToken, {
       name: payload.adSetName,
       campaign_id: campaign.id,
       status: payload.adStatus,
       billing_event: payload.billingEvent,
       optimization_goal: payload.optimizationGoal,
-      targeting: payload.targeting,
+      targeting: cleanTargeting,
       ...(payload.startTime ? { start_time: payload.startTime } : {}),
       ...(payload.endTime ? { end_time: payload.endTime } : {}),
       ...(payload.pixelId && payload.conversionEvent
@@ -164,6 +166,7 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
             },
           }
         : {}),
+      ...(advantage_audience ? { targeting_automation: { advantage_audience } } : {}),
     });
     result.adSetId = adSet.id;
 
