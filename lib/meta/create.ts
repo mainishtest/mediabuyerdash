@@ -83,6 +83,7 @@ export interface AdSetCreateParams {
   targeting_automation?: {
     advantage_audience?: number; // 1 = on, 0 = off
   };
+  bid_strategy?: "LOWEST_COST_WITHOUT_CAP" | "LOWEST_COST_WITH_BID_CAP" | "COST_CAP";
   lifetime_budget?: number; // in cents — required when using adset_schedule
   adset_schedule?: Array<{
     start_minute: number; // 0–1440
@@ -227,7 +228,10 @@ export async function createCampaign(
     ...(params.daily_budget != null ? { daily_budget: params.daily_budget } : {}),
     ...(params.lifetime_budget != null ? { lifetime_budget: params.lifetime_budget } : {}),
     buying_type: params.buying_type ?? "AUCTION",
-    bid_strategy: params.bid_strategy ?? "LOWEST_COST_WITHOUT_CAP",
+    // bid_strategy only valid with campaign-level budget (CBO); omit for ABO
+    ...(params.daily_budget != null || params.lifetime_budget != null
+      ? { bid_strategy: params.bid_strategy ?? "LOWEST_COST_WITHOUT_CAP" }
+      : {}),
     // Required for ABO (no campaign budget) — allow ad sets to share budget
     is_adset_budget_sharing_enabled: params.is_adset_budget_sharing_enabled ?? false,
   });
@@ -249,6 +253,7 @@ export async function createAdSet(
     ...(params.daily_budget != null ? { daily_budget: params.daily_budget } : {}),
     ...(params.lifetime_budget != null ? { lifetime_budget: params.lifetime_budget } : {}),
     ...(params.bid_amount != null ? { bid_amount: params.bid_amount } : {}),
+    bid_strategy: params.bid_strategy ?? "LOWEST_COST_WITHOUT_CAP",
     ...(params.start_time ? { start_time: params.start_time } : {}),
     ...(params.end_time ? { end_time: params.end_time } : {}),
     targeting: params.targeting,
