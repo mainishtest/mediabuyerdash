@@ -165,7 +165,7 @@ export function LauncherView({ options, prefill, assets }: Props) {
       const payload: LaunchPayload = {
         campaignName,
         objective: objective as LaunchPayload["objective"],
-        specialAdCategories: specialAdCategories as LaunchPayload["specialAdCategories"],
+        specialAdCategories: specialAdCategories.filter((c) => c !== "NONE") as LaunchPayload["specialAdCategories"],
         campaignStatus: "PAUSED",
         adSetName,
         optimizationGoal: optimizationGoal as LaunchPayload["optimizationGoal"],

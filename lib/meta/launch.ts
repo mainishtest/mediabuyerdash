@@ -131,19 +131,23 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
 
   const budgetCents = Math.round(payload.dailyBudget * 100);
 
+  // Filter out "NONE" from special_ad_categories — Meta API doesn't accept it
+  const validCategories = (payload.specialAdCategories ?? []).filter(
+    (c) => c !== "NONE"
+  );
+
   try {
-    // 2. Create Campaign
+    // 2. Create Campaign (budget goes on the ad set, not campaign)
     result.status = "creating_campaign";
     const campaign = await createCampaign(payload.adAccountId, payload.accessToken, {
       name: payload.campaignName,
       objective: payload.objective,
       status: payload.campaignStatus,
-      special_ad_categories: payload.specialAdCategories,
-      daily_budget: budgetCents,
+      special_ad_categories: validCategories,
     });
     result.campaignId = campaign.id;
 
-    // 3. Create Ad Set
+    // 3. Create Ad Set (budget at ad set level)
     result.status = "creating_adset";
     const adSet = await createAdSet(payload.adAccountId, payload.accessToken, {
       name: payload.adSetName,
@@ -151,6 +155,7 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
       status: payload.adStatus,
       billing_event: payload.billingEvent,
       optimization_goal: payload.optimizationGoal,
+      daily_budget: budgetCents,
       targeting: payload.targeting,
       ...(payload.startTime ? { start_time: payload.startTime } : {}),
       ...(payload.endTime ? { end_time: payload.endTime } : {}),
@@ -206,19 +211,22 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
     result.completedAt = new Date().toISOString();
     return result;
   } catch (err) {
+    const failedStep = result.status; // capture which step was running when error occurred
     result.status = "failed";
     result.completedAt = new Date().toISOString();
 
     if (err instanceof MetaCreateError) {
+      console.error(`[meta/launch] Failed at step "${failedStep}":`, err.message, `(code: ${err.code}, subcode: ${err.subcode}, trace: ${err.fbtrace})`);
       result.errors.push({
-        step: result.status === "failed" ? "unknown" : result.status,
-        message: err.message,
+        step: failedStep,
+        message: `${failedStep}: ${err.message}`,
         code: err.code,
       });
     } else {
+      console.error(`[meta/launch] Failed at step "${failedStep}":`, err);
       result.errors.push({
-        step: "unknown",
-        message: err instanceof Error ? err.message : "Unknown error",
+        step: failedStep,
+        message: `${failedStep}: ${err instanceof Error ? err.message : "Unknown error"}`,
       });
     }
     return result;

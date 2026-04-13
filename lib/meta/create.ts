@@ -164,6 +164,12 @@ async function metaPost<T = MetaCreateResult>(
 
   if (!res.ok) {
     const err = (json as { error?: MetaApiError }).error;
+    // Log full error + params for debugging (redact access_token)
+    const debugParams = Object.fromEntries(
+      Object.entries(params).filter(([k]) => k !== "access_token")
+    );
+    console.error(`[meta/create] POST ${endpoint} failed:`, JSON.stringify(err, null, 2));
+    console.error(`[meta/create] Params sent:`, JSON.stringify(debugParams, null, 2));
     throw new MetaCreateError(
       err?.message ?? `Meta API ${res.status}`,
       err?.code ?? res.status,

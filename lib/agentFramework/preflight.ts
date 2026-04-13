@@ -33,7 +33,7 @@ export function runPreflightChecks(draft: PreflightDraftInput): PreflightCheck[]
   checks.push(
     draft.page?.id
       ? { name: "Facebook Page", status: "pass", message: "Page connected", blocking: false }
-      : { name: "Facebook Page", status: "warn", message: "No Facebook Page selected. Required for ad delivery.", blocking: false }
+      : { name: "Facebook Page", status: "fail", message: "No Facebook Page selected. Required for ad delivery.", blocking: true }
   );
 
   // ── Pixel (required for Sales/Leads) ────────────────────────────────────
@@ -79,7 +79,7 @@ export function runPreflightChecks(draft: PreflightDraftInput): PreflightCheck[]
   // ── Destination URL ─────────────────────────────────────────────────────
   const hasUrl = draft.ads?.some((a) => a.destinationUrl && a.destinationUrl.length > 0);
   if (!hasUrl && adCount > 0) {
-    checks.push({ name: "Destination URL", status: "warn", message: "No destination URL set on ads. Required for traffic/conversion campaigns.", blocking: false });
+    checks.push({ name: "Destination URL", status: "fail", message: "No destination URL set on ads. Required for traffic/conversion campaigns.", blocking: true });
   } else if (hasUrl) {
     checks.push({ name: "Destination URL", status: "pass", message: "Destination URL configured", blocking: false });
   }
