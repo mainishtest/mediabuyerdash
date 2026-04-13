@@ -283,7 +283,15 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
   let pixel = null;
 
   if (connection && connection.selectedAccounts.length > 0) {
-    const first = connection.selectedAccounts[0];
+    // Try to match ad account to the brand/product name from the intent
+    const brandLower = (intent.brandOrProduct ?? "").toLowerCase();
+    const matchedAccount = brandLower
+      ? connection.selectedAccounts.find((sa) =>
+          sa.accessibleAdAccount.accountName.toLowerCase().includes(brandLower) ||
+          brandLower.includes(sa.accessibleAdAccount.accountName.toLowerCase())
+        )
+      : null;
+    const first = matchedAccount ?? connection.selectedAccounts[0];
     adAccount = {
       id: first.id,
       externalId: first.accessibleAdAccount.externalAdAccountId,
@@ -302,7 +310,19 @@ export async function resolveIntentData(intent: CampaignIntent): Promise<IntentD
       ]);
 
       if (pages.length > 0) {
-        page = { id: pages[0].id, name: pages[0].name };
+        // Try to match the page to the brand/product name from the intent
+        const brandLower = (intent.brandOrProduct ?? "").toLowerCase();
+        const matched = brandLower
+          ? pages.find((p) => p.name.toLowerCase().includes(brandLower) || brandLower.includes(p.name.toLowerCase()))
+          : null;
+        page = matched
+          ? { id: matched.id, name: matched.name }
+          : { id: pages[0].id, name: pages[0].name };
+        if (matched) {
+          console.log(`[campaignAgent] Matched page "${matched.name}" for brand "${intent.brandOrProduct}"`);
+        } else if (brandLower) {
+          warnings.push(`No Facebook Page matched "${intent.brandOrProduct}". Using "${pages[0].name}" — change in the launcher if needed.`);
+        }
       } else {
         warnings.push("No Facebook Pages found. You need a Page to run ads.");
       }
