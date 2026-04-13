@@ -265,6 +265,84 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     shopifyByDate.set(d, entry);
   }
 
+  // ── Backfill spend from MetaSyncedInsight for dates missing in primary source
+  // When reconciliation or UTM data exists for some dates but not others
+  // (e.g. today hasn't been reconciled yet), fill the gaps from raw Meta data.
+  const datesWithSpend = new Set(rows.filter((r) => r.spend > 0).map((r) => r.date));
+  if (dataSource !== "meta_insights") {
+    // Build the list of dates in the requested range
+    const allDates: string[] = [];
+    const cursor = new Date(from + "T12:00:00Z");
+    const end    = new Date(to + "T12:00:00Z");
+    while (cursor <= end) {
+      allDates.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const missingDates = allDates.filter((d) => !datesWithSpend.has(d));
+
+    if (missingDates.length > 0) {
+      const selectedAccounts = await prisma.metaSelectedAdAccount.findMany({
+        where:  { clientAccountId: clientId },
+        select: { accessibleAdAccount: { select: { externalAdAccountId: true } } },
+      });
+      const adAccountIds = selectedAccounts
+        .map((s) => s.accessibleAdAccount.externalAdAccountId)
+        .filter(Boolean);
+
+      if (adAccountIds.length > 0) {
+        const backfillInsights = await prisma.metaSyncedInsight.findMany({
+          where: {
+            externalAdAccountId: { in: adAccountIds },
+            dateStart: { in: missingDates },
+            level: "ad",
+          },
+          select: {
+            dateStart: true,
+            externalCampaignId: true,
+            externalAdId: true,
+            spend: true, impressions: true, clicks: true,
+          },
+        });
+
+        if (backfillInsights.length > 0) {
+          const bfCampaignIds = [...new Set(backfillInsights.map((i) => i.externalCampaignId).filter(Boolean))];
+          const bfAdIds       = [...new Set(backfillInsights.map((i) => i.externalAdId).filter(Boolean))];
+          const [bfCampaigns, bfAds] = await Promise.all([
+            bfCampaignIds.length > 0
+              ? prisma.metaSyncedCampaign.findMany({
+                  where:  { externalCampaignId: { in: bfCampaignIds } },
+                  select: { externalCampaignId: true, name: true },
+                })
+              : [],
+            bfAdIds.length > 0
+              ? prisma.metaSyncedAd.findMany({
+                  where:  { externalAdId: { in: bfAdIds } },
+                  select: { externalAdId: true, name: true },
+                })
+              : [],
+          ]);
+          const bfCampaignNameMap = new Map(bfCampaigns.map((c) => [c.externalCampaignId, c.name]));
+          const bfAdNameMap       = new Map(bfAds.map((a) => [a.externalAdId, a.name]));
+
+          for (const i of backfillInsights) {
+            rows.push({
+              date:         i.dateStart,
+              campaignId:   i.externalCampaignId,
+              campaignName: bfCampaignNameMap.get(i.externalCampaignId) ?? i.externalCampaignId,
+              adId:         i.externalAdId,
+              adName:       bfAdNameMap.get(i.externalAdId) ?? i.externalAdId,
+              spend:        i.spend,
+              impressions:  i.impressions,
+              clicks:       i.clicks,
+              conversions:  0,
+              revenue:      0,
+            });
+          }
+        }
+      }
+    }
+  }
+
   // ── Daily totals ──────────────────────────────────────────────────────────
   const dailyMap = new Map<string, {
     date: string; spend: number; revenue: number; orders: number;
