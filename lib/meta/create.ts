@@ -60,6 +60,7 @@ export interface CampaignCreateParams {
   lifetime_budget?: number; // in cents
   buying_type?: "AUCTION" | "RESERVED";
   is_adset_budget_sharing_enabled?: boolean;
+  bid_strategy?: "LOWEST_COST_WITHOUT_CAP" | "LOWEST_COST_WITH_BID_CAP" | "COST_CAP" | "LOWEST_COST_WITH_MIN_ROAS";
 }
 
 export interface AdSetCreateParams {
@@ -226,6 +227,7 @@ export async function createCampaign(
     ...(params.daily_budget != null ? { daily_budget: params.daily_budget } : {}),
     ...(params.lifetime_budget != null ? { lifetime_budget: params.lifetime_budget } : {}),
     buying_type: params.buying_type ?? "AUCTION",
+    bid_strategy: params.bid_strategy ?? "LOWEST_COST_WITHOUT_CAP",
     // Required for ABO (no campaign budget) — allow ad sets to share budget
     is_adset_budget_sharing_enabled: params.is_adset_budget_sharing_enabled ?? false,
   });
