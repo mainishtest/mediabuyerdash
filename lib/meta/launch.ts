@@ -208,7 +208,7 @@ export async function launchMetaCampaignFlow(payload: LaunchPayload): Promise<La
             },
           }
         : {}),
-      ...(advantage_audience ? { targeting_automation: { advantage_audience } } : {}),
+      targeting_automation: { advantage_audience: advantage_audience ? 1 : 0 },
     });
     result.adSetId = adSet.id;
 
