@@ -39,7 +39,8 @@ async function syncAccount(
     creativesSynced:   number;
     insightRowsSynced: number;
   },
-  timezone = "America/New_York"
+  timezone = "America/New_York",
+  insightDayRange = 7
 ): Promise<void> {
   // Campaigns
   const rawCampaigns = await fetchCampaigns(externalAdAccountId, accessToken);
@@ -96,12 +97,12 @@ async function syncAccount(
   const mappedCreatives = mergedCreatives.map((c) => mapCreative(c, workspaceId));
   counts.creativesSynced += await upsertCreatives(mappedCreatives);
 
-  // Insights — last 7 days at ad level
+  // Insights — configurable day range (2 for cron, 7 for full/manual sync)
   // Only replace if we got data — prevents deleting good data on partial/failed syncs
   const { rows: rawInsights, since, until } = await fetchInsights(
     externalAdAccountId,
     accessToken,
-    7,
+    insightDayRange,
     timezone
   );
   const mappedInsights = rawInsights.map((r) =>
@@ -128,7 +129,8 @@ export async function runMetaSyncForAccounts(
   adAccounts: Array<{ externalAdAccountId: string; accessToken: string }>,
   connectionId: string,
   workspaceId: string | null = null,
-  timezone = "America/New_York"
+  timezone = "America/New_York",
+  insightDayRange = 7
 ): Promise<SyncSummary> {
   const startedAt = new Date();
 
@@ -158,19 +160,25 @@ export async function runMetaSyncForAccounts(
   };
   const errors: string[] = [];
 
-  for (const account of adAccounts) {
+  for (let i = 0; i < adAccounts.length; i++) {
+    const account = adAccounts[i];
     try {
       await syncAccount(
         account.externalAdAccountId,
         account.accessToken,
         workspaceId,
         counts,
-        timezone
+        timezone,
+        insightDayRange
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${account.externalAdAccountId}: ${msg}`);
       console.error("[Meta sync]", account.externalAdAccountId, err);
+    }
+    // Brief pause between accounts to avoid hitting Meta's per-account rate limits
+    if (i < adAccounts.length - 1) {
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
 
@@ -194,7 +202,8 @@ export async function runMetaSyncForAccounts(
 // ── Workspace-wide orchestrator ───────────────────────────────────────────────
 
 export async function runMetaSync(
-  workspaceId: string | null = null
+  workspaceId: string | null = null,
+  insightDayRange = 2
 ): Promise<SyncSummary> {
   const startedAt = new Date();
 
@@ -235,5 +244,8 @@ export async function runMetaSync(
     };
   }
 
-  return runMetaSyncForAccounts(selected, connection.id, workspaceId);
+  // Cron sync: only fetch 2 days of insights (today + yesterday) to reduce
+  // API calls and avoid Meta's per-account rate limit (error 80004).
+  // Full 7-day backfill happens via manual sync or client-scoped sync.
+  return runMetaSyncForAccounts(selected, connection.id, workspaceId, "America/New_York", insightDayRange);
 }

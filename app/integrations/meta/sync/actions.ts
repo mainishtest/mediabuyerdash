@@ -27,7 +27,7 @@ export async function runMetaSyncAction(): Promise<SyncSummary> {
   const session    = await getServerSession(authOptions);
   const workspaceId = session?.user?.workspaceId ?? null;
 
-  const summary = await runMetaSync(workspaceId);
+  const summary = await runMetaSync(workspaceId, 7);
   revalidatePath(PAGE);
   return summary;
 }

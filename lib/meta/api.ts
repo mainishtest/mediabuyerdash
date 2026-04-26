@@ -265,6 +265,9 @@ export async function fetchInsights(
     const url = `${META_GRAPH_BASE}/${externalAdAccountId}/insights?${params}`;
     const rows = await fetchAllPages<RawMetaInsight>(url, accessToken, 20);
     allRows.push(...rows);
+
+    // Brief pause between day requests to stay under Meta's rate limit
+    if (d < dayRange - 1) await sleep(500);
   }
 
   return { rows: allRows, since, until };
